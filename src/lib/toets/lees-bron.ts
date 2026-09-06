@@ -1,7 +1,7 @@
 export const BRON_ACCEPT =
   ".pdf,.txt,.md,.csv,.json,.docx,.doc,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-export const MAX_BRON_BYTES = 40 * 1024 * 1024;
+export const MAX_BRON_BYTES = 50 * 1024 * 1024;
 export const MAX_BRON_TEKENS = 100_000;
 export const MAX_ANTWOORD_TEKENS = 100_000;
 
@@ -105,7 +105,7 @@ export async function leesBronBestand(
   onVoortgang?: (v: LeesVoortgang) => void,
 ): Promise<BronLeesResultaat> {
   if (file.size > MAX_BRON_BYTES) {
-    throw new Error("Bestand is te groot (max. 40 MB).");
+    throw new Error("Bestand is te groot (max. 50 MB).");
   }
   if (isPdf(file)) {
     const result = await leesPdf(file, onVoortgang);
