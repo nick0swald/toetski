@@ -24,11 +24,11 @@ export const STUUR_SECTIES: StuurSectie[] = [
     id: "origineel",
     titel: "Originele vragen",
     punten: [
-      "Verzin ALTIJD nieuwe toetsvragen: nieuwe contexten, namen, getallen en situaties.",
-      "Neem geen opgaven, voorbeelden of vraagstammen letterlijk of herkenbaar over uit leerlingboek, werkboek of antwoordenboek.",
+      "Vragen mogen in ZELFDE STIJL zijn als voorbeeldoefeningen in de lesstof (Cito-achtig, zelfde soort opdracht), maar NOOIT 1:1 hetzelfde.",
+      "Als een boekopgave ter inspiratie dient: pas ALTIJD namen, getallen, eenheden-waarden en concrete situaties aan. Zelfde leerdoel/RTTI, andere oppervlakte.",
+      "Neem geen vraagstammen, opties of modelantwoorden letterlijk over uit leerlingboek, werkboek of antwoordenboek.",
       "Vermijd formuleringen als \"zoals in het boek\", \"uit de lesstof\", \"zoals in het voorbeeld\" of \"zoals hierboven in de tekst\".",
-      "Herkader wel dezelfde leerdoelen en RTTI-eisen; verander oppervlaktekenmerken genoeg zodat het geen kopie is.",
-      "Bij berekeningen: andere getallen dan in de aangeleverde voorbeelden, met dezelfde soort redenering.",
+      "Bij berekeningen: andere getallen dan in de aangeleverde voorbeelden, met dezelfde soort redenering en moeilijkheid.",
     ],
   },
   {
