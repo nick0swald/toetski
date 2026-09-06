@@ -166,7 +166,7 @@ async function fetchBronUrl(url: string): Promise<string> {
 
 async function callGrok(
   messages: { role: string; content: string }[],
-  maxTokens = 8000,
+  maxTokens = 4000,
 ): Promise<string> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
@@ -179,7 +179,7 @@ async function callGrok(
     },
     signal: AbortSignal.timeout(180000),
     body: JSON.stringify({
-      model: "grok-4.5",
+      model: "grok-4.3",
       temperature: 0.4,
       max_tokens: maxTokens,
       response_format: { type: "json_object" },
