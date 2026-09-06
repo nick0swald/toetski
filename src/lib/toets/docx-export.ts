@@ -23,19 +23,27 @@ import type { CijferNorm, GegenereerdeToets } from "./types";
 import { withDefaults } from "./defaults";
 
 const GREEN = "004422";
-const INK = "0A2E22";
-const MUTED = "1E4A38";
+const INK = "000000";
+const MUTED = "333333";
 const thin = { style: BorderStyle.SINGLE, size: 4, color: "C3D7EE" };
 const borders = { top: thin, bottom: thin, left: thin, right: thin };
 
-function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean }) {
+/** Nick's school Word standard (Cito-achtig voorbeeld). */
+const FONT = "Arial";
+const BODY_SIZE = 24; // 12pt
+const SMALL_SIZE = 20; // 10pt
+/** ~2.5cm / 2cm in twips (1cm ≈ 567). */
+const PAGE_MARGINS = { top: 1418, right: 1418, bottom: 1134, left: 1418 };
+const PAGE_A4 = { width: 11906, height: 16838 };
+
+function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number }) {
   return new Paragraph({
-    spacing: { after: 120 },
+    spacing: { after: opts?.after ?? 120, line: 276, lineRule: "auto" },
     children: [
       new TextRun({
         text,
-        font: "Arial",
-        size: opts?.size ?? 22,
+        font: FONT,
+        size: opts?.size ?? BODY_SIZE,
         bold: opts?.bold,
         italics: opts?.italics,
         color: INK,
@@ -70,6 +78,27 @@ function cell(text: string, opts?: { bold?: boolean; fill?: string }) {
       }),
     ],
   });
+}
+
+
+function schoolLeerlingChrome() {
+  return {
+    headers: {
+      default: new Header({ children: [new Paragraph({ children: [] })] }),
+    },
+    footers: {
+      default: new Footer({
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [
+              new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: SMALL_SIZE, color: MUTED }),
+            ],
+          }),
+        ],
+      }),
+    },
+  };
 }
 
 function headerFooter(label: string) {
@@ -107,21 +136,53 @@ function toetsParagrafen(toets: GegenereerdeToets): Paragraph[] {
   const m = t.meta;
   const max = totaalPunten(t.vragen);
   const out: Paragraph[] = [
-    heading(m.titel),
-    sub(`${m.vak} · ${m.leerweg} klas ${m.leerjaar} · versie ${m.versie}`),
-    p(`Tijd: ${m.duurMinuten} minuten. Maximumscore: ${max} punten.`),
-    p("Naam: ________________________    Klas: ________    Datum: ________"),
+    p(m.titel, { bold: true, size: 28, after: 80 }),
+    p(`${m.vak} · ${m.leerweg} klas ${m.leerjaar} · versie ${m.versie}`, { size: SMALL_SIZE, after: 40 }),
+    p(`Tijd: ${m.duurMinuten} minuten. Maximumscore: ${max} punten.`, { size: SMALL_SIZE, after: 40 }),
+    p("Naam: ________________________    Klas: ________    Datum: ________", { after: 200 }),
   ];
   if (m.instructies.length) {
-    out.push(p("Instructie", { bold: true }));
-    for (const s of m.instructies) out.push(p(`• ${s}`));
+    out.push(p("Instructie", { bold: true, after: 60 }));
+    for (const s of m.instructies) out.push(p(s, { size: SMALL_SIZE, after: 40 }));
+    out.push(p("", { after: 120 }));
   }
   for (const q of t.vragen) {
-    out.push(p(`Vraag ${q.nummer}  (${q.punten} punten)`, { bold: true, size: 24 }));
-    if (q.context) out.push(p(q.context, { italics: true }));
-    for (const line of q.stam.split("\n")) out.push(p(line || " "));
+    const stam = (q.stam || "").trim();
+    const kop = `${q.punten}p  ${q.nummer}  ${stam}`;
+    out.push(
+      new Paragraph({
+        spacing: { before: 200, after: 80, line: 276, lineRule: "auto" },
+        indent: { left: 709, hanging: 709 },
+        children: [
+          new TextRun({ text: kop, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
+        ],
+      }),
+    );
+    if (q.context?.trim()) {
+      out.push(p(q.context.trim(), { size: BODY_SIZE, after: 80 }));
+    }
     if (q.opties?.length) {
-      for (const o of q.opties) out.push(p(`${o.letter}.  ${o.tekst}`));
+      for (const o of q.opties) {
+        out.push(
+          new Paragraph({
+            spacing: { after: 40, line: 276, lineRule: "auto" },
+            indent: { left: 709 },
+            children: [
+              new TextRun({
+                text: `${o.letter}  ${o.tekst}`,
+                font: FONT,
+                size: BODY_SIZE,
+                color: INK,
+              }),
+            ],
+          }),
+        );
+      }
+    } else {
+      // Open vraag: antwoordlijnen zoals in schoolvoorbeeld
+      for (let i = 0; i < 3; i++) {
+        out.push(p("__________________________________________________________________", { after: 40 }));
+      }
     }
   }
   return out;
@@ -221,10 +282,10 @@ function cijferParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
 
 function docOf(children: (Paragraph | Table)[], label: string) {
   return new Document({
-    styles: { default: { document: { run: { font: "Arial", size: 22 } } } },
+    styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
     sections: [
       {
-        properties: { page: { size: { width: 11906, height: 16838 } } },
+        properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } },
         ...headerFooter(label),
         children,
       },
@@ -274,12 +335,12 @@ export async function downloadKwaliteitDocx(toets: GegenereerdeToets) {
 export async function downloadPakketDocx(toets: GegenereerdeToets) {
   const t = withDefaults(toets);
   const doc = new Document({
-    styles: { default: { document: { run: { font: "Arial", size: 22 } } } },
+    styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
     sections: [
-      { properties: { page: { size: { width: 11906, height: 16838 } } }, ...headerFooter(`Toets versie ${t.meta.versie}`), children: toetsParagrafen(t) },
-      { properties: { page: { size: { width: 11906, height: 16838 } } }, ...headerFooter("Nakijkmodel"), children: nakijkParagrafen(t) },
-      { properties: { page: { size: { width: 11906, height: 16838 } } }, ...headerFooter("Toetsmatrijs"), children: matrijsBlocks(t) },
-      { properties: { page: { size: { width: 11906, height: 16838 } } }, ...headerFooter("Cijferomzetting"), children: cijferParagrafen(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: toetsParagrafen(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Nakijkmodel"), children: nakijkParagrafen(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Toetsmatrijs"), children: matrijsBlocks(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Cijferomzetting"), children: cijferParagrafen(t) },
     ],
   });
   await saveDoc(doc, `${slug(t.meta.titel)}-versie-${t.meta.versie}-pakket.docx`);
