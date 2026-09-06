@@ -62,12 +62,27 @@ function veldenUitStukken(stukken: Stuk[]): {
     s.naam && s.naam !== "tekstvak" && s.naam !== "plaktekst"
       ? `--- ${s.naam} ---\n${s.tekst}`
       : s.tekst;
+  const bron = stukken.filter((s) => s.rol === "lesstof").map(blok).join("\n\n");
+  const antwoorden = stukken.filter((s) => s.rol === "antwoorden").map(blok).join("\n\n");
+  const extra = stukken.filter((s) => s.rol === "notities").map(blok).join("\n\n");
   return {
-    bron: stukken.filter((s) => s.rol === "lesstof").map(blok).join("\n\n"),
-    antwoorden: stukken.filter((s) => s.rol === "antwoorden").map(blok).join("\n\n"),
-    extra: stukken.filter((s) => s.rol === "notities").map(blok).join("\n\n"),
+    bron: bron.length > MAX_BRON_TEKENS ? bron.slice(0, MAX_BRON_TEKENS) : bron,
+    antwoorden:
+      antwoorden.length > MAX_ANTWOORD_TEKENS
+        ? antwoorden.slice(0, MAX_ANTWOORD_TEKENS)
+        : antwoorden,
+    extra,
     url: stukken.find((s) => s.rol === "url")?.tekst.trim() ?? "",
   };
+}
+
+
+function vriendelijkeFout(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  if (/too_big|antwoordenmateriaal|bronmateriaal|Too big: expected string/i.test(raw)) {
+    return "Dit bestand is te dik voor één keer. De tekst wordt automatisch ingekort — probeer opnieuw. Lukt het niet, upload leerlingboek en antwoordenboek apart.";
+  }
+  return raw || "Er ging iets mis bij het maken.";
 }
 
 export function CreateForm() {
@@ -157,10 +172,7 @@ export function CreateForm() {
           const scan = result.scan ? " · scan gelezen" : "";
           gelezen.push({
             naam: `${file.name}${pagina}${scan}${result.afgekapt ? " · ingekort" : ""}`,
-            tekst: result.text.slice(
-              0,
-              file.name.toLowerCase().includes("antwoord") ? MAX_ANTWOORD_TEKENS : MAX_BRON_TEKENS,
-            ),
+            tekst: result.text.slice(0, MAX_BRON_TEKENS),
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : `${file.name} kon niet worden gelezen.`;
@@ -260,8 +272,9 @@ export function CreateForm() {
     try {
       const result = await generateToets({ data: input });
       if (!result.ok) {
-        setError(result.error);
-        toast.error(result.error);
+        const msg = vriendelijkeFout(new Error(result.error));
+        setError(msg);
+        toast.error(msg);
         return;
       }
       const toetsId = await persistToetsBeforeNavigate(result.toets);
@@ -274,7 +287,7 @@ export function CreateForm() {
       }
       navigate({ to: "/toets/$id", params: { id: toetsId } });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Er ging iets mis bij het maken.";
+      const msg = vriendelijkeFout(err);
       setError(msg);
       toast.error(msg);
     } finally {

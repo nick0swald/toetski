@@ -167,8 +167,8 @@ export const generateToets = createServerFn({ method: "POST" })
         const extra = await fetchBronUrl(data.bronUrl.trim());
         bron = [bron, extra].filter(Boolean).join("\n\n");
       }
-      bron = bron.slice(0, 60000);
-      const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, 40000);
+      bron = bron.slice(0, 100000);
+      const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, 100000);
       if (!bron.trim()) {
         return { ok: false, error: "Plak lesstof, lever het leerlingboek in, of zet een openbare link." };
       }

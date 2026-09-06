@@ -35,10 +35,10 @@ export const generateInputSchema = z.object({
     T2: z.coerce.number(),
     I: z.coerce.number(),
   }),
-  bronmateriaal: z.string().max(60000).optional().default(""),
+  bronmateriaal: z.string().max(100000).optional().default(""),
   extraEisen: z.string().max(4000).optional().default(""),
   bronUrl: z.string().max(500).optional(),
-  antwoordenmateriaal: z.string().max(40000).optional().default(""),
+  antwoordenmateriaal: z.string().max(100000).optional().default(""),
   versie: z.enum(["A", "B"]).default("A"),
   moeilijkheid: z.enum(["makkelijk", "normaal", "moeilijk"]).default("normaal"),
   cijferNorm: cijferNormSchema.default({

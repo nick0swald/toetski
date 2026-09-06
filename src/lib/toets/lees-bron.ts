@@ -2,8 +2,8 @@ export const BRON_ACCEPT =
   ".pdf,.txt,.md,.csv,.json,.docx,.doc,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export const MAX_BRON_BYTES = 40 * 1024 * 1024;
-export const MAX_BRON_TEKENS = 60_000;
-export const MAX_ANTWOORD_TEKENS = 40_000;
+export const MAX_BRON_TEKENS = 100_000;
+export const MAX_ANTWOORD_TEKENS = 100_000;
 
 export type BronSoort = "pdf" | "docx" | "tekst";
 
