@@ -5,7 +5,7 @@
   --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
 
   --color-bg: #ffffff;
-  --color-surface: #ffd0cc;
+  --color-surface: #bed7ff;
   --color-paper: #ffffff;
   --color-field: #ffffff;
   --color-fg: #0a2e22;
@@ -14,13 +14,13 @@
   --color-muted: #1e4a38;
   --color-primary: #0ebf65;
   --color-primary-fg: #004422;
-  --color-border: #e8a39c;
+  --color-border: #9ec0e8;
   --color-leaf: #0ebf65;
-  --color-sky: #ffd0cc;
+  --color-sky: #bed7ff;
   --color-warn: #8a4b1f;
   --color-rtti-r: #004422;
   --color-rtti-t1: #0ebf65;
-  --color-rtti-t2: #d4746a;
+  --color-rtti-t2: #7eb4e0;
   --color-rtti-i: #0a2e22;
 
   --radius-sm: 12px;
