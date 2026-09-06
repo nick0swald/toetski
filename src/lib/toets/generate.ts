@@ -177,7 +177,7 @@ async function callGrok(
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(180000),
     body: JSON.stringify({
       model: "grok-4.5",
       temperature: 0.4,
