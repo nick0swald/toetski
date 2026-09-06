@@ -1,6 +1,5 @@
 export type Rtti = "R" | "T1" | "T2" | "I";
 
-export type VraagsoortVoorkeur = "veel-mc" | "gemengd" | "meer-open";
 export type Leerweg = "BB" | "KB" | "GT";
 export type VraagType =
   | "meerkeuze"
@@ -128,7 +127,10 @@ export interface GenerateInput {
   duurMinuten: number;
   doelPunten: number;
   aantalVragen: number;
-  vraagsoortVoorkeur?: VraagsoortVoorkeur;
+  /** Leeg/undefined = auto (AI kiest op basis van lesstof). */
+  mcVragen?: number;
+  /** Leeg/undefined = auto. */
+  openVragen?: number;
   rttiDoel: RttiVerdeling;
   bronmateriaal: string;
   extraEisen: string;
