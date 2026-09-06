@@ -67,14 +67,52 @@ function sub(text: string) {
   });
 }
 
-function cell(text: string, opts?: { bold?: boolean; fill?: string }) {
+function cell(
+  text: string,
+  opts?: { bold?: boolean; fill?: string; center?: boolean; lines?: string[]; width?: number; columnSpan?: number },
+) {
+  const lines = opts?.lines?.length ? opts.lines : [text];
   return new TableCell({
     borders,
     verticalAlign: VerticalAlign.CENTER,
+    columnSpan: opts?.columnSpan,
+    width: opts?.width ? { size: opts.width, type: WidthType.DXA } : undefined,
     shading: opts?.fill ? { fill: opts.fill } : undefined,
+    children: lines.map(
+      (line, i) =>
+        new Paragraph({
+          alignment: opts?.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+          spacing: { after: i === lines.length - 1 ? 40 : 0 },
+          children: [
+            new TextRun({
+              text: line,
+              font: "Arial",
+              size: 18,
+              bold: opts?.bold && i === 0,
+              color: INK,
+            }),
+          ],
+        }),
+    ),
+  });
+}
+
+function metaPair(label: string, value: string) {
+  return new TableCell({
+    borders: {
+      top: { style: BorderStyle.NIL, size: 0, color: "FFFFFF" },
+      bottom: { style: BorderStyle.NIL, size: 0, color: "FFFFFF" },
+      left: { style: BorderStyle.NIL, size: 0, color: "FFFFFF" },
+      right: { style: BorderStyle.NIL, size: 0, color: "FFFFFF" },
+    },
+    width: { size: 4680, type: WidthType.DXA },
     children: [
       new Paragraph({
-        children: [new TextRun({ text, font: "Arial", size: 18, bold: opts?.bold, color: INK })],
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: `${label}  `, font: "Arial", size: 16, bold: true, color: GREEN }),
+          new TextRun({ text: value, font: "Arial", size: 18, color: INK }),
+        ],
       }),
     ],
   });
@@ -243,30 +281,135 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
 function matrijsBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const t = withDefaults(toets);
   const { matrijs } = t;
-  const header = [
-    cell("Domein", { bold: true, fill: "E8F0EA" }),
-    ...RTTI_ORDER.map((k) => cell(RTTI_META[k].kort, { bold: true, fill: "E8F0EA" })),
-  ];
-  const rows: TableRow[] = [new TableRow({ children: header })];
+  const max = totaalPunten(t.vragen);
+  const cesuur = cesuurPunten(max, t.cijferNorm);
+  const fill = "E8F0EA";
+  const wOnderwerp = 2600;
+  const wVragen = 1400;
+  const wRtti = 1100;
+  const wTotaal = 960;
+
+  const meta = new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        children: [
+          metaPair("Vak", t.meta.vak || "—"),
+          metaPair("Naam toets", t.meta.titel || "—"),
+        ],
+      }),
+      new TableRow({
+        children: [
+          metaPair("Leerweg", t.meta.leerweg),
+          metaPair("Toetsvorm", "schriftelijke toets"),
+        ],
+      }),
+      new TableRow({
+        children: [
+          metaPair("Leerjaar", String(t.meta.leerjaar)),
+          metaPair(
+            "Cesuur",
+            `${cesuur} van de ${max} punten (${t.cijferNorm.cesuurPct}%)`,
+          ),
+        ],
+      }),
+    ],
+  });
+
+  const headerTop = new TableRow({
+    children: [
+      cell("Onderwerpen / toetsdoelen", { bold: true, fill, width: wOnderwerp }),
+      cell("Vragen", { bold: true, fill, center: true, width: wVragen }),
+      cell("Aantal punten (RTTI)", {
+        bold: true,
+        fill,
+        center: true,
+        columnSpan: 4,
+        width: wRtti * 4,
+      }),
+      cell("Totaal", { bold: true, fill, center: true, width: wTotaal }),
+    ],
+  });
+  const headerRtti = new TableRow({
+    children: [
+      cell("", { fill, width: wOnderwerp }),
+      cell("", { fill, width: wVragen }),
+      ...RTTI_ORDER.map((k) =>
+        cell(RTTI_META[k].kort, {
+          bold: true,
+          fill,
+          center: true,
+          width: wRtti,
+          lines: [RTTI_META[k].kort, RTTI_META[k].naam],
+        }),
+      ),
+      cell("%", { bold: true, fill, center: true, width: wTotaal }),
+    ],
+  });
+
+  const rows: TableRow[] = [headerTop, headerRtti];
+  let nr = 0;
   for (const d of matrijs.domeinen) {
+    nr += 1;
     const row = matrijs.cellen[d];
+    const alleVragen = RTTI_ORDER.flatMap((k) => row?.[k]?.vraagnummers ?? []);
+    const unieke = [...new Set(alleVragen)].sort((a, b) => a - b);
+    const domeinPunten = RTTI_ORDER.reduce((s, k) => s + (row?.[k]?.punten ?? 0), 0);
+    const pct = max > 0 ? Math.round((domeinPunten / max) * 100) : 0;
     rows.push(
       new TableRow({
         children: [
-          cell(d, { bold: true }),
+          cell(`${nr}.  ${d}`, { bold: true, width: wOnderwerp }),
+          cell(unieke.join(", ") || "—", { center: true, width: wVragen }),
           ...RTTI_ORDER.map((k) => {
             const cel = row?.[k];
-            if (!cel || cel.punten <= 0) return cell("—");
-            return cell(`${cel.vraagnummers.map((n) => `v${n}`).join(" ")} (${cel.punten}p)`);
+            if (!cel || cel.punten <= 0) return cell("", { center: true, width: wRtti });
+            const nums = cel.vraagnummers.join(", ");
+            return cell("", {
+              center: true,
+              width: wRtti,
+              lines: [String(cel.punten), `(${nums})`],
+            });
           }),
+          cell(`${pct}%`, { center: true, bold: true, width: wTotaal }),
         ],
       }),
     );
   }
+
+  const aantalVragen = t.vragen.length;
+  rows.push(
+    new TableRow({
+      children: [
+        cell("Totaal", { bold: true, fill, width: wOnderwerp }),
+        cell(String(aantalVragen), { bold: true, fill, center: true, width: wVragen }),
+        ...RTTI_ORDER.map((k) =>
+          cell(`${matrijs.totalen[k]?.percentage ?? 0}%`, {
+            bold: true,
+            fill,
+            center: true,
+            width: wRtti,
+          }),
+        ),
+        cell("100%", { bold: true, fill, center: true, width: wTotaal }),
+      ],
+    }),
+  );
+
   const out: (Paragraph | Table)[] = [
-    heading(`Toetsmatrijs · ${t.meta.titel}`),
-    sub(`RTTI · ${t.meta.leerweg} klas ${t.meta.leerjaar}`),
-    new Table({ width: { size: 9360, type: WidthType.DXA }, rows }),
+    heading("Toetsmatrijs · schriftelijke toets"),
+    sub(`RTTI · versie ${t.meta.versie}`),
+    meta,
+    p("", { after: 120 }),
+    new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: [wOnderwerp, wVragen, wRtti, wRtti, wRtti, wRtti, wTotaal],
+      rows,
+    }),
+    p("", { after: 80 }),
+    sub(
+      RTTI_ORDER.map((k) => `${RTTI_META[k].kort} = ${RTTI_META[k].naam}`).join("  ·  "),
+    ),
   ];
   if (t.kwaliteit?.punten?.length) {
     out.push(heading("Feedback op de toets"));
