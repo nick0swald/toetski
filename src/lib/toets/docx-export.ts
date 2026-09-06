@@ -174,25 +174,31 @@ function toetsParagrafen(toets: GegenereerdeToets): Paragraph[] {
   const m = t.meta;
   const max = totaalPunten(t.vragen);
   const out: Paragraph[] = [
+    // Alleen toets-titel + vraagpunten vet; rest regular.
     p(m.titel, { bold: true, size: 28, after: 80 }),
-    p(`${m.vak} · ${m.leerweg} klas ${m.leerjaar} · versie ${m.versie}`, { size: SMALL_SIZE, after: 40 }),
+    p(`${m.vak} · ${m.leerweg} klas ${m.leerjaar}`, { size: SMALL_SIZE, after: 40 }),
     p(`Tijd: ${m.duurMinuten} minuten. Maximumscore: ${max} punten.`, { size: SMALL_SIZE, after: 40 }),
     p("Naam: ________________________    Klas: ________    Datum: ________", { after: 200 }),
   ];
   if (m.instructies.length) {
-    out.push(p("Instructie", { bold: true, after: 60 }));
+    out.push(p("Instructie", { after: 60 }));
     for (const s of m.instructies) out.push(p(s, { size: SMALL_SIZE, after: 40 }));
     out.push(p("", { after: 120 }));
   }
   for (const q of t.vragen) {
     const stam = (q.stam || "").trim();
-    const kop = `${q.punten}p  ${q.nummer}  ${stam}`;
     out.push(
       new Paragraph({
         spacing: { before: 200, after: 80, line: 276, lineRule: "auto" },
         indent: { left: 709, hanging: 709 },
         children: [
-          new TextRun({ text: kop, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
+          new TextRun({ text: `${q.punten}p`, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
+          new TextRun({
+            text: stam ? `  ${q.nummer}  ${stam}` : `  ${q.nummer}`,
+            font: FONT,
+            size: BODY_SIZE,
+            color: INK,
+          }),
         ],
       }),
     );
@@ -207,7 +213,8 @@ function toetsParagrafen(toets: GegenereerdeToets): Paragraph[] {
             indent: { left: 709 },
             children: [
               new TextRun({
-                text: `${o.letter}  ${o.tekst}`,
+                // Leeg vierkant om aan te kruisen vóór de letter.
+                text: `☐  ${o.letter}  ${o.tekst}`,
                 font: FONT,
                 size: BODY_SIZE,
                 color: INK,
@@ -217,8 +224,9 @@ function toetsParagrafen(toets: GegenereerdeToets): Paragraph[] {
         );
       }
     } else {
-      // Open vraag: antwoordlijnen zoals in schoolvoorbeeld
-      for (let i = 0; i < 3; i++) {
+      // Open: aantal antwoordlijnen ≈ punten + 1 (minimaal 2).
+      const lijnen = Math.max(2, (Number(q.punten) || 1) + 1);
+      for (let i = 0; i < lijnen; i++) {
         out.push(p("__________________________________________________________________", { after: 40 }));
       }
     }
@@ -242,15 +250,18 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
     const q = t.vragen.find((v) => v.nummer === n.nummer);
     const punten = q?.punten ?? "?";
     const stam = (q?.stam || "").trim();
-    const kop = stam
-      ? `${punten}p  ${n.nummer}  ${stam}`
-      : `${punten}p  ${n.nummer}`;
     out.push(
       new Paragraph({
         spacing: { before: 200, after: 80, line: 276, lineRule: "auto" },
         indent: { left: 709, hanging: 709 },
         children: [
-          new TextRun({ text: kop, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
+          new TextRun({ text: `${punten}p`, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
+          new TextRun({
+            text: stam ? `  ${n.nummer}  ${stam}` : `  ${n.nummer}`,
+            font: FONT,
+            size: BODY_SIZE,
+            color: INK,
+          }),
         ],
       }),
     );
