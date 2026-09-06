@@ -24,7 +24,7 @@ function tokensVoorAantalVragen(n: number): number {
 
 function parseAiJson(raw: string): unknown {
   try {
-    return parseAiJson(raw);
+    return JSON.parse(stripJsonFence(raw));
   } catch {
     throw new Error(
       "De AI-respons was onvolledig of geen geldige JSON (vaak bij heel veel vragen). Probeer opnieuw, of zet tijdelijk iets minder MC/open.",
