@@ -13,7 +13,6 @@ import {
   LEERWEGEN,
   MOEILIJKHEDEN,
   RTTI_PRESETS,
-  VERSIES,
   presetVoorLeerjaar,
   rttiVoorMoeilijkheid,
 } from "@/lib/toets/constants";
@@ -34,7 +33,7 @@ import {
 } from "@/lib/toets/lees-bron";
 import { VOORBEELD_LESSTOF } from "@/lib/toets/sample";
 import { DEFAULT_CIJFER } from "@/lib/toets/cijfer";
-import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling, ToetsVersie } from "@/lib/toets/types";
+import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling } from "@/lib/toets/types";
 import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
@@ -92,7 +91,6 @@ export function CreateForm() {
   const [vak, setVak] = useState("");
   const [leerweg, setLeerweg] = useState<Leerweg>("KB");
   const [leerjaar, setLeerjaar] = useState<1 | 2 | 3 | 4>(2);
-  const [versie, setVersie] = useState<ToetsVersie>("A");
   const [moeilijkheid, setMoeilijkheid] = useState<Moeilijkheid>("normaal");
   const [duur, setDuur] = useState(45);
   const [punten, setPunten] = useState(40);
@@ -295,7 +293,7 @@ export function CreateForm() {
       extraEisen: v.extra,
       bronUrl: v.url.trim() || undefined,
       antwoordenmateriaal: v.antwoorden.trim() || undefined,
-      versie,
+      versie: "A",
       moeilijkheid,
       cijferNorm,
       ronde: 1,
@@ -605,7 +603,6 @@ export function CreateForm() {
             options={MOEILIJKHEDEN}
           />
           <RttiPicker value={rtti} onChange={setRtti} />
-          <Choice legend="Versie" value={versie} onChange={setVersie} options={VERSIES} />
         </div>
       </details>
 
