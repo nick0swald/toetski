@@ -34,7 +34,7 @@ import {
 } from "@/lib/toets/lees-bron";
 import { VOORBEELD_LESSTOF } from "@/lib/toets/sample";
 import { DEFAULT_CIJFER } from "@/lib/toets/cijfer";
-import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling, ToetsVersie, VraagsoortVoorkeur } from "@/lib/toets/types";
+import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling, ToetsVersie } from "@/lib/toets/types";
 import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
@@ -94,10 +94,10 @@ export function CreateForm() {
   const [leerjaar, setLeerjaar] = useState<1 | 2 | 3 | 4>(2);
   const [versie, setVersie] = useState<ToetsVersie>("A");
   const [moeilijkheid, setMoeilijkheid] = useState<Moeilijkheid>("normaal");
-  const [duur, setDuur] = useState(50);
+  const [duur, setDuur] = useState(45);
   const [punten, setPunten] = useState(40);
-  const [aantal, setAantal] = useState(10);
-  const [vraagsoort, setVraagsoort] = useState<VraagsoortVoorkeur>("veel-mc");
+  const [mcTekst, setMcTekst] = useState("");
+  const [openTekst, setOpenTekst] = useState("");
   const [rtti, setRtti] = useState<RttiVerdeling>(
     rttiVoorMoeilijkheid(RTTI_PRESETS.onderbouw.verdeling, "normaal"),
   );
@@ -251,15 +251,31 @@ export function CreateForm() {
     setError(null);
     setStap(0);
     const timer = window.setInterval(() => setStap((s) => (s < STAPPEN.length - 1 ? s + 1 : s)), 2200);
-    const input: GenerateInput = {
+    const parseOpt = (s: string) => {
+      const t = s.trim();
+      if (!t) return undefined;
+      const n = Number(t);
+      if (!Number.isFinite(n) || n < 0) return undefined;
+      return Math.min(16, Math.floor(n));
+    };
+    const mcN = parseOpt(mcTekst);
+    const openN = parseOpt(openTekst);
+    const aantalVragen =
+      mcN != null && openN != null
+        ? Math.max(4, Math.min(16, mcN + openN))
+        : mcN != null || openN != null
+          ? Math.max(4, Math.min(16, (mcN ?? 0) + (openN ?? 0) + 4))
+          : 10;
+        const input: GenerateInput = {
       titel: titel.trim(),
       vak: vak.trim(),
       leerweg,
       leerjaar,
       duurMinuten: duur,
       doelPunten: punten,
-      aantalVragen: aantal,
-      vraagsoortVoorkeur: vraagsoort,
+      aantalVragen,
+      mcVragen: mcN,
+      openVragen: openN,
       rttiDoel: rtti,
       bronmateriaal: v.bron,
       extraEisen: v.extra,
@@ -452,14 +468,14 @@ export function CreateForm() {
 
       <div className="grid min-w-0 gap-4 rounded-[var(--radius-xl)] bg-surface px-6 py-6 sm:px-8">
         <h2 className="text-lg font-bold tracking-tight text-brand">Toetsgegevens</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.7fr)_4.5rem_4.5rem] gap-2 sm:gap-3">
           <div className="grid gap-2">
             <Label htmlFor="vak">Vak</Label>
-            <Input id="vak" value={vak} onChange={(e) => setVak(e.target.value)} placeholder="Auto uit lesstof" />
+            <Input id="vak" value={vak} onChange={(e) => setVak(e.target.value)} placeholder="Auto" />
           </div>
-          <div className="grid gap-2 sm:col-span-1 lg:col-span-1">
+          <div className="grid gap-2">
             <Label htmlFor="titel">Titel / hoofdstuk</Label>
-            <Input id="titel" value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Auto uit lesstof" />
+            <Input id="titel" value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Auto" />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="jaar">Klas</Label>
@@ -475,7 +491,7 @@ export function CreateForm() {
             >
               {[1, 2, 3, 4].map((j) => (
                 <option key={j} value={j}>
-                  Klas {j}
+                  {j}
                 </option>
               ))}
             </select>
@@ -490,7 +506,7 @@ export function CreateForm() {
             >
               {LEERWEGEN.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.label} — {l.hint}
+                  {l.label}
                 </option>
               ))}
             </select>
@@ -506,23 +522,33 @@ export function CreateForm() {
             <Input id="punten" type="number" min={10} max={100} value={punten} onChange={(e) => setPunten(Number(e.target.value))} />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="aantal">Vragen</Label>
-            <Input id="aantal" type="number" min={4} max={16} value={aantal} onChange={(e) => setAantal(Number(e.target.value))} />
+            <Label htmlFor="mc">MC</Label>
+            <Input
+              id="mc"
+              type="number"
+              min={0}
+              max={16}
+              value={mcTekst}
+              onChange={(e) => setMcTekst(e.target.value)}
+              placeholder="auto"
+            />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="vraagsoort">MC / open</Label>
-            <select
-              id="vraagsoort"
-              value={vraagsoort}
-              onChange={(e) => setVraagsoort(e.target.value as VraagsoortVoorkeur)}
-              className={selectCls}
-            >
-              <option value="veel-mc">Veel MC</option>
-              <option value="gemengd">Gemengd</option>
-              <option value="meer-open">Meer open</option>
-            </select>
+            <Label htmlFor="open">Open</Label>
+            <Input
+              id="open"
+              type="number"
+              min={0}
+              max={16}
+              value={openTekst}
+              onChange={(e) => setOpenTekst(e.target.value)}
+              placeholder="auto"
+            />
           </div>
         </div>
+        <p className="text-xs leading-relaxed text-muted">
+          MC/Open leeg = auto: hoofdstuktoets → veel MC; dictee/schrijf → vooral open. Vul aantallen in als je het wilt vastzetten.
+        </p>
       </div>
 
       <details className="group min-w-0 overflow-hidden rounded-[var(--radius-xl)] bg-surface">

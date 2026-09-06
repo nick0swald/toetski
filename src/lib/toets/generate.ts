@@ -93,7 +93,8 @@ function userPrompt(
     duurMinuten: number;
     doelPunten: number;
     aantalVragen: number;
-    vraagsoortVoorkeur?: "veel-mc" | "gemengd" | "meer-open";
+    mcVragen?: number;
+    openVragen?: number;
     rttiDoel: { R: number; T1: number; T2: number; I: number };
     extraEisen?: string;
     antwoordenmateriaal?: string;
@@ -114,13 +115,18 @@ function userPrompt(
       : moe === "moeilijk"
         ? "MOEILIJK: meer T2/I, grotere denkstappen."
         : "NORMAAL: passend bij leerjaar en leerweg.";
-  const vs = input.vraagsoortVoorkeur ?? "veel-mc";
-  const vsTekst =
-    vs === "meer-open"
-      ? "MEER OPEN: minder meerkeuze, meer open/berekening/bronvragen."
-      : vs === "gemengd"
-        ? "GEMENGD: ongeveer half meerkeuze, half open/andere vormen."
-        : "VEEL MEERKEUZE: bij voldoende lesstof relatief veel MC (streef ≥ helft van de vragen), rest open/berekening passend bij de stof.";
+  const mcN = input.mcVragen;
+  const openN = input.openVragen;
+  let verdelingTekst: string;
+  if (mcN != null && openN != null) {
+    verdelingTekst = `VAST: ${mcN} meerkeuze + ${openN} open/andere (totaal ${mcN + openN}).`;
+  } else if (mcN != null) {
+    verdelingTekst = `VAST: ${mcN} meerkeuze; vul aan met open/andere tot ongeveer ${input.aantalVragen} vragen totaal (of passend bij de stof).`;
+  } else if (openN != null) {
+    verdelingTekst = `VAST: ${openN} open/andere; vul aan met meerkeuze tot ongeveer ${input.aantalVragen} vragen totaal waar passend.`;
+  } else {
+    verdelingTekst = `AUTO (~${input.aantalVragen} vragen): kies MC vs open op basis van de lesstof. Dictee/schrijf/luister/spreek → vooral open, weinig of geen MC. Hoofdstuktoets met voldoende stof → relatief veel MC (≥ helft). Anders gemengd.`;
+  }
   let feedbackBlok = "";
   if (input.feedback?.trim() || input.vorigeSamenvatting?.trim()) {
     feedbackBlok = `
@@ -143,8 +149,8 @@ Niveau: ${input.leerweg}
 Leerjaar: ${input.leerjaar}
 Titel: ${input.titel?.trim() || "(leid af uit de lesstof)"}
 Toetsduur: ${input.duurMinuten} minuten
-Aantal vragen: ${input.aantalVragen}
-Vraagsoorten: ${vsTekst}
+Aantal vragen (richtlijn): ${input.aantalVragen}
+Vraagverdeling: ${verdelingTekst}
 Streefmaximum: ${input.doelPunten} punten
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
 Versie: ${input.versie ?? "A"}
