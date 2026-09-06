@@ -146,7 +146,7 @@ Cijfernorm: ${input.cijferNorm?.model ?? "lineair"}
 Extra eisen van de docent:
 ${input.extraEisen?.trim() || "(geen)"}
 ${feedbackBlok}
-Leerlingboek / lesstof (hieruit de vragen; kopieer geen antwoorden naar de leerlingtoets):
+Leerlingboek / lesstof (KADER voor leerdoelen/begrippen/formules — VERZIN originele vragen met nieuwe contexten en getallen; neem geen opgaven letterlijk of herkenbaar over; geen "zoals in het boek"; kopieer geen antwoorden naar de leerlingtoets):
 ${bron.trim() || "(geen bron)"}
 ${
   input.antwoordenmateriaal?.trim()
