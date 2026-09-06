@@ -81,6 +81,9 @@ function vriendelijkeFout(err: unknown): string {
   if (/too_big|antwoordenmateriaal|bronmateriaal|Too big: expected string/i.test(raw)) {
     return "Dit bestand is te dik voor één keer. De tekst wordt automatisch ingekort — probeer opnieuw. Lukt het niet, upload leerlingboek en antwoordenboek apart.";
   }
+  if (/JSON|Expected ','|Unexpected token|position \d+/i.test(raw)) {
+    return "De AI-respons was onvolledig (vaak bij heel veel vragen). Probeer opnieuw, of zet tijdelijk iets minder MC/open.";
+  }
   return raw || "Er ging iets mis bij het maken.";
 }
 
@@ -145,7 +148,7 @@ export function CreateForm() {
       const gelezen: { naam: string; tekst: string }[] = [];
       for (const file of files) {
         if (bestandTeGroot(file)) {
-          toast.error(`${file.name} is te groot (max. 40 MB).`);
+          toast.error(`${file.name} is te groot (max. 50 MB).`);
           continue;
         }
         try {
