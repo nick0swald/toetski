@@ -48,7 +48,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Validiteit: elke vraag dekt een leerdoel; geen triviale of off-topic items.",
       "Betrouwbaarheid: eenduidige vragen plus nakijkmodel waarmee twee docenten tot dezelfde score komen.",
       "Geen dubbele ontkenningen, geen strikvragen, één opdracht per deelvraag.",
-      "Meerkeuze: vier opties A–D, één beste antwoord; standaard 1 punt.",
+      "Meerkeuze: vier opties A–D, één beste antwoord; standaard 1 punt. Spreid juiste antwoorden over A–D (niet steeds dezelfde letter).",
       "Open vragen: commando’s als Noem, Geef, Leg uit, Bereken, Verklaar.",
     ],
   },
