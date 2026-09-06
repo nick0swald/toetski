@@ -545,7 +545,10 @@ export function CreateForm() {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="grid gap-2">
-              <Label htmlFor="mc">MC</Label>
+              <Label htmlFor="mc" className="flex items-baseline gap-1.5">
+                MC
+                <span className="text-[11px] font-normal text-muted">aantal</span>
+              </Label>
               <Input
                 id="mc"
                 type="number"
@@ -557,7 +560,10 @@ export function CreateForm() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="open">Open</Label>
+              <Label htmlFor="open" className="flex items-baseline gap-1.5">
+                Open
+                <span className="text-[11px] font-normal text-muted">aantal</span>
+              </Label>
               <Input
                 id="open"
                 type="number"
@@ -582,8 +588,8 @@ export function CreateForm() {
             />
           </div>
         </div>
-        <p className="text-xs leading-relaxed text-muted">
-          MC/Open of punten leeg = auto. Punten-auto hangt af van minuten en moeilijkheid (nu ~{schatPunten(duur, moeilijkheid)}p).
+        <p className="text-center text-xs leading-relaxed text-muted">
+          MC/Open = aantal vragen (niet %). Leeg = auto. Punten-auto hangt af van minuten en moeilijkheid (nu ~{schatPunten(duur, moeilijkheid)}p).
         </p>
       </div>
 
