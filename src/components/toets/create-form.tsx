@@ -491,6 +491,31 @@ export function CreateForm() {
         ) : null}
       </div>
 
+      {busy ? (
+        <div role="status" aria-live="polite" className="rounded-[var(--radius-xl)] bg-surface p-6 sm:p-8">
+          <p className="flex items-center gap-2 font-semibold text-brand">
+            <Loader2 className="size-4 animate-spin" />
+            Toets wordt opgebouwd…
+          </p>
+          <ol className="mt-3 grid gap-1 text-sm">
+            {STAPPEN.map((s, i) => (
+              <li key={s} className={cn(i <= stap ? "text-fg" : "text-muted")}>
+                {i < stap ? "Klaar — " : i === stap ? "Bezig — " : ""}
+                {s}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+      {error ? <p className="text-sm text-warn">{error}</p> : null}
+      <Button type="submit" disabled={!canSubmit} className="h-auto min-h-20 w-full justify-between rounded-[var(--radius-lg)] px-6 py-5 text-left sm:px-8 [&_svg]:size-6">
+        <span className="min-w-0">
+          <span className="block text-xl font-bold">{busy ? "Bezig…" : "Toets maken"}</span>
+          <span className="mt-1 block text-sm font-medium opacity-80">Word-pakket volgt automatisch.</span>
+        </span>
+        {busy ? <Loader2 className="size-6 shrink-0 animate-spin" /> : <ArrowRight className="size-6 shrink-0" />}
+      </Button>
+
       <div className="grid min-w-0 gap-4 rounded-[var(--radius-xl)] bg-surface px-6 py-6 sm:px-8">
         <h2 className="text-lg font-bold tracking-tight text-brand">Toetsgegevens</h2>
         <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)_minmax(0,1.1fr)] gap-x-2 gap-y-4 sm:gap-x-3">
@@ -632,30 +657,6 @@ export function CreateForm() {
         </div>
       </details>
 
-      {busy ? (
-        <div role="status" aria-live="polite" className="rounded-[var(--radius-xl)] bg-surface p-6 sm:p-8">
-          <p className="flex items-center gap-2 font-semibold text-brand">
-            <Loader2 className="size-4 animate-spin" />
-            Toets wordt opgebouwd…
-          </p>
-          <ol className="mt-3 grid gap-1 text-sm">
-            {STAPPEN.map((s, i) => (
-              <li key={s} className={cn(i <= stap ? "text-fg" : "text-muted")}>
-                {i < stap ? "Klaar — " : i === stap ? "Bezig — " : ""}
-                {s}
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
-      {error ? <p className="text-sm text-warn">{error}</p> : null}
-      <Button type="submit" disabled={!canSubmit} className="h-auto min-h-20 w-full justify-between rounded-[var(--radius-lg)] px-6 py-5 text-left sm:px-8 [&_svg]:size-6">
-        <span className="min-w-0">
-          <span className="block text-xl font-bold">{busy ? "Bezig…" : "Toets maken"}</span>
-          <span className="mt-1 block text-sm font-medium opacity-80">Word-pakket volgt automatisch.</span>
-        </span>
-        {busy ? <Loader2 className="size-6 shrink-0 animate-spin" /> : <ArrowRight className="size-6 shrink-0" />}
-      </Button>
     </form>
   );
 }
