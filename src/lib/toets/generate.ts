@@ -16,6 +16,30 @@ function stripJsonFence(raw: string): string {
   return trimmed;
 }
 
+/** Grotere toetsen (veel MC) knappen anders midden in JSON af. */
+function tokensVoorAantalVragen(n: number): number {
+  const aantal = Math.max(4, Math.min(80, Math.floor(n || 10)));
+  return Math.min(16000, Math.max(5000, 3000 + aantal * 450));
+}
+
+function parseAiJson(raw: string): unknown {
+  try {
+    return parseAiJson(raw);
+  } catch {
+    throw new Error(
+      "De AI-respons was onvolledig of geen geldige JSON (vaak bij heel veel vragen). Probeer opnieuw, of zet tijdelijk iets minder MC/open.",
+    );
+  }
+}
+
+function vriendelijkeAiFout(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  if (/JSON|Expected ','|Unexpected token|position \d+/i.test(raw)) {
+    return "De AI-respons was onvolledig (vaak bij heel veel vragen). Probeer opnieuw, of zet tijdelijk iets minder MC/open.";
+  }
+  return raw || "Het maken van de toets is mislukt.";
+}
+
 function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return true;
@@ -192,17 +216,25 @@ export const generateToets = createServerFn({ method: "POST" })
         { role: "system", content: bouwSystemPrompt(data.stuurdocument) },
         { role: "user", content: userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron) },
       ];
-      let raw = await callGrok(messages);
+      const maxTok = tokensVoorAantalVragen(data.aantalVragen);
+      let raw = await callGrok(messages, maxTok);
       let parsed: unknown;
       try {
-        parsed = JSON.parse(stripJsonFence(raw));
+        parsed = parseAiJson(raw);
       } catch {
-        raw = await callGrok([
-          ...messages,
-          { role: "assistant", content: raw.slice(0, 4000) },
-          { role: "user", content: "Stuur hetzelfde resultaat opnieuw als één puur JSON-object, zonder markdown." },
-        ]);
-        parsed = JSON.parse(stripJsonFence(raw));
+        raw = await callGrok(
+          [
+            ...messages,
+            { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
+            {
+              role: "user",
+              content:
+                "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object, zonder markdown. Kap niet af.",
+            },
+          ],
+          maxTok,
+        );
+        parsed = parseAiJson(raw);
       }
       const payload = generatedPayloadSchema.parse(parsed);
       const rttiDoel = normaliseer(data.rttiDoel);
@@ -251,7 +283,7 @@ export const generateToets = createServerFn({ method: "POST" })
       };
       return { ok: true, toets };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : "Het maken van de toets is mislukt." };
+      return { ok: false, error: vriendelijkeAiFout(err) };
     }
   });
 
@@ -296,10 +328,10 @@ ${bron}`;
         { role: "system", content: MATRIJS_SYSTEM },
         { role: "user", content: user },
       ];
-      let raw = await callGrok(messages, 6000);
+      let raw = await callGrok(messages, 8000);
       let parsed: unknown;
       try {
-        parsed = JSON.parse(stripJsonFence(raw));
+        parsed = parseAiJson(raw);
       } catch {
         raw = await callGrok(
           [
@@ -309,7 +341,7 @@ ${bron}`;
           ],
           6000,
         );
-        parsed = JSON.parse(stripJsonFence(raw));
+        parsed = parseAiJson(raw);
       }
       const payload = matrijsPayloadSchema.parse(parsed);
       const vragen = payload.vragen.map((q, i) => ({
@@ -359,6 +391,6 @@ ${bron}`;
       };
       return { ok: true, toets };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : "Het maken van de matrijs is mislukt." };
+      return { ok: false, error: vriendelijkeAiFout(err).replace("toets", "matrijs") };
     }
   });
