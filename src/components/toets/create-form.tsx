@@ -189,6 +189,7 @@ export function CreateForm() {
     }
   }
 
+  /** Plak/drop van bronmateriaal → chips. true = niet in het commentaarveld zetten. */
   function verwerkPlak(tekst: string): boolean {
     const t = tekst.trim();
     if (!t) return false;
@@ -196,15 +197,13 @@ export function CreateForm() {
       voegStukkenToe([{ rol: "url", naam: t, reden: "Link uit de balk of plak.", tekst: t }]);
       return true;
     }
+    // Korte sturing/commentaar hoort in het tekstveld, geen chip.
+    const regels = t.split(/\n/).filter((r) => r.trim()).length;
+    const kortCommentaar = t.length < 280 && regels <= 4 && !/\b(hoofdstuk|paragraaf|leerdoel|opgave|opdracht)\b/i.test(t);
+    if (kortCommentaar) return false;
     const hit = herkenBron("plaktekst", t, ctxVan(stukken));
-    if (hit.rol === "lesstof" && !stukken.some((s) => s.rol === "lesstof")) {
-      return false;
-    }
-    if (hit.rol !== "lesstof") {
-      voegStukkenToe([{ rol: hit.rol, naam: "plaktekst", reden: hit.reden, tekst: t }]);
-      return true;
-    }
-    return false;
+    voegStukkenToe([{ rol: hit.rol, naam: "plaktekst", reden: hit.reden, tekst: t }]);
+    return true;
   }
 
   function zetRol(id: string, rol: BronRol) {
@@ -226,6 +225,7 @@ export function CreateForm() {
     }
     if (tekst.trim()) {
       if (!verwerkPlak(tekst)) {
+        // Korte sturing → commentaarveld; verder niets auto-vullen.
         setVrijeTekst((prev) => (prev ? `${prev}\n\n${tekst.trim()}` : tekst.trim()));
       }
     }
@@ -237,14 +237,28 @@ export function CreateForm() {
     let actief = stukken;
     const vrij = vrijeTekst.trim();
     if (vrij) {
-      const hit = isUrlRegel(vrij)
-        ? { rol: "url" as const, reden: "Link uit het tekstvak." }
-        : herkenBron("tekstvak", vrij, ctxVan(stukken));
-      actief = [...actief, { id: nieuwId(), rol: hit.rol, naam: "tekstvak", reden: hit.reden, tekst: vrij }];
+      if (isUrlRegel(vrij)) {
+        actief = [
+          ...actief,
+          { id: nieuwId(), rol: "url", naam: "tekstvak", reden: "Link uit het commentaarveld.", tekst: vrij },
+        ];
+      } else {
+        // Altijd sturing/commentaar — nooit als lesstof scrapen.
+        actief = [
+          ...actief,
+          {
+            id: nieuwId(),
+            rol: "notities",
+            naam: "tekstvak",
+            reden: "Docentsturing uit het commentaarveld.",
+            tekst: vrij,
+          },
+        ];
+      }
     }
     const v = veldenUitStukken(actief);
     if (!v.bron.trim() && !v.url.trim()) {
-      toast.error("Drop lesstof of een leerlingboek, of plak tekst.");
+      toast.error("Drop of plak eerst lesstof (leerlingboek). Commentaar alleen is niet genoeg.");
       return;
     }
     setBusy(true);
@@ -358,11 +372,11 @@ export function CreateForm() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-brand">Drop en herken</h2>
           <p className="mt-2 leading-relaxed text-muted">
-            De maker zet zelf leerlingboek, antwoordenboek, notities of een link uit elkaar. Een scan van het (antwoorden)boek wordt pagina voor pagina gelezen. Tik een chip als het misgaat.
+            Drop of kies pdf/Word (ook scans): leerlingboek, antwoordenboek of link worden als chips herkend. Het tekstveld hieronder blijft leeg voor jouw commentaar of sturing.
           </p>
         </div>
         <Textarea
-          id="bron"
+          id="sturing"
           value={vrijeTekst}
           onChange={(e) => setVrijeTekst(e.target.value)}
           onPaste={(e) => {
@@ -375,8 +389,8 @@ export function CreateForm() {
             const text = e.clipboardData.getData("text/plain");
             if (verwerkPlak(text)) e.preventDefault();
           }}
-          placeholder="Drop pdf of Word (ook scans), of plak lesstof, notities of een link."
-          className="min-h-44 bg-paper"
+          placeholder="Optioneel: sturing voor de AI, bijv. ‘ongeveer de helft transfer / niet letterlijk uit de tekst’ of ‘geen vragen over X’."
+          className="min-h-28 bg-paper"
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <label
