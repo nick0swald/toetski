@@ -53,6 +53,7 @@ function ToetsPage() {
   const [tab, setTab] = useState<TabId>("toets");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [lookupReady, setLookupReady] = useState(false);
   const ensureVoorbeeld = useToetsStore((s) => s.ensureVoorbeeld);
 
   useEffect(() => {
@@ -63,9 +64,31 @@ function ToetsPage() {
     if (stored?.soort === "matrijs") setTab("matrijs");
   }, [id, stored?.soort]);
 
+  // Brief grace after hydration so a just-upserted toets can appear before "niet gevonden".
+  useEffect(() => {
+    if (!hydrated) {
+      setLookupReady(false);
+      return;
+    }
+    if (stored || id === "voorbeeld-fotosynthese") {
+      setLookupReady(true);
+      return;
+    }
+    setLookupReady(false);
+    let n = 0;
+    const idTimer = window.setInterval(() => {
+      n += 1;
+      if (useToetsStore.getState().byId(id) || n >= 8) {
+        window.clearInterval(idTimer);
+        setLookupReady(true);
+      }
+    }, 50);
+    return () => window.clearInterval(idTimer);
+  }, [hydrated, id, stored]);
+
   const titel = toets?.meta.titel ?? "Toets";
 
-  if (!hydrated) {
+  if (!hydrated || !lookupReady) {
     return (
       <AppShell>
         <main className="mx-auto max-w-3xl px-5 py-16 text-muted">Toets laden…</main>

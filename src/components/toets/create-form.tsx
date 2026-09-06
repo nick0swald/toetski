@@ -35,7 +35,7 @@ import {
 import { VOORBEELD_LESSTOF } from "@/lib/toets/sample";
 import { DEFAULT_CIJFER } from "@/lib/toets/cijfer";
 import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling, ToetsVersie } from "@/lib/toets/types";
-import { useToetsStore } from "@/store/toets-store";
+import { flushToetsPersist, useToetsStore } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
 const STAPPEN = ["Lesstof lezen", "Toetsmatrijs met RTTI", "Vragen in Cito-stijl", "Nakijkmodel en Word-bestand"];
@@ -266,6 +266,12 @@ export function CreateForm() {
         return;
       }
       upsert(result.toets);
+      flushToetsPersist();
+      if (!useToetsStore.getState().byId(result.toets.id)) {
+        setError("De toets kon niet worden opgeslagen op dit apparaat.");
+        toast.error("De toets kon niet worden opgeslagen op dit apparaat.");
+        return;
+      }
       try {
         const { downloadPakketDocx } = await import("@/lib/toets/docx-export");
         await downloadPakketDocx(result.toets);

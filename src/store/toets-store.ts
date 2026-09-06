@@ -36,6 +36,24 @@ export type ToetsStore = {
   ensureVoorbeeld: () => GegenereerdeToets;
 };
 
+export const TOETS_STORE_KEY = "ares058-toetsmaker";
+
+/** Sync current store slice to localStorage before client navigates. */
+export function flushToetsPersist(): void {
+  if (typeof localStorage === "undefined") return;
+  const s = useToetsStore.getState();
+  localStorage.setItem(
+    TOETS_STORE_KEY,
+    JSON.stringify({
+      state: {
+        toetsen: s.toetsen,
+        stuurdocument: s.stuurdocument,
+      },
+      version: 0,
+    }),
+  );
+}
+
 export const useToetsStore = create<ToetsStore>()(
   persist(
     (set, get) => ({
@@ -99,7 +117,7 @@ export const useToetsStore = create<ToetsStore>()(
       },
     }),
     {
-      name: "ares058-toetsmaker",
+      name: TOETS_STORE_KEY,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         toetsen: s.toetsen,
