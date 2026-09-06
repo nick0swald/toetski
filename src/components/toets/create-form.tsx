@@ -34,7 +34,7 @@ import {
 } from "@/lib/toets/lees-bron";
 import { VOORBEELD_LESSTOF } from "@/lib/toets/sample";
 import { DEFAULT_CIJFER } from "@/lib/toets/cijfer";
-import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling, ToetsVersie } from "@/lib/toets/types";
+import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling, ToetsVersie, VraagsoortVoorkeur } from "@/lib/toets/types";
 import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
@@ -97,6 +97,7 @@ export function CreateForm() {
   const [duur, setDuur] = useState(50);
   const [punten, setPunten] = useState(40);
   const [aantal, setAantal] = useState(10);
+  const [vraagsoort, setVraagsoort] = useState<VraagsoortVoorkeur>("veel-mc");
   const [rtti, setRtti] = useState<RttiVerdeling>(
     rttiVoorMoeilijkheid(RTTI_PRESETS.onderbouw.verdeling, "normaal"),
   );
@@ -258,6 +259,7 @@ export function CreateForm() {
       duurMinuten: duur,
       doelPunten: punten,
       aantalVragen: aantal,
+      vraagsoortVoorkeur: vraagsoort,
       rttiDoel: rtti,
       bronmateriaal: v.bron,
       extraEisen: v.extra,
@@ -295,6 +297,22 @@ export function CreateForm() {
       setBusy(false);
     }
   }
+
+
+  const defaultRtti = rttiVoorJaar(leerjaar, "normaal");
+  const moeilijkheidStandaard =
+    moeilijkheid === "normaal" &&
+    rtti.R === defaultRtti.R &&
+    rtti.T1 === defaultRtti.T1 &&
+    rtti.T2 === defaultRtti.T2 &&
+    rtti.I === defaultRtti.I;
+  const cijferStandaard =
+    cijferNorm.model === DEFAULT_CIJFER.model &&
+    cijferNorm.cesuurPct === DEFAULT_CIJFER.cesuurPct &&
+    cijferNorm.exponent === DEFAULT_CIJFER.exponent;
+
+  const selectCls =
+    "flex h-12 w-full rounded-[var(--radius-md)] border border-transparent bg-paper px-4 text-sm text-fg";
 
   return (
     <form onSubmit={onSubmit} className="grid min-w-0 gap-5">
@@ -432,22 +450,19 @@ export function CreateForm() {
         ) : null}
       </div>
 
-      <details className="group min-w-0 overflow-hidden rounded-[var(--radius-xl)] bg-surface">
-        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-6 py-5 text-2xl font-bold tracking-tight text-brand hover:opacity-80 sm:px-8 [&::-webkit-details-marker]:hidden">
-          Instellingen
-          <ChevronDown className="size-5 shrink-0 text-muted transition-transform duration-[var(--motion-quick)] ease-[var(--ease-out)] group-open:rotate-180" />
-        </summary>
-        <div className="grid gap-6 px-6 pb-8 pt-1 sm:px-8">
-          <div className="grid gap-2">
-            <Label htmlFor="titel">Titel</Label>
-            <Input id="titel" value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Leeg = automatisch" />
-          </div>
+      <div className="grid min-w-0 gap-4 rounded-[var(--radius-xl)] bg-surface px-6 py-6 sm:px-8">
+        <h2 className="text-lg font-bold tracking-tight text-brand">Toetsgegevens</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="grid gap-2">
             <Label htmlFor="vak">Vak</Label>
-            <Input id="vak" value={vak} onChange={(e) => setVak(e.target.value)} placeholder="Leeg = automatisch uit de lesstof" />
+            <Input id="vak" value={vak} onChange={(e) => setVak(e.target.value)} placeholder="Auto uit lesstof" />
+          </div>
+          <div className="grid gap-2 sm:col-span-1 lg:col-span-1">
+            <Label htmlFor="titel">Titel / hoofdstuk</Label>
+            <Input id="titel" value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Auto uit lesstof" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="jaar">Leerjaar</Label>
+            <Label htmlFor="jaar">Klas</Label>
             <select
               id="jaar"
               value={leerjaar}
@@ -456,7 +471,7 @@ export function CreateForm() {
                 setLeerjaar(jaar);
                 setRtti(rttiVoorJaar(jaar, moeilijkheid));
               }}
-              className="flex h-12 w-full rounded-[var(--radius-md)] border border-transparent bg-paper px-4 text-sm text-fg"
+              className={selectCls}
             >
               {[1, 2, 3, 4].map((j) => (
                 <option key={j} value={j}>
@@ -465,28 +480,64 @@ export function CreateForm() {
               ))}
             </select>
           </div>
-          <Choice legend="Niveau" value={leerweg} onChange={setLeerweg} options={LEERWEGEN} />
-          <Choice legend="Versie" value={versie} onChange={setVersie} options={VERSIES} />
-          <div className="grid grid-cols-3 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="duur">Minuten</Label>
-              <Input id="duur" type="number" min={10} max={180} value={duur} onChange={(e) => setDuur(Number(e.target.value))} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="punten">Punten</Label>
-              <Input id="punten" type="number" min={10} max={100} value={punten} onChange={(e) => setPunten(Number(e.target.value))} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="aantal">Vragen</Label>
-              <Input id="aantal" type="number" min={4} max={16} value={aantal} onChange={(e) => setAantal(Number(e.target.value))} />
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="niveau">Niveau</Label>
+            <select
+              id="niveau"
+              value={leerweg}
+              onChange={(e) => setLeerweg(e.target.value as Leerweg)}
+              className={selectCls}
+            >
+              {LEERWEGEN.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label} — {l.hint}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid gap-2">
+            <Label htmlFor="duur">Minuten</Label>
+            <Input id="duur" type="number" min={10} max={180} value={duur} onChange={(e) => setDuur(Number(e.target.value))} />
           </div>
           <div className="grid gap-2">
-            <h3 className="text-sm font-semibold text-brand">Cijfernorm</h3>
-            <CijferNormControls value={cijferNorm} onChange={setCijferNorm} max={punten} />
+            <Label htmlFor="punten">Punten</Label>
+            <Input id="punten" type="number" min={10} max={100} value={punten} onChange={(e) => setPunten(Number(e.target.value))} />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="aantal">Vragen</Label>
+            <Input id="aantal" type="number" min={4} max={16} value={aantal} onChange={(e) => setAantal(Number(e.target.value))} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="vraagsoort">MC / open</Label>
+            <select
+              id="vraagsoort"
+              value={vraagsoort}
+              onChange={(e) => setVraagsoort(e.target.value as VraagsoortVoorkeur)}
+              className={selectCls}
+            >
+              <option value="veel-mc">Veel MC</option>
+              <option value="gemengd">Gemengd</option>
+              <option value="meer-open">Meer open</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <details className="group min-w-0 overflow-hidden rounded-[var(--radius-xl)] bg-surface">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 text-base font-bold tracking-tight text-brand hover:opacity-80 sm:px-8 [&::-webkit-details-marker]:hidden">
+          <span>
+            Moeilijkheid
+            <span className="ml-2 font-medium text-muted">
+              · {moeilijkheidStandaard ? "Standaard" : "Aangepast"}
+            </span>
+          </span>
+          <ChevronDown className="size-5 shrink-0 text-muted transition-transform duration-[var(--motion-quick)] ease-[var(--ease-out)] group-open:rotate-180" />
+        </summary>
+        <div className="grid gap-6 px-6 pb-8 pt-1 sm:px-8">
           <Choice
-            legend="Moeilijkheid"
+            legend="Niveau van de toets"
             value={moeilijkheid}
             onChange={(m) => {
               setMoeilijkheid(m);
@@ -495,6 +546,22 @@ export function CreateForm() {
             options={MOEILIJKHEDEN}
           />
           <RttiPicker value={rtti} onChange={setRtti} />
+          <Choice legend="Versie" value={versie} onChange={setVersie} options={VERSIES} />
+        </div>
+      </details>
+
+      <details className="group min-w-0 overflow-hidden rounded-[var(--radius-xl)] bg-surface">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 text-base font-bold tracking-tight text-brand hover:opacity-80 sm:px-8 [&::-webkit-details-marker]:hidden">
+          <span>
+            Cijferberekening
+            <span className="ml-2 font-medium text-muted">
+              · {cijferStandaard ? "Standaard" : "Aangepast"}
+            </span>
+          </span>
+          <ChevronDown className="size-5 shrink-0 text-muted transition-transform duration-[var(--motion-quick)] ease-[var(--ease-out)] group-open:rotate-180" />
+        </summary>
+        <div className="grid gap-4 px-6 pb-8 pt-1 sm:px-8">
+          <CijferNormControls value={cijferNorm} onChange={setCijferNorm} max={punten} />
         </div>
       </details>
 
