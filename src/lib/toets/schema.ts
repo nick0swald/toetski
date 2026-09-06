@@ -29,7 +29,8 @@ export const generateInputSchema = z.object({
   duurMinuten: z.coerce.number().int().min(10).max(180),
   doelPunten: z.coerce.number().int().min(10).max(100),
   aantalVragen: z.coerce.number().int().min(4).max(16),
-  vraagsoortVoorkeur: z.enum(["veel-mc", "gemengd", "meer-open"]).default("veel-mc"),
+  mcVragen: z.coerce.number().int().min(0).max(16).optional(),
+  openVragen: z.coerce.number().int().min(0).max(16).optional(),
   rttiDoel: z.object({
     R: z.coerce.number(),
     T1: z.coerce.number(),
