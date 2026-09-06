@@ -324,6 +324,8 @@ Niveau: ${data.leerweg}
 Leerjaar: ${data.leerjaar}
 RTTI-doel: R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
 ${feedback}
+Notities van de docent:
+${data.extraEisen?.trim() || "(geen)"}
 
 Bestaande toets:
 ${bron}`;

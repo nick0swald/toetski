@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRight, FileUp, Loader2 } from "lucide-react";
+import { ArrowRight, FileUp, Loader2, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,28 +9,41 @@ import { RTTI_PRESETS } from "@/lib/toets/constants";
 import { generateMatrijs } from "@/lib/toets/generate";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { VOORBEELD_TOETS_TEKST } from "@/lib/toets/sample";
-import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
+import { persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
 export function MatrijsForm() {
   const navigate = useNavigate();
-  const [bron, setBron] = useState("");
+  /** Ingelezen / geplakte toets — niet in het notitieveld. */
+  const [toetsTekst, setToetsTekst] = useState("");
+  const [bronLabel, setBronLabel] = useState<string | null>(null);
+  /** Alleen docentnotities / sturing. */
+  const [notities, setNotities] = useState("");
   const [feedback, setFeedback] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stap, setStap] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [bestandsnaam, setBestandsnaam] = useState<string | null>(null);
 
   const stappen = feedback
     ? ["Toets lezen", "Vragen en RTTI toewijzen", "Toetsmatrijs", "Feedback", "Word-bestand"]
     : ["Toets lezen", "Vragen en RTTI toewijzen", "Toetsmatrijs", "Word-bestand"];
-  const canSubmit = bron.trim().length > 0 && !busy;
+  const canSubmit = toetsTekst.trim().length > 0 && !busy;
+
+  function zetToets(tekst: string, label: string) {
+    setToetsTekst(tekst);
+    setBronLabel(label);
+  }
+
+  function wisToets() {
+    setToetsTekst("");
+    setBronLabel(null);
+  }
 
   async function onFile(list: FileList | null) {
     const file = list?.[0];
     if (!file) return;
     if (bestandTeGroot(file)) {
-      toast.error("Bestand is te groot (max. 40 MB).");
+      toast.error("Bestand is te groot (max. 50 MB).");
       return;
     }
     try {
@@ -40,17 +53,28 @@ export function MatrijsForm() {
         }
       });
       if (!result.text) {
-        toast.error("Geen tekst in dit bestand. Plak de toets.");
+        toast.error("Geen tekst in dit bestand.");
         return;
       }
-      setBron(result.text);
-      setBestandsnaam(file.name);
+      zetToets(result.text, file.name);
       toast.success(
         `Ingelezen: ${file.name}${result.paginaAantal ? ` · ${result.paginaAantal} pagina’s` : ""}`,
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Dit bestand kon niet worden gelezen. Plak de tekst.");
+      toast.error(err instanceof Error ? err.message : "Dit bestand kon niet worden gelezen.");
     }
+  }
+
+  /** Lange plak = toetsbron; korte tekst blijft notitie. */
+  function verwerkPlak(tekst: string): boolean {
+    const t = tekst.trim();
+    if (!t) return false;
+    const regels = t.split(/\n/).filter((r) => r.trim()).length;
+    const lijktToets = t.length >= 400 || regels >= 8;
+    if (!lijktToets) return false;
+    zetToets(t, "geplakte toets");
+    toast.success("Toets als bron gezet (notitieveld blijft leeg).");
+    return true;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -66,7 +90,8 @@ export function MatrijsForm() {
           leerweg: "KB",
           leerjaar: 2,
           rttiDoel: RTTI_PRESETS.onderbouw.verdeling,
-          bronmateriaal: bron,
+          bronmateriaal: toetsTekst,
+          extraEisen: notities.trim() || undefined,
           feedbackGewenst: feedback,
         },
       });
@@ -99,17 +124,30 @@ export function MatrijsForm() {
       <header>
         <h1 className="text-3xl font-bold tracking-tight text-brand sm:text-4xl">Matrijsmaker</h1>
         <p className="mt-3 max-w-xl text-pretty leading-relaxed text-muted">
-          Lever een bestaande toets in. Je krijgt alleen de RTTI-matrijs als Word-bestand.
+          Lever een bestaande toets in (bestand of plak). Het tekstveld blijft leeg voor notities.
         </p>
       </header>
       <div className="grid min-w-0 gap-4 rounded-[var(--radius-xl)] bg-surface p-6 sm:p-8">
-        <Label htmlFor="toets-bron">Bestaande toets</Label>
+        <div>
+          <Label htmlFor="matrijs-notities">Notities / sturing</Label>
+          <p className="mt-1 text-sm text-muted">Optioneel. De toets zelf komt via bestand of plakken — niet in dit veld.</p>
+        </div>
         <Textarea
-          id="toets-bron"
-          value={bron}
-          onChange={(e) => setBron(e.target.value)}
-          placeholder="Plak de toets, of kies een pdf of Word-bestand."
-          className="min-h-56 bg-paper"
+          id="matrijs-notities"
+          value={notities}
+          onChange={(e) => setNotities(e.target.value)}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files];
+            if (files.length) {
+              e.preventDefault();
+              void onFile(e.clipboardData.files);
+              return;
+            }
+            const text = e.clipboardData.getData("text/plain");
+            if (verwerkPlak(text)) e.preventDefault();
+          }}
+          placeholder="Optioneel: notities voor de AI, bijv. ‘tel bronvragen mee als T2’."
+          className="min-h-28 bg-paper"
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <label
@@ -117,26 +155,40 @@ export function MatrijsForm() {
             className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-[var(--radius-md)] bg-paper px-4 text-sm font-semibold text-brand hover:opacity-90"
           >
             <FileUp className="size-4 shrink-0" />
-            {bestandsnaam ?? "Bestand"}
+            Bestand
             <input
               id="toets-bestand"
               type="file"
               accept={BRON_ACCEPT}
               className="sr-only"
-              onChange={(e) => onFile(e.target.files)}
+              onChange={(e) => {
+                void onFile(e.target.files);
+                e.target.value = "";
+              }}
             />
           </label>
           <Button
             type="button"
             variant="ghost"
             onClick={() => {
-              setBron(VOORBEELD_TOETS_TEKST);
-              toast.success("Voorbeeldtoets ingevuld.");
+              zetToets(VOORBEELD_TOETS_TEKST, "Voorbeeldtoets");
+              toast.success("Voorbeeldtoets als bron gezet.");
             }}
           >
             Voorbeeldtoets
           </Button>
         </div>
+        {bronLabel ? (
+          <div className="flex min-w-0 items-center gap-2 rounded-[var(--radius-md)] bg-paper px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-brand">{bronLabel}</span>
+            <span className="text-xs text-muted">toetsbron</span>
+            <Button type="button" variant="ghost" size="icon" aria-label="Bron verwijderen" onClick={wisToets}>
+              <X className="size-4" />
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Nog geen toetsbron — kies een bestand of plak de toets (lange plak wordt bron).</p>
+        )}
         <label className="flex min-h-11 items-center gap-3 text-sm">
           <input
             type="checkbox"
