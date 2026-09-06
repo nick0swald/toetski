@@ -67,11 +67,9 @@ async function callGrok(messages: { role: string; content: string }[], maxTokens
     },
     signal: AbortSignal.timeout(180000),
     body: JSON.stringify({
-      model: "grok-4.3",
+      model: "grok-4.20-0309-non-reasoning",
       temperature: 0.4,
       max_tokens: maxTokens,
-      // Keep non-reasoning so large toets JSON finishes under Vercel time limits.
-      reasoning_effort: "none",
       response_format: { type: "json_object" },
       messages,
     }),
