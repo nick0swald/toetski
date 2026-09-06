@@ -482,7 +482,7 @@ export function CreateForm() {
 
       <div className="grid min-w-0 gap-4 rounded-[var(--radius-xl)] bg-surface px-6 py-6 sm:px-8">
         <h2 className="text-lg font-bold tracking-tight text-brand">Toetsgegevens</h2>
-        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.7fr)_4.5rem_4.5rem] gap-2 sm:gap-3">
+        <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)_minmax(0,1.1fr)] gap-x-2 gap-y-4 sm:gap-x-3">
           <div className="grid gap-2">
             <Label htmlFor="vak">Vak</Label>
             <Input id="vak" value={vak} onChange={(e) => setVak(e.target.value)} placeholder="Auto" />
@@ -491,77 +491,96 @@ export function CreateForm() {
             <Label htmlFor="titel">Titel / hoofdstuk</Label>
             <Input id="titel" value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Auto" />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="jaar">Klas</Label>
-            <select
-              id="jaar"
-              value={leerjaar}
-              onChange={(e) => {
-                const jaar = Number(e.target.value) as 1 | 2 | 3 | 4;
-                setLeerjaar(jaar);
-                setRtti(rttiVoorJaar(jaar, moeilijkheid));
-              }}
-              className={selectCls}
-            >
-              {[1, 2, 3, 4].map((j) => (
-                <option key={j} value={j}>
-                  {j}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2">
+              <Label htmlFor="jaar">Klas</Label>
+              <select
+                id="jaar"
+                value={leerjaar}
+                onChange={(e) => {
+                  const jaar = Number(e.target.value) as 1 | 2 | 3 | 4;
+                  setLeerjaar(jaar);
+                  setRtti(rttiVoorJaar(jaar, moeilijkheid));
+                }}
+                className={selectCls}
+              >
+                {[1, 2, 3, 4].map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="niveau">Niveau</Label>
+              <select
+                id="niveau"
+                value={leerweg}
+                onChange={(e) => setLeerweg(e.target.value as Leerweg)}
+                className={selectCls}
+              >
+                {LEERWEGEN.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="niveau">Niveau</Label>
-            <select
-              id="niveau"
-              value={leerweg}
-              onChange={(e) => setLeerweg(e.target.value as Leerweg)}
-              className={selectCls}
-            >
-              {LEERWEGEN.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+
           <div className="grid gap-2">
             <Label htmlFor="duur">Minuten</Label>
             <Input id="duur" type="number" min={10} max={180} value={duur} onChange={(e) => setDuur(Number(e.target.value))} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2">
+              <Label htmlFor="mc">MC</Label>
+              <Input
+                id="mc"
+                type="number"
+                min={0}
+                max={16}
+                value={mcTekst}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setMcTekst(next);
+                  const m = Number(next);
+                  const o = Number(openTekst);
+                  if (next.trim() !== "" && openTekst.trim() !== "" && Number.isFinite(m) && Number.isFinite(o) && m >= 0 && o >= 0) {
+                    setPunten(Math.max(10, Math.min(100, Math.floor(m) * 1 + Math.floor(o) * 2)));
+                  }
+                }}
+                placeholder="auto"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="open">Open</Label>
+              <Input
+                id="open"
+                type="number"
+                min={0}
+                max={16}
+                value={openTekst}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setOpenTekst(next);
+                  const m = Number(mcTekst);
+                  const o = Number(next);
+                  if (mcTekst.trim() !== "" && next.trim() !== "" && Number.isFinite(m) && Number.isFinite(o) && m >= 0 && o >= 0) {
+                    setPunten(Math.max(10, Math.min(100, Math.floor(m) * 1 + Math.floor(o) * 2)));
+                  }
+                }}
+                placeholder="auto"
+              />
+            </div>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="punten">Punten</Label>
             <Input id="punten" type="number" min={10} max={100} value={punten} onChange={(e) => setPunten(Number(e.target.value))} />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="mc">MC</Label>
-            <Input
-              id="mc"
-              type="number"
-              min={0}
-              max={16}
-              value={mcTekst}
-              onChange={(e) => setMcTekst(e.target.value)}
-              placeholder="auto"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="open">Open</Label>
-            <Input
-              id="open"
-              type="number"
-              min={0}
-              max={16}
-              value={openTekst}
-              onChange={(e) => setOpenTekst(e.target.value)}
-              placeholder="auto"
-            />
-          </div>
         </div>
         <p className="text-xs leading-relaxed text-muted">
-          MC/Open leeg = auto: hoofdstuktoets → veel MC; dictee/schrijf → vooral open. Vul aantallen in als je het wilt vastzetten.
+          Kolommen lijn uit: vak↔minuten · titel↔MC/Open · klas+niveau↔punten. MC/Open leeg = auto. Beide ingevuld → punten ≈ MC×1 + open×2 (nog aanpasbaar).
         </p>
       </div>
 
