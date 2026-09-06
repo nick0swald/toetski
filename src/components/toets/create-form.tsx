@@ -268,15 +268,15 @@ export function CreateForm() {
       if (!t) return undefined;
       const n = Number(t);
       if (!Number.isFinite(n) || n < 0) return undefined;
-      return Math.min(16, Math.floor(n));
+      return Math.min(60, Math.floor(n));
     };
     const mcN = parseOpt(mcTekst);
     const openN = parseOpt(openTekst);
     const aantalVragen =
       mcN != null && openN != null
-        ? Math.max(4, Math.min(16, mcN + openN))
+        ? Math.max(4, Math.min(80, mcN + openN))
         : mcN != null || openN != null
-          ? Math.max(4, Math.min(16, (mcN ?? 0) + (openN ?? 0) + 4))
+          ? Math.max(4, Math.min(80, (mcN ?? 0) + (openN ?? 0) + 4))
           : 10;
         const input: GenerateInput = {
       titel: titel.trim(),
@@ -578,7 +578,7 @@ export function CreateForm() {
                 id="mc"
                 type="number"
                 min={0}
-                max={16}
+                max={60}
                 value={mcTekst}
                 onChange={(e) => setMcTekst(e.target.value)}
                 placeholder="auto"
@@ -593,7 +593,7 @@ export function CreateForm() {
                 id="open"
                 type="number"
                 min={0}
-                max={16}
+                max={40}
                 value={openTekst}
                 onChange={(e) => setOpenTekst(e.target.value)}
                 placeholder="auto"
