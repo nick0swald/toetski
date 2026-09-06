@@ -9,12 +9,11 @@ import { RTTI_PRESETS } from "@/lib/toets/constants";
 import { generateMatrijs } from "@/lib/toets/generate";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { VOORBEELD_TOETS_TEKST } from "@/lib/toets/sample";
-import { useToetsStore } from "@/store/toets-store";
+import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
 export function MatrijsForm() {
   const navigate = useNavigate();
-  const upsert = useToetsStore((s) => s.upsert);
   const [bron, setBron] = useState("");
   const [feedback, setFeedback] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,7 +75,7 @@ export function MatrijsForm() {
         toast.error(result.error);
         return;
       }
-      upsert(result.toets);
+      const toetsId = await persistToetsBeforeNavigate(result.toets);
       try {
         const { downloadMatrijsDocx } = await import("@/lib/toets/docx-export");
         await downloadMatrijsDocx(result.toets);
@@ -84,7 +83,7 @@ export function MatrijsForm() {
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Download geblokkeerd. Tik Word op de matrijs.");
       }
-      navigate({ to: "/toets/$id", params: { id: result.toets.id } });
+      navigate({ to: "/toets/$id", params: { id: toetsId } });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Het maken van de matrijs is mislukt.";
       setError(msg);

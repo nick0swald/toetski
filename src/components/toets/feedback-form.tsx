@@ -10,13 +10,12 @@ import { generateToets } from "@/lib/toets/generate";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { totaalPunten } from "@/lib/toets/rtti";
 import { kwaliteitAlsTekst, samenstellenFeedback, vorigeSamenvatting } from "@/lib/toets/text";
-import { useToetsStore } from "@/store/toets-store";
+import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
 export function FeedbackForm({ startId }: { startId?: string }) {
   const navigate = useNavigate();
   const toetsen = useToetsStore((s) => s.toetsen.filter((t) => t.soort !== "matrijs"));
-  const upsert = useToetsStore((s) => s.upsert);
   const stuurdocument = useToetsStore((s) => s.stuurdocument);
   const ensureVoorbeeld = useToetsStore((s) => s.ensureVoorbeeld);
   const [id, setId] = useState(startId ?? "");
@@ -99,7 +98,7 @@ export function FeedbackForm({ startId }: { startId?: string }) {
         toast.error(result.error);
         return;
       }
-      upsert(result.toets);
+      const toetsId = await persistToetsBeforeNavigate(result.toets);
       try {
         const { downloadPakketDocx } = await import("@/lib/toets/docx-export");
         await downloadPakketDocx(result.toets);
@@ -107,7 +106,7 @@ export function FeedbackForm({ startId }: { startId?: string }) {
       } catch {
         toast.error("Download geblokkeerd. Tik Word op de toets.");
       }
-      navigate({ to: "/toets/$id", params: { id: result.toets.id } });
+      navigate({ to: "/toets/$id", params: { id: toetsId } });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Aanpassen mislukt.";
       setError(msg);

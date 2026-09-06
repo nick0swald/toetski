@@ -35,7 +35,7 @@ import {
 import { VOORBEELD_LESSTOF } from "@/lib/toets/sample";
 import { DEFAULT_CIJFER } from "@/lib/toets/cijfer";
 import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling, ToetsVersie } from "@/lib/toets/types";
-import { useToetsStore } from "@/store/toets-store";
+import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
 const STAPPEN = ["Lesstof lezen", "Toetsmatrijs met RTTI", "Vragen in Cito-stijl", "Nakijkmodel en Word-bestand"];
@@ -72,7 +72,6 @@ function veldenUitStukken(stukken: Stuk[]): {
 
 export function CreateForm() {
   const navigate = useNavigate();
-  const upsert = useToetsStore((s) => s.upsert);
   const stuurdocument = useToetsStore((s) => s.stuurdocument);
   const [titel, setTitel] = useState("");
   const [vak, setVak] = useState("");
@@ -265,7 +264,7 @@ export function CreateForm() {
         toast.error(result.error);
         return;
       }
-      upsert(result.toets);
+      const toetsId = await persistToetsBeforeNavigate(result.toets);
       try {
         const { downloadPakketDocx } = await import("@/lib/toets/docx-export");
         await downloadPakketDocx(result.toets);
@@ -273,7 +272,7 @@ export function CreateForm() {
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Download werd geblokkeerd. Tik Word op de toets.");
       }
-      navigate({ to: "/toets/$id", params: { id: result.toets.id } });
+      navigate({ to: "/toets/$id", params: { id: toetsId } });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Er ging iets mis bij het maken.";
       setError(msg);

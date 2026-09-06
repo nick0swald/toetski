@@ -107,15 +107,41 @@ export const useToetsStore = create<ToetsStore>()(
       }),
       merge: (persisted, current) => {
         const p = persisted as { toetsen?: GegenereerdeToets[]; stuurdocument?: string } | undefined;
-        const toetsen = Array.isArray(p?.toetsen)
+        const persistedToetsen = Array.isArray(p?.toetsen)
           ? p.toetsen.map((t) => normalizeToets(t))
-          : current.toetsen;
+          : [];
+        // In-memory wins on id collision so a late rehydrate cannot wipe a fresh upsert.
+        const byId = new Map<string, GegenereerdeToets>();
+        for (const t of persistedToetsen) byId.set(t.id, t);
+        for (const t of current.toetsen) byId.set(t.id, t);
         return {
           ...current,
-          toetsen,
+          toetsen: Array.from(byId.values()),
           stuurdocument: typeof p?.stuurdocument === "string" ? p.stuurdocument : current.stuurdocument,
         };
       },
     },
   ),
 );
+
+/** Wait until persist has hydrated, then re-upsert so navigation cannot lose the toets. */
+export async function persistToetsBeforeNavigate(toets: GegenereerdeToets): Promise<string> {
+  const id = toets?.id?.trim();
+  if (!id) throw new Error("Gegenereerde toets mist een id.");
+  useToetsStore.getState().upsert(toets);
+  await new Promise<void>((resolve) => {
+    if (useToetsStore.persist.hasHydrated()) {
+      resolve();
+      return;
+    }
+    const unsub = useToetsStore.persist.onFinishHydration(() => {
+      unsub();
+      resolve();
+    });
+  });
+  // Re-apply after hydration so a late merge cannot drop this toets.
+  useToetsStore.getState().upsert(toets);
+  // localStorage writes are sync; yield one tick so subscribers see the update.
+  await Promise.resolve();
+  return id;
+}

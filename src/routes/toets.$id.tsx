@@ -45,7 +45,16 @@ function ToetsPage() {
   const { id } = Route.useParams();
   const hydrated = useHydrated();
   const stored = useToetsStore((s) => s.toetsen.find((t) => t.id === id));
-  const raw = stored ?? (id === "voorbeeld-fotosynthese" ? maakVoorbeeldToets() : undefined);
+  const [retryTick, setRetryTick] = useState(0);
+  useEffect(() => {
+    if (!hydrated || stored || retryTick >= 12) return;
+    const t = window.setTimeout(() => setRetryTick((n) => n + 1), 40);
+    return () => window.clearTimeout(t);
+  }, [hydrated, stored, retryTick, id]);
+  const raw =
+    stored ??
+    (retryTick > 0 ? useToetsStore.getState().byId(id) : undefined) ??
+    (id === "voorbeeld-fotosynthese" ? maakVoorbeeldToets() : undefined);
   const toets = raw ? withDefaults(raw) : undefined;
   const updateVraag = useToetsStore((s) => s.updateVraag);
   const updateNakijk = useToetsStore((s) => s.updateNakijk);
@@ -65,7 +74,7 @@ function ToetsPage() {
 
   const titel = toets?.meta.titel ?? "Toets";
 
-  if (!hydrated) {
+  if (!hydrated || (!toets && retryTick < 12)) {
     return (
       <AppShell>
         <main className="mx-auto max-w-3xl px-5 py-16 text-muted">Toets laden…</main>
