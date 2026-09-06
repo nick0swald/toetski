@@ -151,7 +151,7 @@ Titel: ${input.titel?.trim() || "(leid af uit de lesstof)"}
 Toetsduur: ${input.duurMinuten} minuten
 Aantal vragen (richtlijn): ${input.aantalVragen}
 Vraagverdeling: ${verdelingTekst}
-Streefmaximum: ${input.doelPunten} punten
+Streefmaximum: ${input.doelPunten} punten (richtlijn; passend bij toetsduur en moeilijkheid, tenzij de docent anders stuurt)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
 Versie: ${input.versie ?? "A"}
 Moeilijkheid: ${moeTekst}

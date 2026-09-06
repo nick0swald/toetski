@@ -93,7 +93,7 @@ export function CreateForm() {
   const [leerjaar, setLeerjaar] = useState<1 | 2 | 3 | 4>(2);
   const [moeilijkheid, setMoeilijkheid] = useState<Moeilijkheid>("normaal");
   const [duur, setDuur] = useState(45);
-  const [punten, setPunten] = useState(40);
+  const [puntenTekst, setPuntenTekst] = useState("");
   const [mcTekst, setMcTekst] = useState("");
   const [openTekst, setOpenTekst] = useState("");
   const [rtti, setRtti] = useState<RttiVerdeling>(
@@ -284,7 +284,13 @@ export function CreateForm() {
       leerweg,
       leerjaar,
       duurMinuten: duur,
-      doelPunten: punten,
+      doelPunten: (() => {
+        const raw = puntenTekst.trim();
+        if (!raw) return schatPunten(duur, moeilijkheid);
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return schatPunten(duur, moeilijkheid);
+        return Math.max(10, Math.min(100, Math.floor(n)));
+      })(),
       aantalVragen,
       mcVragen: mcN,
       openVragen: openN,
@@ -338,6 +344,13 @@ export function CreateForm() {
     cijferNorm.model === DEFAULT_CIJFER.model &&
     cijferNorm.cesuurPct === DEFAULT_CIJFER.cesuurPct &&
     cijferNorm.exponent === DEFAULT_CIJFER.exponent;
+
+  function schatPunten(minuten: number, m: Moeilijkheid): number {
+    let p = Math.round((Math.max(10, minuten) / 45) * 40);
+    if (m === "makkelijk") p = Math.round(p * 0.9);
+    if (m === "moeilijk") p = Math.round(p * 1.15);
+    return Math.max(10, Math.min(100, p));
+  }
 
   const selectCls =
     "flex h-12 w-full rounded-[var(--radius-md)] border border-transparent bg-paper px-4 text-sm text-fg";
@@ -539,15 +552,7 @@ export function CreateForm() {
                 min={0}
                 max={16}
                 value={mcTekst}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setMcTekst(next);
-                  const m = Number(next);
-                  const o = Number(openTekst);
-                  if (next.trim() !== "" && openTekst.trim() !== "" && Number.isFinite(m) && Number.isFinite(o) && m >= 0 && o >= 0) {
-                    setPunten(Math.max(10, Math.min(100, Math.floor(m) * 1 + Math.floor(o) * 2)));
-                  }
-                }}
+                onChange={(e) => setMcTekst(e.target.value)}
                 placeholder="auto"
               />
             </div>
@@ -559,26 +564,26 @@ export function CreateForm() {
                 min={0}
                 max={16}
                 value={openTekst}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setOpenTekst(next);
-                  const m = Number(mcTekst);
-                  const o = Number(next);
-                  if (mcTekst.trim() !== "" && next.trim() !== "" && Number.isFinite(m) && Number.isFinite(o) && m >= 0 && o >= 0) {
-                    setPunten(Math.max(10, Math.min(100, Math.floor(m) * 1 + Math.floor(o) * 2)));
-                  }
-                }}
+                onChange={(e) => setOpenTekst(e.target.value)}
                 placeholder="auto"
               />
             </div>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="punten">Punten</Label>
-            <Input id="punten" type="number" min={10} max={100} value={punten} onChange={(e) => setPunten(Number(e.target.value))} />
+            <Input
+              id="punten"
+              type="number"
+              min={10}
+              max={100}
+              value={puntenTekst}
+              onChange={(e) => setPuntenTekst(e.target.value)}
+              placeholder="auto"
+            />
           </div>
         </div>
         <p className="text-xs leading-relaxed text-muted">
-          Kolommen lijn uit: vak↔minuten · titel↔MC/Open · klas+niveau↔punten. MC/Open leeg = auto. Beide ingevuld → punten ≈ MC×1 + open×2 (nog aanpasbaar).
+          MC/Open of punten leeg = auto. Punten-auto hangt af van minuten en moeilijkheid (nu ~{schatPunten(duur, moeilijkheid)}p).
         </p>
       </div>
 
@@ -617,7 +622,7 @@ export function CreateForm() {
           <ChevronDown className="size-5 shrink-0 text-muted transition-transform duration-[var(--motion-quick)] ease-[var(--ease-out)] group-open:rotate-180" />
         </summary>
         <div className="grid gap-4 px-6 pb-8 pt-1 sm:px-8">
-          <CijferNormControls value={cijferNorm} onChange={setCijferNorm} max={punten} />
+          <CijferNormControls value={cijferNorm} onChange={setCijferNorm} max={puntenTekst.trim() ? Math.max(10, Math.min(100, Number(puntenTekst) || 40)) : schatPunten(duur, moeilijkheid)} />
         </div>
       </details>
 
