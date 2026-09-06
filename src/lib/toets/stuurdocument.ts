@@ -15,8 +15,20 @@ export const STUUR_SECTIES: StuurSectie[] = [
     id: "lesstof",
     titel: "Lesstof is leidend",
     punten: [
-      "Vragen dekken alleen de aangeleverde lesstof. Verzin geen extra hoofdstukken.",
+      "Vragen dekken alleen de aangeleverde lesstof (leerdoelen, begrippen, formules, vaardigheden). Verzin geen extra hoofdstukken.",
+      "De lesstof is het KADER, geen plakboek: haal er geen oefeningen of vraagzinnen letterlijk uit.",
       "Een antwoordenboek is alleen voor het nakijkmodel. Zet geen antwoorden in de leerlingtoets.",
+    ],
+  },
+  {
+    id: "origineel",
+    titel: "Originele vragen",
+    punten: [
+      "Verzin ALTIJD nieuwe toetsvragen: nieuwe contexten, namen, getallen en situaties.",
+      "Neem geen opgaven, voorbeelden of vraagstammen letterlijk of herkenbaar over uit leerlingboek, werkboek of antwoordenboek.",
+      "Vermijd formuleringen als \"zoals in het boek\", \"uit de lesstof\", \"zoals in het voorbeeld\" of \"zoals hierboven in de tekst\".",
+      "Herkader wel dezelfde leerdoelen en RTTI-eisen; verander oppervlaktekenmerken genoeg zodat het geen kopie is.",
+      "Bij berekeningen: andere getallen dan in de aangeleverde voorbeelden, met dezelfde soort redenering.",
     ],
   },
   {
