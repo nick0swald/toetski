@@ -4,6 +4,7 @@ import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
 import { generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
 import { bouwSystemPrompt } from "./stuurdocument";
+import { balanceMcAntwoorden } from "./mc-balance";
 import type { GegenereerdeToets } from "./types";
 
 function stripJsonFence(raw: string): string {
@@ -238,12 +239,14 @@ export const generateToets = createServerFn({ method: "POST" })
       }
       const payload = generatedPayloadSchema.parse(parsed);
       const rttiDoel = normaliseer(data.rttiDoel);
-      const vragen = payload.vragen.map((q, i) => ({
+      const vragenRaw = payload.vragen.map((q, i) => ({
         ...q,
         nummer: q.nummer || i + 1,
         context: q.context || undefined,
         opties: q.opties?.length ? q.opties : undefined,
       }));
+      // MC-sleutels husselen: voorkomt dat antwoorden op één letter clusteren (klassieke LLM-bias).
+      const { vragen, nakijkmodel } = balanceMcAntwoorden(vragenRaw, payload.nakijkmodel);
       const max = totaalPunten(vragen);
       const cijferNorm = data.cijferNorm;
       const cesuurP = cesuurPunten(max, cijferNorm);
@@ -271,7 +274,7 @@ export const generateToets = createServerFn({ method: "POST" })
           moeilijkheid: data.moeilijkheid,
         },
         vragen,
-        nakijkmodel: payload.nakijkmodel,
+        nakijkmodel,
         cesuur: {
           nTerm: 1,
           cesuurPunten: cesuurP,
