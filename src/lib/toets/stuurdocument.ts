@@ -70,7 +70,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Eenvoudige open vraag (één kort antwoord, noem/geef): 1–2 punten.",
       "Overige open/berekening/bronvragen: punten = aantal zinvolle nakijkstappen (1 punt per stap/criterium), passend bij RTTI-zwaarte.",
       "Totaal dicht bij het gevraagde maximum.",
-      "Hoofdstuktoetsen: bij voldoende lesstof relatief veel meerkeuzevragen (ruwweg ≥ helft), tenzij de docent een andere verdeling vraagt.",
+      "Vraagverdeling: tenzij de docent aantallen vastzet — hoofdstuktoets met voldoende stof → relatief veel MC; dictee/schrijf/luister/spreek → vooral open, weinig of geen MC.",
       "Nakijkmodel: per vraag een modelantwoord én puntenverdeelsleutel.",
     ],
   },
