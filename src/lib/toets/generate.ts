@@ -182,6 +182,8 @@ async function callGrok(
       model: "grok-4.3",
       temperature: 0.4,
       max_tokens: maxTokens,
+      // Reasoning models can sit near the timeout; keep this non-reasoning/fast.
+      reasoning_effort: "none",
       response_format: { type: "json_object" },
       messages,
     }),
