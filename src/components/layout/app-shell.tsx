@@ -4,10 +4,9 @@ import { LeafMark } from "@/components/brand/mark";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { to: "/", label: "Toets maken", exact: true },
-  { to: "/cijfer", label: "Cijfer berekenen" },
+  { to: "/", label: "Toetsmaker", exact: true },
   { to: "/matrijsmaker", label: "Matrijsmaker" },
-  { to: "/feedback", label: "Feedback" },
+  { to: "/cijfer", label: "Cijfer" },
 ] as const;
 
 export function AppShell({
@@ -32,7 +31,7 @@ export function AppShell({
           </div>
           <nav
             aria-label="Hoofdmenu"
-            className="grid grid-cols-2 gap-1 rounded-[var(--radius-lg)] bg-surface p-1 sm:grid-cols-4"
+            className="grid grid-cols-3 gap-1 rounded-[var(--radius-lg)] bg-surface p-1"
           >
             {TABS.map((tab) => (
               <NavItem key={tab.to} to={tab.to} exact={"exact" in tab && tab.exact}>
@@ -97,7 +96,7 @@ function NavItem({
   children,
   exact,
 }: {
-  to: "/" | "/cijfer" | "/matrijsmaker" | "/feedback";
+  to: "/" | "/matrijsmaker" | "/cijfer";
   children: ReactNode;
   exact?: boolean;
 }) {
