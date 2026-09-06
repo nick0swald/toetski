@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Aeres Toetsmaker",
+      "hasCanvas": false,
+      "bodyTextLen": 954,
+      "bodyTextHash": "94538dd12d2792fa5296d3341ae17072e0350407e17782ad5feb21bd965df17b",
+      "bodyTextPrefix": "Naar inhoud Aeres Toetsmaker Toets maken Cijfer berekenen Matrij",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Aeres Toetsmaker",
+      "hasCanvas": false,
+      "bodyTextLen": 954,
+      "bodyTextHash": "94538dd12d2792fa5296d3341ae17072e0350407e17782ad5feb21bd965df17b",
+      "bodyTextPrefix": "Naar inhoud Aeres Toetsmaker Toets maken Cijfer berekenen Matrij",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
