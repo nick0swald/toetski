@@ -14,6 +14,7 @@ import { Route as CijferRouteImport } from './routes/cijfer'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as MatrijsRouteImport } from './routes/matrijs'
 import { Route as MatrijsmakerRouteImport } from './routes/matrijsmaker'
+import { Route as StuurdocumentRouteImport } from './routes/stuurdocument'
 import { Route as WerkwijzeRouteImport } from './routes/werkwijze'
 import { Route as ToetsIdRouteImport } from './routes/toets.$id'
 
@@ -42,6 +43,11 @@ const MatrijsmakerRoute = MatrijsmakerRouteImport.update({
   path: '/matrijsmaker',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StuurdocumentRoute = StuurdocumentRouteImport.update({
+  id: '/stuurdocument',
+  path: '/stuurdocument',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WerkwijzeRoute = WerkwijzeRouteImport.update({
   id: '/werkwijze',
   path: '/werkwijze',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/feedback': typeof FeedbackRoute
   '/matrijs': typeof MatrijsRoute
   '/matrijsmaker': typeof MatrijsmakerRoute
+  '/stuurdocument': typeof StuurdocumentRoute
   '/werkwijze': typeof WerkwijzeRoute
   '/toets/$id': typeof ToetsIdRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/feedback': typeof FeedbackRoute
   '/matrijs': typeof MatrijsRoute
   '/matrijsmaker': typeof MatrijsmakerRoute
+  '/stuurdocument': typeof StuurdocumentRoute
   '/werkwijze': typeof WerkwijzeRoute
   '/toets/$id': typeof ToetsIdRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/feedback': typeof FeedbackRoute
   '/matrijs': typeof MatrijsRoute
   '/matrijsmaker': typeof MatrijsmakerRoute
+  '/stuurdocument': typeof StuurdocumentRoute
   '/werkwijze': typeof WerkwijzeRoute
   '/toets/$id': typeof ToetsIdRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/matrijs'
     | '/matrijsmaker'
+    | '/stuurdocument'
     | '/werkwijze'
     | '/toets/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/matrijs'
     | '/matrijsmaker'
+    | '/stuurdocument'
     | '/werkwijze'
     | '/toets/$id'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/matrijs'
     | '/matrijsmaker'
+    | '/stuurdocument'
     | '/werkwijze'
     | '/toets/$id'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   FeedbackRoute: typeof FeedbackRoute
   MatrijsRoute: typeof MatrijsRoute
   MatrijsmakerRoute: typeof MatrijsmakerRoute
+  StuurdocumentRoute: typeof StuurdocumentRoute
   WerkwijzeRoute: typeof WerkwijzeRoute
   ToetsIdRoute: typeof ToetsIdRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MatrijsmakerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stuurdocument': {
+      id: '/stuurdocument'
+      path: '/stuurdocument'
+      fullPath: '/stuurdocument'
+      preLoaderRoute: typeof StuurdocumentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/werkwijze': {
       id: '/werkwijze'
       path: '/werkwijze'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackRoute: FeedbackRoute,
   MatrijsRoute: MatrijsRoute,
   MatrijsmakerRoute: MatrijsmakerRoute,
+  StuurdocumentRoute: StuurdocumentRoute,
   WerkwijzeRoute: WerkwijzeRoute,
   ToetsIdRoute: ToetsIdRoute,
 }

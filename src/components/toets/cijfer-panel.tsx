@@ -2,13 +2,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { fieldClassName, Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  cesuurZin,
-  cijferVanScore,
-  formuleTekst,
-  nlCijfer,
-  omzetTabel,
-} from "@/lib/toets/cijfer";
+import { cesuurPunten, cijferVanScore, formuleTekst, nlCijfer, omzetTabel } from "@/lib/toets/cijfer";
 import type { CijferNorm } from "@/lib/toets/types";
 import { cn } from "@/lib/utils";
 import { CijferCurve } from "./cijfer-curve";
@@ -36,6 +30,7 @@ export function CijferPanel({
   const clampedScore = Math.max(0, Math.min(safeMax, score));
   const tabel = useMemo(() => omzetTabel(safeMax, norm), [safeMax, norm]);
   const cijfer = cijferVanScore(clampedScore, safeMax, norm);
+  const cesuur = cesuurPunten(safeMax, norm);
 
   return (
     <div className="grid gap-8">
@@ -43,12 +38,10 @@ export function CijferPanel({
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-brand">{titel}</h2>
           <p className="mt-1 text-sm text-muted">
-            Zet punten om naar een cijfer van 1,0 tot 10,0. De tabel kun je als
-            Word bewaren.
+            Zet punten om naar een cijfer van 1,0 tot 10,0. De tabel kun je als Word bewaren.
           </p>
         </div>
       ) : null}
-
       {maxEditable ? (
         <div className="grid gap-2 sm:max-w-xs">
           <Label htmlFor="max-punten">Maximumscore</Label>
@@ -66,12 +59,11 @@ export function CijferPanel({
           />
         </div>
       ) : null}
-
       <CijferNormControls value={norm} onChange={onChange} max={safeMax} showCurve={false} />
-
       <p className="text-sm font-medium">{formuleTekst(norm, safeMax)}</p>
-      <p className="text-sm font-medium">{cesuurZin(safeMax, norm)}</p>
-
+      <p className="text-sm">
+        Cesuur: <span className="tabular-nums font-medium">{cesuur}</span> van {safeMax} punten voor een 5,5
+      </p>
       <div>
         <Label htmlFor="score">Behaalde punten</Label>
         <div className="mt-2 flex flex-wrap items-end gap-4">
@@ -92,16 +84,12 @@ export function CijferPanel({
             onChange={(e) => setScore(Number(e.target.value))}
             className={cn(fieldClassName, "w-20 tabular-nums")}
           />
-          <p className="font-display text-4xl tabular-nums tracking-tight text-brand">
-            {nlCijfer(cijfer)}
-          </p>
+          <p className="font-display text-4xl tabular-nums tracking-tight text-brand">{nlCijfer(cijfer)}</p>
         </div>
       </div>
-
       <div className="rounded-[var(--radius-md)] bg-paper p-4">
         <CijferCurve max={safeMax} norm={norm} score={clampedScore} height={200} />
       </div>
-
       <div className="overflow-x-auto rounded-[var(--radius-md)] bg-paper p-4">
         <table className="w-full min-w-[16rem] text-left text-sm">
           <thead>
@@ -112,14 +100,7 @@ export function CijferPanel({
           </thead>
           <tbody>
             {tabel.map((r) => (
-              <tr
-                key={r.punten}
-                className={
-                  r.punten === clampedScore
-                    ? "bg-primary/10"
-                    : "border-b border-border"
-                }
-              >
+              <tr key={r.punten} className={r.punten === clampedScore ? "bg-primary/10" : "border-b border-border"}>
                 <td className="py-1.5 pr-3 tabular-nums">{r.punten}</td>
                 <td className="py-1.5 tabular-nums">{nlCijfer(r.cijfer)}</td>
               </tr>
@@ -127,7 +108,6 @@ export function CijferPanel({
           </tbody>
         </table>
       </div>
-
       <Button type="button" onClick={() => void onExport()}>
         Omzettingstabel als Word
       </Button>

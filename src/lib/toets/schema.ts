@@ -35,9 +35,10 @@ export const generateInputSchema = z.object({
     T2: z.coerce.number(),
     I: z.coerce.number(),
   }),
-  bronmateriaal: z.string().max(16000).optional().default(""),
+  bronmateriaal: z.string().max(60000).optional().default(""),
   extraEisen: z.string().max(4000).optional().default(""),
   bronUrl: z.string().max(500).optional(),
+  antwoordenmateriaal: z.string().max(40000).optional().default(""),
   versie: z.enum(["A", "B"]).default("A"),
   moeilijkheid: z.enum(["makkelijk", "normaal", "moeilijk"]).default("normaal"),
   cijferNorm: cijferNormSchema.default({
@@ -45,11 +46,11 @@ export const generateInputSchema = z.object({
     cesuurPct: 55,
     exponent: 1,
   }),
-  vakProfiel: z.enum(["generiek", "nask"]).optional().default("generiek"),
   ronde: z.coerce.number().int().min(1).max(12).optional().default(1),
   parentId: z.string().max(80).optional(),
   feedback: z.string().max(8000).optional().default(""),
   vorigeSamenvatting: z.string().max(8000).optional().default(""),
+  stuurdocument: z.string().max(20000).optional(),
 });
 
 const vraagSchema = z.object({
@@ -63,7 +64,6 @@ const vraagSchema = z.object({
       if (x.includes("invul")) return "invul";
       if (x.includes("bereken")) return "berekening";
       if (x.includes("bron")) return "bronvraag";
-      if (x.includes("open")) return "open";
       return "open";
     })
     .pipe(vraagType),
@@ -82,28 +82,6 @@ const vraagSchema = z.object({
     .array(z.object({ letter: z.string(), tekst: z.string() }))
     .nullish()
     .transform((v) => v ?? []),
-  tabel: z
-    .object({
-      koppen: z.array(z.string()).default([]),
-      rijen: z.array(z.array(z.string())).default([]),
-    })
-    .nullish()
-    .transform((v) => (v && v.koppen.length ? v : undefined)),
-  grafiek: z
-    .object({
-      titel: z.string().optional().default(""),
-      xLabel: z.string().optional().default(""),
-      yLabel: z.string().optional().default(""),
-      punten: z.array(
-        z.object({
-          x: z.coerce.number(),
-          y: z.coerce.number(),
-          label: z.string().optional(),
-        }),
-      ),
-    })
-    .nullish()
-    .transform((v) => (v && v.punten.length ? v : undefined)),
 });
 
 const nakijkSchema = z.object({
@@ -113,6 +91,20 @@ const nakijkSchema = z.object({
     .array(z.object({ punt: z.coerce.number(), criterium: z.string() }))
     .default([]),
   nietToekennen: z.array(z.string()).optional().default([]),
+});
+
+const kwaliteitSchema = z.object({
+  samenvatting: z.string(),
+  punten: z.array(
+    z.object({
+      criterium: z.string(),
+      oordeel: z
+        .string()
+        .transform((s) => s.toLowerCase())
+        .pipe(z.enum(["voldoet", "aandacht", "ontbreekt"])),
+      toelichting: z.string(),
+    }),
+  ),
 });
 
 export const generatedPayloadSchema = z.object({
@@ -134,35 +126,7 @@ export const generatedPayloadSchema = z.object({
     toelichting: z.string(),
     formule: z.string().default("cijfer = 1 + 9 × (score / maximum)"),
   }),
-  kwaliteit: z.object({
-    samenvatting: z.string(),
-    punten: z.array(
-      z.object({
-        criterium: z.string(),
-        oordeel: z
-          .string()
-          .transform((s) => s.toLowerCase())
-          .pipe(z.enum(["voldoet", "aandacht", "ontbreekt"])),
-        toelichting: z.string(),
-      }),
-    ),
-  }),
-});
-
-export type GeneratedPayload = z.infer<typeof generatedPayloadSchema>;
-
-const kwaliteitSchema = z.object({
-  samenvatting: z.string(),
-  punten: z.array(
-    z.object({
-      criterium: z.string(),
-      oordeel: z
-        .string()
-        .transform((s) => s.toLowerCase())
-        .pipe(z.enum(["voldoet", "aandacht", "ontbreekt"])),
-      toelichting: z.string(),
-    }),
-  ),
+  kwaliteit: kwaliteitSchema,
 });
 
 export const matrijsInputSchema = z.object({

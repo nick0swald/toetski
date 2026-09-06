@@ -9,7 +9,8 @@ import { NakijkSheet } from "@/components/toets/nakijk-sheet";
 import { ToetsSheet } from "@/components/toets/toets-sheet";
 import { Button } from "@/components/ui/button";
 import { withDefaults } from "@/lib/toets/defaults";
-import { maakVoorbeeldNaskToets, maakVoorbeeldToets } from "@/lib/toets/sample";
+import { maakVoorbeeldToets } from "@/lib/toets/sample";
+import { cesuurPunten, formuleTekst } from "@/lib/toets/cijfer";
 import { totaalPunten } from "@/lib/toets/rtti";
 import { useToetsStore } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
@@ -44,13 +45,7 @@ function ToetsPage() {
   const { id } = Route.useParams();
   const hydrated = useHydrated();
   const stored = useToetsStore((s) => s.toetsen.find((t) => t.id === id));
-  const raw =
-    stored ??
-    (id === "voorbeeld-fotosynthese"
-      ? maakVoorbeeldToets()
-      : id === "voorbeeld-nask-kas"
-        ? maakVoorbeeldNaskToets()
-        : undefined);
+  const raw = stored ?? (id === "voorbeeld-fotosynthese" ? maakVoorbeeldToets() : undefined);
   const toets = raw ? withDefaults(raw) : undefined;
   const updateVraag = useToetsStore((s) => s.updateVraag);
   const updateNakijk = useToetsStore((s) => s.updateNakijk);
@@ -59,12 +54,10 @@ function ToetsPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const ensureVoorbeeld = useToetsStore((s) => s.ensureVoorbeeld);
-  const ensureVoorbeeldNask = useToetsStore((s) => s.ensureVoorbeeldNask);
 
   useEffect(() => {
     if (id === "voorbeeld-fotosynthese" && !stored) ensureVoorbeeld();
-    if (id === "voorbeeld-nask-kas" && !stored) ensureVoorbeeldNask();
-  }, [id, stored, ensureVoorbeeld, ensureVoorbeeldNask]);
+  }, [id, stored, ensureVoorbeeld]);
 
   useEffect(() => {
     if (stored?.soort === "matrijs") setTab("matrijs");
@@ -85,10 +78,7 @@ function ToetsPage() {
       <AppShell>
         <main className="mx-auto max-w-3xl px-5 py-16">
           <h1 className="text-2xl font-medium tracking-tight">Toets niet gevonden</h1>
-          <p className="mt-3 text-sm text-muted">
-            Hij staat niet (meer) op dit apparaat. Maak een nieuwe, of open het
-            voorbeeld vanaf de startpagina.
-          </p>
+          <p className="mt-3 text-sm text-muted">Hij staat niet (meer) op dit apparaat.</p>
           <Button asChild className="mt-6">
             <Link to="/">Nieuwe toets</Link>
           </Button>
@@ -99,25 +89,19 @@ function ToetsPage() {
 
   const current = toets;
   const isMatrijs = toets.soort === "matrijs";
-  const heeftFeedback =
-    Boolean(toets.feedbackGewenst) || toets.kwaliteit.punten.length > 0;
+  const heeftFeedback = Boolean(toets.feedbackGewenst) || toets.kwaliteit.punten.length > 0;
   const tabs = TABS.filter((t) => {
-    if (isMatrijs && (t.id === "toets" || t.id === "cijfer" || t.id === "nakijk"))
-      return false;
+    if (isMatrijs && (t.id === "toets" || t.id === "cijfer" || t.id === "nakijk")) return false;
     if (t.id === "nakijk" && toets.nakijkmodel.length === 0) return false;
     if (t.id === "kwaliteit" && isMatrijs && !heeftFeedback) return false;
     return true;
   });
-  const visibleTab: TabId = tabs.some((t) => t.id === tab)
-    ? tab
-    : (tabs[0]?.id ?? "toets");
+  const visibleTab: TabId = tabs.some((t) => t.id === tab) ? tab : (tabs[0]?.id ?? "toets");
 
   async function saveDocx() {
     setSaving(true);
     try {
-      const { downloadMatrijsDocx, downloadPakketDocx } = await import(
-        "@/lib/toets/docx-export"
-      );
+      const { downloadMatrijsDocx, downloadPakketDocx } = await import("@/lib/toets/docx-export");
       if (current.soort === "matrijs") await downloadMatrijsDocx(current);
       else await downloadPakketDocx(current);
       toast.success("Word-bestand gedownload");
@@ -140,63 +124,57 @@ function ToetsPage() {
               <h1 className="truncate text-2xl font-bold tracking-tight text-brand">{titel}</h1>
               <p className="mt-1 text-sm text-muted">
                 {isMatrijs
-                  ? `Matrijs · ${toets.meta.vak} · ${toets.meta.leerweg} klas ${toets.meta.leerjaar}${heeftFeedback ? " · met feedback" : ""}`
-                  : `${toets.meta.vak} · ${toets.meta.leerweg} klas ${toets.meta.leerjaar} · versie ${toets.meta.versie} · ${toets.meta.moeilijkheid}`}
+                  ? `Matrijs · ${toets.meta.vak} · ${toets.meta.leerweg} klas ${toets.meta.leerjaar}`
+                  : `${toets.meta.vak} · ${toets.meta.leerweg} klas ${toets.meta.leerjaar} · versie ${toets.meta.versie}`}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               {isMatrijs ? null : (
-                <Button
-                  type="button"
-                  variant={editing ? "default" : "ghost"}
-                  onClick={() => setEditing((v) => !v)}
-                >
-                  {editing ? "Klaar" : "Bewerken"}
-                </Button>
+                <>
+                  <Button type="button" variant={editing ? "default" : "ghost"} onClick={() => setEditing((v) => !v)}>
+                    {editing ? "Klaar" : "Bewerken"}
+                  </Button>
+                  <Button asChild variant="ghost">
+                    <Link to="/feedback" search={{ id: toets.id }}>
+                      Wijzigingen
+                    </Link>
+                  </Button>
+                </>
               )}
-              <Button type="button" disabled={saving} onClick={saveDocx} variant="ink">
+              <Button type="button" disabled={saving} onClick={saveDocx}>
                 {saving ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
                 Word
               </Button>
             </div>
           </div>
           {tabs.length > 1 ? (
-          <nav className="mt-6 flex gap-1 overflow-x-auto rounded-[var(--radius-lg)] bg-surface p-1">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={cn(
-                  "min-h-11 shrink-0 rounded-[var(--radius-md)] px-3 text-sm whitespace-nowrap",
-                  visibleTab === t.id
-                    ? "bg-brand font-semibold text-paper"
-                    : "text-muted hover:text-brand",
-                )}
-              >
-                {t.id === "kwaliteit" && isMatrijs ? "Feedback" : t.label}
-              </button>
-            ))}
-          </nav>
+            <nav className="mt-6 flex gap-1 overflow-x-auto rounded-[var(--radius-lg)] bg-surface p-1">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    "min-h-11 shrink-0 rounded-[var(--radius-md)] px-3 text-sm whitespace-nowrap",
+                    visibleTab === t.id ? "bg-brand font-semibold text-paper" : "text-muted hover:text-brand",
+                  )}
+                >
+                  {t.id === "kwaliteit" && isMatrijs ? "Feedback" : t.label}
+                </button>
+              ))}
+            </nav>
           ) : null}
         </div>
       </div>
-
       <div className="mx-auto max-w-[210mm] px-3 py-8 sm:px-6">
         {visibleTab === "toets" ? (
-          <ToetsSheet
-            toets={toets}
-            editing={editing}
-            onStam={(nummer, stam) => updateVraag(toets.id, nummer, { stam })}
-          />
+          <ToetsSheet toets={toets} editing={editing} onStam={(nummer, stam) => updateVraag(toets.id, nummer, { stam })} />
         ) : null}
         {visibleTab === "nakijk" ? (
           <NakijkSheet
             toets={toets}
             editing={editing}
-            onAntwoord={(nummer, modelantwoord) =>
-              updateNakijk(toets.id, nummer, { modelantwoord })
-            }
+            onAntwoord={(nummer, modelantwoord) => updateNakijk(toets.id, nummer, { modelantwoord })}
           />
         ) : null}
         {visibleTab === "matrijs" ? <MatrijsSheet toets={toets} /> : null}
@@ -207,7 +185,15 @@ function ToetsPage() {
                 max={totaalPunten(toets.vragen)}
                 norm={toets.cijferNorm}
                 onChange={(norm) => {
-                  update(toets.id, { cijferNorm: norm });
+                  const max = totaalPunten(toets.vragen);
+                  update(toets.id, {
+                    cijferNorm: norm,
+                    cesuur: {
+                      ...toets.cesuur,
+                      cesuurPunten: cesuurPunten(max, norm),
+                      formule: formuleTekst(norm, max),
+                    },
+                  });
                 }}
                 onExport={async () => {
                   const { downloadCijferDocx } = await import("@/lib/toets/docx-export");
@@ -223,14 +209,17 @@ function ToetsPage() {
             <h2 className="text-2xl font-bold tracking-tight text-brand">
               {isMatrijs ? "Feedback op deze toets" : "SLO-kwaliteitscheck"}
             </h2>
-            <p className="mt-3 leading-relaxed text-muted">
-              {isMatrijs
-                ? "Beoordeling van de bestaande toets. Jouw vakoordeel gaat hier boven."
-                : "Automatische beoordeling bij constructie. Jouw vakoordeel gaat hier boven."}
-            </p>
+            <p className="mt-3 leading-relaxed text-muted">Jouw vakoordeel gaat hier boven.</p>
             <div className="mt-6">
               <KwaliteitPanel toets={toets} />
             </div>
+            {isMatrijs ? null : (
+              <Button asChild className="mt-6">
+                <Link to="/feedback" search={{ id: toets.id }}>
+                  Wijzigingen doorgeven
+                </Link>
+              </Button>
+            )}
           </div>
         ) : null}
       </div>

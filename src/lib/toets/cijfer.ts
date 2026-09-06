@@ -17,7 +17,6 @@ export const VOLDOENDE_PRESETS: Record<
   moeilijker: { cesuurPct: 65, exponent: 1.45 },
 };
 
-/** @deprecated alias — toetsmoeilijkheid en cijfercurve zijn onafhankelijk. */
 export const MOEILIJKHEID_CIJFER: Record<
   Moeilijkheid,
   Pick<CijferNorm, "cesuurPct" | "exponent">
@@ -36,7 +35,6 @@ export function roundCijfer(n: number): number {
   return Math.round((clamped + Number.EPSILON) * 10) / 10;
 }
 
-/** Onrounded cijfer — voor de grafiek, zodat de lijn niet zaagt op 0,1-stappen. */
 export function cijferVanScoreRaw(
   score: number,
   max: number,
@@ -45,16 +43,11 @@ export function cijferVanScoreRaw(
   if (max <= 0) return 1;
   const p = Math.max(0, Math.min(max, score));
   const x = p / max;
-
-  if (norm.model === "lineair") {
-    return 1 + 9 * x;
-  }
-
+  if (norm.model === "lineair") return 1 + 9 * x;
   if (norm.model === "exponentieel") {
     const k = Math.max(0.3, Math.min(3, norm.exponent || 1));
     return 1 + 9 * Math.pow(x, k);
   }
-
   const cesuurScore = (Math.max(5, Math.min(95, norm.cesuurPct)) / 100) * max;
   if (p <= cesuurScore) {
     if (cesuurScore <= 0) return 1;
@@ -78,44 +71,6 @@ export function cesuurPunten(max: number, norm: CijferNorm): number {
     if (cijferVanScore(s, max, norm) >= 5.5) return s;
   }
   return Math.round(0.5 * max);
-}
-
-export function cesuurModelLabel(model: CijferModel): string {
-  if (model === "lineair") return "lineair";
-  if (model === "gebroken") return "gebroken grafiek";
-  return "exponentieel";
-}
-
-/** Eén zin, overal hetzelfde: nakijkmodel, cijfertabel, instructie. */
-export function cesuurZin(max: number, norm: CijferNorm): string {
-  const x = cesuurPunten(Math.max(1, max), norm);
-  return `Cesuur 5,5 bij ${x}/${Math.max(1, max)} punten (${cesuurModelLabel(norm.model)}).`;
-}
-
-/** Vervangt tegenstrijdige cesuurzinnen in de instructie door de canonieke zin. */
-export function instructiesMetCesuur(
-  raw: string[],
-  max: number,
-  norm: CijferNorm,
-): string[] {
-  const zin = cesuurZin(max, norm);
-  const filtered = raw.filter(
-    (s) => !/cesuur|n-?\s*term|cijfer\s*=|5\s*,\s*5 bij/i.test(s),
-  );
-  return [zin, ...filtered];
-}
-
-export function bevestigingsRegel(opts: {
-  leerweg: string;
-  leerjaar: number;
-  versie: string;
-  moeilijkheid: string;
-  duurMinuten: number;
-  aantalVragen: number;
-  doelPunten: number;
-  model: CijferModel | string;
-}): string {
-  return `${opts.leerweg} · leerjaar ${opts.leerjaar} · versie ${opts.versie} · ${opts.moeilijkheid} · ${opts.duurMinuten} min · ${opts.aantalVragen} vragen · max ${opts.doelPunten} pt · norm ${opts.model}`;
 }
 
 export function formuleTekst(norm: CijferNorm, max: number): string {
@@ -159,24 +114,17 @@ export function voldoendeHint(norm: CijferNorm): string {
   }
   if (norm.model === "gebroken") {
     const pct = Math.round(norm.cesuurPct);
-    if (pct < 50)
-      return `Voldoende is relatief makkelijk: 5,5 bij ${pct}% van de punten.`;
-    if (pct > 58)
-      return `Voldoende is relatief moeilijk: 5,5 bij ${pct}% van de punten.`;
+    if (pct < 50) return `Voldoende is relatief makkelijk: 5,5 bij ${pct}% van de punten.`;
+    if (pct > 58) return `Voldoende is relatief moeilijk: 5,5 bij ${pct}% van de punten.`;
     return `Voldoende rond de gebruikelijke cesuur: 5,5 bij ${pct}% van de punten.`;
   }
   const k = norm.exponent;
-  if (k < 0.9)
-    return "De kromme buigt omhoog: middelste scores krijgen een hoger cijfer (voldoende makkelijker).";
-  if (k > 1.15)
-    return "De kromme buigt omlaag: middelste scores krijgen een lager cijfer (voldoende moeilijker).";
+  if (k < 0.9) return "De kromme buigt omhoog: middelste scores krijgen een hoger cijfer.";
+  if (k > 1.15) return "De kromme buigt omlaag: middelste scores krijgen een lager cijfer.";
   return "Bijna lineair. Schuif de exponent om de voldoende te verzwaren of te verlichten.";
 }
 
-export function omzetTabel(
-  max: number,
-  norm: CijferNorm,
-): { punten: number; cijfer: number }[] {
+export function omzetTabel(max: number, norm: CijferNorm): { punten: number; cijfer: number }[] {
   const out: { punten: number; cijfer: number }[] = [];
   const step = max > 50 ? 2 : 1;
   for (let p = 0; p <= max; p += step) {
@@ -188,35 +136,29 @@ export function omzetTabel(
   return out;
 }
 
-/**
- * Punten voor de grafiek. Lineair en gebroken: alleen de knikpunten
- * (strakke segmenten). Exponentieel: dichte, onafgeronde samples.
- */
 export function curvePunten(
   max: number,
   norm: CijferNorm,
-  samples = 64,
 ): { p: number; cijfer: number }[] {
-  const safeMax = Math.max(1, max);
   if (norm.model === "lineair") {
     return [
       { p: 0, cijfer: 1 },
-      { p: safeMax, cijfer: 10 },
+      { p: max, cijfer: 10 },
     ];
   }
   if (norm.model === "gebroken") {
-    const ces = (Math.max(5, Math.min(95, norm.cesuurPct)) / 100) * safeMax;
+    const ces = (Math.max(5, Math.min(95, norm.cesuurPct)) / 100) * max;
     return [
       { p: 0, cijfer: 1 },
       { p: ces, cijfer: 5.5 },
-      { p: safeMax, cijfer: 10 },
+      { p: max, cijfer: 10 },
     ];
   }
-  const n = Math.max(16, Math.min(samples, 96));
+  const n = 64;
   const out: { p: number; cijfer: number }[] = [];
   for (let i = 0; i <= n; i++) {
-    const p = (i / n) * safeMax;
-    out.push({ p, cijfer: cijferVanScoreRaw(p, safeMax, norm) });
+    const p = (i / n) * max;
+    out.push({ p, cijfer: cijferVanScoreRaw(p, max, norm) });
   }
   return out;
 }

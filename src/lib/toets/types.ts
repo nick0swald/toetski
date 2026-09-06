@@ -12,7 +12,6 @@ export type KwaliteitOordeel = "voldoet" | "aandacht" | "ontbreekt";
 export type ToetsVersie = "A" | "B";
 export type Moeilijkheid = "makkelijk" | "normaal" | "moeilijk";
 export type CijferModel = "lineair" | "gebroken" | "exponentieel";
-export type VakProfiel = "generiek" | "nask";
 
 export interface RttiVerdeling {
   R: number;
@@ -23,9 +22,7 @@ export interface RttiVerdeling {
 
 export interface CijferNorm {
   model: CijferModel;
-  /** Percentage van het maximum waarbij het cijfer 5,5 is (gebroken grafiek). */
   cesuurPct: number;
-  /** k in 1 + 9 × (score/max)^k. 1 = lineair; lager = voldoende makkelijker. */
   exponent: number;
 }
 
@@ -48,18 +45,6 @@ export interface VraagOptie {
   tekst: string;
 }
 
-export interface VraagTabel {
-  koppen: string[];
-  rijen: string[][];
-}
-
-export interface VraagGrafiek {
-  titel: string;
-  xLabel: string;
-  yLabel: string;
-  punten: { x: number; y: number; label?: string }[];
-}
-
 export interface Vraag {
   nummer: number;
   type: VraagType;
@@ -70,8 +55,6 @@ export interface Vraag {
   context?: string;
   stam: string;
   opties?: VraagOptie[];
-  tabel?: VraagTabel;
-  grafiek?: VraagGrafiek;
 }
 
 export interface PuntenCriterium {
@@ -131,10 +114,8 @@ export interface GegenereerdeToets {
   cesuur: Cesuur;
   matrijs: Toetsmatrijs;
   kwaliteit: Kwaliteitscheck;
-  /** "matrijs" = bestaande toets, alleen matrijs (+ optionele feedback). */
   soort?: "toets" | "matrijs";
   feedbackGewenst?: boolean;
-  vakProfiel?: VakProfiel;
 }
 
 export interface GenerateInput {
@@ -149,6 +130,7 @@ export interface GenerateInput {
   bronmateriaal: string;
   extraEisen: string;
   bronUrl?: string;
+  antwoordenmateriaal?: string;
   versie: ToetsVersie;
   moeilijkheid: Moeilijkheid;
   cijferNorm: CijferNorm;
@@ -156,7 +138,7 @@ export interface GenerateInput {
   parentId?: string;
   feedback?: string;
   vorigeSamenvatting?: string;
-  vakProfiel?: VakProfiel;
+  stuurdocument?: string;
 }
 
 export interface GenerateMatrijsInput {

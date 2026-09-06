@@ -11,13 +11,11 @@ export const Route = createFileRoute("/cijfer")({ component: CijferPage });
 function CijferPage() {
   const [max, setMax] = useState(40);
   const [norm, setNorm] = useState<CijferNorm>(DEFAULT_CIJFER);
-
   return (
     <AppShell>
       <Page>
         <PageIntro title="Cijfer berekenen">
-          Punten omzetten zonder een toets te maken. De tabel download je als
-          Word.
+          Punten omzetten zonder een toets te maken. De tabel download je als Word.
         </PageIntro>
         <div className="rounded-[var(--radius-xl)] bg-surface p-6 sm:p-8">
           <CijferPanel
@@ -30,11 +28,7 @@ function CijferPage() {
             onExport={async () => {
               try {
                 const { downloadCijferTabelDocx } = await import("@/lib/toets/docx-export");
-                await downloadCijferTabelDocx({
-                  titel: "Cijferomzetting",
-                  max,
-                  norm,
-                });
+                await downloadCijferTabelDocx({ titel: "Cijferomzetting", max, norm });
                 toast.success("Word-bestand gedownload");
               } catch (err) {
                 toast.error(err instanceof Error ? err.message : "Download mislukt");

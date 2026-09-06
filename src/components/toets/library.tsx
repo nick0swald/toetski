@@ -8,7 +8,6 @@ export function Library() {
   const toetsen = useToetsStore((s) => s.toetsen);
   const remove = useToetsStore((s) => s.remove);
   const ensureVoorbeeld = useToetsStore((s) => s.ensureVoorbeeld);
-  const ensureVoorbeeldNask = useToetsStore((s) => s.ensureVoorbeeldNask);
   const navigate = useNavigate();
 
   return (
@@ -17,53 +16,31 @@ export function Library() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-brand">Opgeslagen</h2>
           <p className="mt-2 leading-relaxed text-muted">
-            Blijft op dit apparaat. Tik Voorbeeld voor een kant-en-klare toets,
-            zonder te wachten.
+            Blijft op dit apparaat. Tik Voorbeeld voor een kant-en-klare toets, zonder te wachten.
           </p>
         </div>
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              const t = ensureVoorbeeld();
-              navigate({ to: "/toets/$id", params: { id: t.id } });
-            }}
-          >
-            Voorbeeld
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              const t = ensureVoorbeeldNask();
-              navigate({ to: "/toets/$id", params: { id: t.id } });
-            }}
-          >
-            Voorbeeld NaSk
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            const t = ensureVoorbeeld();
+            navigate({ to: "/toets/$id", params: { id: t.id } });
+          }}
+        >
+          Voorbeeld
+        </Button>
       </div>
-
       {toetsen.length === 0 ? (
         <p className="mt-5 leading-relaxed text-muted">Nog geen toetsen op dit apparaat.</p>
       ) : (
         <ul className="mt-5">
           {toetsen.map((t) => (
-            <li
-              key={t.id}
-              className="flex items-center gap-3 border-t border-brand/10 py-2 first:border-t-0 first:pt-0"
-            >
-              <Link
-                to="/toets/$id"
-                params={{ id: t.id }}
-                className="min-w-0 flex-1 py-2"
-              >
+            <li key={t.id} className="flex items-center gap-3 border-t border-brand/10 py-2 first:border-t-0 first:pt-0">
+              <Link to="/toets/$id" params={{ id: t.id }} className="min-w-0 flex-1 py-2">
                 <p className="truncate font-semibold text-brand">{t.meta.titel}</p>
                 <p className="mt-0.5 text-sm text-muted">
                   {t.soort === "matrijs" ? "Matrijs · " : ""}
-                  {t.meta.vak} · {t.meta.leerweg} {t.meta.leerjaar} ·{" "}
-                  {t.meta.versie ?? "A"}
+                  {t.meta.vak} · {t.meta.leerweg} {t.meta.leerjaar}
                 </p>
               </Link>
               <Button
@@ -84,13 +61,7 @@ export function Library() {
               >
                 <FileDown className="size-4" />
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Verwijderen"
-                onClick={() => remove(t.id)}
-              >
+              <Button type="button" variant="ghost" size="icon" aria-label="Verwijderen" onClick={() => remove(t.id)}>
                 <Trash2 className="size-4" />
               </Button>
             </li>

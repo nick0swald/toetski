@@ -13,12 +13,9 @@ export function Choice<T extends string>({
   legend?: string;
   hint?: string;
 }) {
-  const selected = options.find((o) => o.id === value);
   return (
     <fieldset className="grid gap-2">
-      {legend ? (
-        <legend className="text-sm font-semibold text-brand">{legend}</legend>
-      ) : null}
+      {legend ? <legend className="text-sm font-semibold text-brand">{legend}</legend> : null}
       {hint ? <p className="text-sm text-muted">{hint}</p> : null}
       <div className="flex min-w-0 rounded-[var(--radius-lg)] bg-paper p-1">
         {options.map((o) => (
@@ -29,18 +26,13 @@ export function Choice<T extends string>({
             onClick={() => onChange(o.id)}
             className={cn(
               "min-h-11 min-w-0 flex-1 rounded-[var(--radius-md)] px-2 text-sm transition-[background-color,color] duration-[var(--motion-quick)] ease-[var(--ease-out)]",
-              value === o.id
-                ? "bg-brand font-semibold text-paper"
-                : "text-muted hover:text-brand",
+              value === o.id ? "bg-brand font-semibold text-paper" : "text-muted hover:text-brand",
             )}
           >
             {o.label}
           </button>
         ))}
       </div>
-      {selected?.hint ? (
-        <p className="text-sm text-muted">{selected.hint}</p>
-      ) : null}
     </fieldset>
   );
 }

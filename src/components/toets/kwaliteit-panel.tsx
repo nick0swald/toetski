@@ -18,8 +18,8 @@ export function KwaliteitPanel({ toets }: { toets: GegenereerdeToets }) {
               <h3 className="font-semibold text-brand">{p.criterium}</h3>
               <span
                 className={cn(
-                  "text-sm",
-                  p.oordeel === "voldoet" ? "text-brand font-semibold" : "text-warn font-semibold",
+                  "text-sm font-semibold",
+                  p.oordeel === "voldoet" ? "text-brand" : "text-warn",
                 )}
               >
                 {label[p.oordeel]}
@@ -30,8 +30,8 @@ export function KwaliteitPanel({ toets }: { toets: GegenereerdeToets }) {
         ))}
       </ul>
       <p className="text-sm leading-relaxed text-muted">
-        Dit is een constructiehulp. De vakdocent blijft verantwoordelijk voor inhoud,
-        cesuur en afname. Loop de toets altijd na voordat leerlingen hem maken.
+        Dit is een constructiehulp. De vakdocent blijft verantwoordelijk voor inhoud, cesuur en
+        afname.
       </p>
     </div>
   );

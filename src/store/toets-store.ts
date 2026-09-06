@@ -1,91 +1,121 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { herbouwMatrijs } from "@/lib/toets/rtti";
-import { maakVoorbeeldNaskToets, maakVoorbeeldToets } from "@/lib/toets/sample";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { cesuurPunten, formuleTekst } from "@/lib/toets/cijfer";
 import { withDefaults } from "@/lib/toets/defaults";
-import type { CijferNorm, GegenereerdeToets, Vraag } from "@/lib/toets/types";
+import { herbouwMatrijs, totaalPunten } from "@/lib/toets/rtti";
+import { maakVoorbeeldToets } from "@/lib/toets/sample";
+import type { CijferNorm, GegenereerdeToets, NakijkItem, Vraag } from "@/lib/toets/types";
 
-interface ToetsState {
+const VOORBEELD_ID = "voorbeeld-fotosynthese";
+
+function normalizeToets(t: GegenereerdeToets): GegenereerdeToets {
+  const next = withDefaults(herbouwMatrijs(t));
+  const max = totaalPunten(next.vragen);
+  return {
+    ...next,
+    cesuur: {
+      ...next.cesuur,
+      cesuurPunten: cesuurPunten(max, next.cijferNorm),
+      formule: formuleTekst(next.cijferNorm, max),
+    },
+  };
+}
+
+export type ToetsStore = {
   toetsen: GegenereerdeToets[];
-  upsert: (toets: GegenereerdeToets) => void;
+  stuurdocument: string;
+  setStuurdocument: (tekst: string) => void;
+  resetStuurdocument: () => void;
+  upsert: (t: GegenereerdeToets) => void;
   update: (id: string, patch: Partial<GegenereerdeToets>) => void;
   updateVraag: (id: string, nummer: number, patch: Partial<Vraag>) => void;
-  updateNakijk: (
-    id: string,
-    nummer: number,
-    patch: Partial<GegenereerdeToets["nakijkmodel"][number]>,
-  ) => void;
+  updateNakijk: (id: string, nummer: number, patch: Partial<NakijkItem>) => void;
   updateCijferNorm: (id: string, norm: CijferNorm) => void;
   remove: (id: string) => void;
   byId: (id: string) => GegenereerdeToets | undefined;
   ensureVoorbeeld: () => GegenereerdeToets;
-  ensureVoorbeeldNask: () => GegenereerdeToets;
-}
+};
 
-export const useToetsStore = create<ToetsState>()(
+export const useToetsStore = create<ToetsStore>()(
   persist(
     (set, get) => ({
       toetsen: [],
-      upsert: (toets) =>
-        set((s) => ({
-          toetsen: [withDefaults(toets), ...s.toetsen.filter((t) => t.id !== toets.id)],
-        })),
-      update: (id, patch) =>
+      stuurdocument: "",
+      setStuurdocument: (tekst) => set({ stuurdocument: tekst.trim() }),
+      resetStuurdocument: () => set({ stuurdocument: "" }),
+      upsert: (t) => {
+        const next = normalizeToets(t);
+        set((s) => {
+          const i = s.toetsen.findIndex((x) => x.id === next.id);
+          const toetsen =
+            i >= 0 ? s.toetsen.map((x, idx) => (idx === i ? next : x)) : [next, ...s.toetsen];
+          return { toetsen };
+        });
+      },
+      update: (id, patch) => {
         set((s) => ({
           toetsen: s.toetsen.map((t) =>
-            t.id === id ? herbouwMatrijs(withDefaults({ ...t, ...patch })) : t,
+            t.id === id ? normalizeToets({ ...t, ...patch, id: t.id }) : t,
           ),
-        })),
-      updateVraag: (id, nummer, patch) =>
+        }));
+      },
+      updateVraag: (id, nummer, patch) => {
         set((s) => ({
           toetsen: s.toetsen.map((t) => {
             if (t.id !== id) return t;
-            const vragen = t.vragen.map((q) =>
-              q.nummer === nummer ? { ...q, ...patch } : q,
+            const vragen = t.vragen.map((q) => (q.nummer === nummer ? { ...q, ...patch } : q));
+            return normalizeToets({ ...t, vragen });
+          }),
+        }));
+      },
+      updateNakijk: (id, nummer, patch) => {
+        set((s) => ({
+          toetsen: s.toetsen.map((t) => {
+            if (t.id !== id) return t;
+            const nakijkmodel = t.nakijkmodel.map((n) =>
+              n.nummer === nummer ? { ...n, ...patch } : n,
             );
-            return herbouwMatrijs(withDefaults({ ...t, vragen }));
+            return withDefaults({ ...t, nakijkmodel });
           }),
-        })),
-      updateNakijk: (id, nummer, patch) =>
-        set((s) => ({
-          toetsen: s.toetsen.map((t) => {
-            if (t.id !== id) return t;
-            return withDefaults({
-              ...t,
-              nakijkmodel: t.nakijkmodel.map((n) =>
-                n.nummer === nummer ? { ...n, ...patch } : n,
-              ),
-            });
-          }),
-        })),
-      updateCijferNorm: (id, norm) =>
-        set((s) => ({
-          toetsen: s.toetsen.map((t) => {
-            if (t.id !== id) return t;
-            return withDefaults({ ...t, cijferNorm: norm });
-          }),
-        })),
-      remove: (id) =>
-        set((s) => ({ toetsen: s.toetsen.filter((t) => t.id !== id) })),
-      byId: (id) => {
-        const t = get().toetsen.find((x) => x.id === id);
-        return t ? withDefaults(t) : undefined;
+        }));
       },
+      updateCijferNorm: (id, norm) => {
+        set((s) => ({
+          toetsen: s.toetsen.map((t) =>
+            t.id === id ? normalizeToets({ ...t, cijferNorm: norm }) : t,
+          ),
+        }));
+      },
+      remove: (id) => {
+        set((s) => ({ toetsen: s.toetsen.filter((t) => t.id !== id) }));
+      },
+      byId: (id) => get().toetsen.find((t) => t.id === id),
       ensureVoorbeeld: () => {
-        const existing = get().toetsen.find((t) => t.id === "voorbeeld-fotosynthese");
-        if (existing) return withDefaults(existing);
-        const sample = maakVoorbeeldToets();
-        set((s) => ({ toetsen: [sample, ...s.toetsen] }));
-        return sample;
-      },
-      ensureVoorbeeldNask: () => {
-        const existing = get().toetsen.find((t) => t.id === "voorbeeld-nask-kas");
-        if (existing) return withDefaults(existing);
-        const sample = maakVoorbeeldNaskToets();
-        set((s) => ({ toetsen: [sample, ...s.toetsen] }));
-        return sample;
+        const existing = get().toetsen.find((t) => t.id === VOORBEELD_ID);
+        if (existing) return existing;
+        const voorbeeld = normalizeToets(maakVoorbeeldToets());
+        set((s) => ({ toetsen: [voorbeeld, ...s.toetsen] }));
+        return voorbeeld;
       },
     }),
-    { name: "aeres-toetsmaker" },
+    {
+      name: "ares058-toetsmaker",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        toetsen: s.toetsen,
+        stuurdocument: s.stuurdocument,
+      }),
+      merge: (persisted, current) => {
+        const p = persisted as { toetsen?: GegenereerdeToets[]; stuurdocument?: string } | undefined;
+        const toetsen = Array.isArray(p?.toetsen)
+          ? p.toetsen.map((t) => normalizeToets(t))
+          : current.toetsen;
+        return {
+          ...current,
+          toetsen,
+          stuurdocument: typeof p?.stuurdocument === "string" ? p.stuurdocument : current.stuurdocument,
+        };
+      },
+    },
   ),
 );

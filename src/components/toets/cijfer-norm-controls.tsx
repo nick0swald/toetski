@@ -38,12 +38,7 @@ export function CijferNormControls({
 
   return (
     <div className="grid gap-5">
-      <Choice
-        value={value.model}
-        onChange={(model) => onChange({ ...value, model })}
-        options={MODELS}
-      />
-
+      <Choice value={value.model} onChange={(model) => onChange({ ...value, model })} options={MODELS} />
       {value.model !== "lineair" && stand ? (
         <Choice
           legend="Halen van een 5,5"
@@ -52,7 +47,6 @@ export function CijferNormControls({
           options={STANDEN}
         />
       ) : null}
-
       {value.model === "gebroken" ? (
         <label className="grid gap-2">
           <span className="text-sm font-medium">
@@ -65,26 +59,15 @@ export function CijferNormControls({
             step={1}
             value={value.cesuurPct}
             onChange={(e) =>
-              onChange({
-                ...value,
-                model: "gebroken",
-                cesuurPct: Number(e.target.value),
-              })
+              onChange({ ...value, model: "gebroken", cesuurPct: Number(e.target.value) })
             }
             className="accent-primary"
           />
-          <span className="flex justify-between text-sm text-muted">
-            <span>Makkelijker</span>
-            <span>Moeilijker</span>
-          </span>
         </label>
       ) : null}
-
       {value.model === "exponentieel" ? (
         <label className="grid gap-2">
-          <span className="text-sm font-medium">
-            Kromming k = {value.exponent.toFixed(2)}
-          </span>
+          <span className="text-sm font-medium">Kromming k = {value.exponent.toFixed(2)}</span>
           <input
             type="range"
             min={0.5}
@@ -92,27 +75,17 @@ export function CijferNormControls({
             step={0.05}
             value={value.exponent}
             onChange={(e) =>
-              onChange({
-                ...value,
-                model: "exponentieel",
-                exponent: Number(e.target.value),
-              })
+              onChange({ ...value, model: "exponentieel", exponent: Number(e.target.value) })
             }
             className="accent-primary"
           />
-          <span className="flex justify-between text-sm text-muted">
-            <span>Makkelijker</span>
-            <span>Moeilijker</span>
-          </span>
         </label>
       ) : null}
-
       <p className="text-sm text-muted">{voldoendeHint(value)}</p>
       <p className="text-sm">
-        {modelLabel(value.model)} · 5,5 bij{" "}
-        <span className="tabular-nums font-medium">{ces}</span> van {max} punten
+        {modelLabel(value.model)} · 5,5 bij <span className="tabular-nums font-medium">{ces}</span> van {max}{" "}
+        punten
       </p>
-
       {showCurve ? (
         <div className="min-w-0 rounded-[var(--radius-md)] bg-paper p-4">
           <CijferCurve max={max} norm={value} height={168} />

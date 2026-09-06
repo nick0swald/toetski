@@ -1,36 +1,5 @@
-import {
-  cesuurPunten,
-  cijferVanScore,
-  curvePunten,
-  nlCijfer,
-} from "@/lib/toets/cijfer";
+import { cesuurPunten, cijferVanScore, curvePunten, nlCijfer } from "@/lib/toets/cijfer";
 import type { CijferNorm } from "@/lib/toets/types";
-
-function pathFromPoints(
-  pts: { x: number; y: number }[],
-  smooth: boolean,
-): string {
-  if (pts.length === 0) return "";
-  const fmt = (n: number) => n.toFixed(2);
-  if (!smooth || pts.length < 4) {
-    return pts
-      .map((pt, i) => `${i === 0 ? "M" : "L"} ${fmt(pt.x)} ${fmt(pt.y)}`)
-      .join(" ");
-  }
-  let d = `M ${fmt(pts[0].x)} ${fmt(pts[0].y)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] ?? p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${fmt(c1x)} ${fmt(c1y)}, ${fmt(c2x)} ${fmt(c2y)}, ${fmt(p2.x)} ${fmt(p2.y)}`;
-  }
-  return d;
-}
 
 export function CijferCurve({
   max,
@@ -52,8 +21,30 @@ export function CijferCurve({
   const pts = curvePunten(safeMax, norm);
   const xOf = (p: number) => pad.l + (p / safeMax) * innerW;
   const yOf = (c: number) => pad.t + (1 - (c - 1) / 9) * innerH;
-  const xy = pts.map((pt) => ({ x: xOf(pt.p), y: yOf(pt.cijfer) }));
-  const d = pathFromPoints(xy, norm.model === "exponentieel");
+
+  function pathD() {
+    const mapped = pts.map((pt) => ({ x: xOf(pt.p), y: yOf(pt.cijfer) }));
+    if (mapped.length < 2) return "";
+    if (norm.model !== "exponentieel" || mapped.length < 4) {
+      return mapped
+        .map((pt, i) => `${i === 0 ? "M" : "L"} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`)
+        .join(" ");
+    }
+    let d = `M ${mapped[0].x.toFixed(2)} ${mapped[0].y.toFixed(2)}`;
+    for (let i = 0; i < mapped.length - 1; i++) {
+      const p0 = mapped[i - 1] ?? mapped[i];
+      const p1 = mapped[i];
+      const p2 = mapped[i + 1];
+      const p3 = mapped[i + 2] ?? p2;
+      const c1x = p1.x + (p2.x - p0.x) / 6;
+      const c1y = p1.y + (p2.y - p0.y) / 6;
+      const c2x = p2.x - (p3.x - p1.x) / 6;
+      const c2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+    }
+    return d;
+  }
+
   const ces = cesuurPunten(safeMax, norm);
   const cesX = xOf(ces);
   const scoreC = score == null ? null : cijferVanScore(score, safeMax, norm);
@@ -66,7 +57,6 @@ export function CijferCurve({
       role="img"
       aria-label={`Cijfercurve ${norm.model}, 5,5 bij ${ces} van ${safeMax} punten`}
     >
-      <title>{`Cijfercurve: 0p = 1,0 · ${ces}p = 5,5 · ${safeMax}p = 10,0`}</title>
       <line x1={pad.l} y1={pad.t} x2={pad.l} y2={pad.t + innerH} stroke="currentColor" className="text-border" />
       <line
         x1={pad.l}
@@ -87,13 +77,7 @@ export function CijferCurve({
             strokeDasharray={tick === 5.5 ? "4 4" : undefined}
             className={tick === 5.5 ? "text-primary/40" : "text-border"}
           />
-          <text
-            x={pad.l - 6}
-            y={yOf(tick) + 3}
-            textAnchor="end"
-            className="fill-muted"
-            fontSize="10"
-          >
+          <text x={pad.l - 6} y={yOf(tick) + 3} textAnchor="end" className="fill-muted" fontSize="10">
             {nlCijfer(tick)}
           </text>
         </g>
@@ -108,13 +92,12 @@ export function CijferCurve({
         className="text-primary/50"
       />
       <path
-        d={d}
+        d={pathD()}
         fill="none"
         stroke="var(--color-primary)"
         strokeWidth="2.6"
         strokeLinecap="round"
         strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
       />
       {scoreC != null && score != null ? (
         <>
