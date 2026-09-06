@@ -93,6 +93,7 @@ function userPrompt(
     duurMinuten: number;
     doelPunten: number;
     aantalVragen: number;
+    vraagsoortVoorkeur?: "veel-mc" | "gemengd" | "meer-open";
     rttiDoel: { R: number; T1: number; T2: number; I: number };
     extraEisen?: string;
     antwoordenmateriaal?: string;
@@ -113,6 +114,13 @@ function userPrompt(
       : moe === "moeilijk"
         ? "MOEILIJK: meer T2/I, grotere denkstappen."
         : "NORMAAL: passend bij leerjaar en leerweg.";
+  const vs = input.vraagsoortVoorkeur ?? "veel-mc";
+  const vsTekst =
+    vs === "meer-open"
+      ? "MEER OPEN: minder meerkeuze, meer open/berekening/bronvragen."
+      : vs === "gemengd"
+        ? "GEMENGD: ongeveer half meerkeuze, half open/andere vormen."
+        : "VEEL MEERKEUZE: bij voldoende lesstof relatief veel MC (streef ≥ helft van de vragen), rest open/berekening passend bij de stof.";
   let feedbackBlok = "";
   if (input.feedback?.trim() || input.vorigeSamenvatting?.trim()) {
     feedbackBlok = `
@@ -136,7 +144,9 @@ Leerjaar: ${input.leerjaar}
 Titel: ${input.titel?.trim() || "(leid af uit de lesstof)"}
 Toetsduur: ${input.duurMinuten} minuten
 Aantal vragen: ${input.aantalVragen}
+Vraagsoorten: ${vsTekst}
 Streefmaximum: ${input.doelPunten} punten
+Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
 Versie: ${input.versie ?? "A"}
 Moeilijkheid: ${moeTekst}
 RTTI-doel: R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
