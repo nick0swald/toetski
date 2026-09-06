@@ -56,7 +56,7 @@ async function fetchBronUrl(url: string): Promise<string> {
   return text.replace(/\s+\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim().slice(0, 12000);
 }
 
-async function callGrok(messages: { role: string; content: string }[], maxTokens = 8000): Promise<string> {
+async function callGrok(messages: { role: string; content: string }[], maxTokens = 4000): Promise<string> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
   const res = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -65,11 +65,13 @@ async function callGrok(messages: { role: string; content: string }[], maxTokens
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(180000),
     body: JSON.stringify({
-      model: "grok-4.5",
+      model: "grok-4.3",
       temperature: 0.4,
       max_tokens: maxTokens,
+      // Keep non-reasoning so large toets JSON finishes under Vercel time limits.
+      reasoning_effort: "none",
       response_format: { type: "json_object" },
       messages,
     }),
