@@ -190,16 +190,52 @@ function toetsParagrafen(toets: GegenereerdeToets): Paragraph[] {
 
 function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const t = withDefaults(toets);
+  const max = totaalPunten(t.vragen);
   const out: (Paragraph | Table)[] = [
-    heading(`Nakijkmodel · ${t.meta.titel}`),
-    sub("Niet voor leerlingen"),
-    p(formuleTekst(t.cijferNorm, totaalPunten(t.vragen)), { bold: true }),
+    p(`Nakijkmodel · ${t.meta.titel}`, { bold: true, size: 28, after: 80 }),
+    p("Niet voor leerlingen", { size: SMALL_SIZE, italics: true, after: 40 }),
+    p(
+      `${t.meta.vak} · ${t.meta.leerweg} klas ${t.meta.leerjaar} · versie ${t.meta.versie}`,
+      { size: SMALL_SIZE, after: 40 },
+    ),
+    p(formuleTekst(t.cijferNorm, max), { bold: true, after: 200 }),
   ];
   for (const n of t.nakijkmodel) {
     const q = t.vragen.find((v) => v.nummer === n.nummer);
-    out.push(p(`Vraag ${n.nummer}  (${q?.punten ?? "?"}p)`, { bold: true }));
-    out.push(p(`Modelantwoord: ${n.modelantwoord}`));
-    for (const pc of n.puntenverdeling) out.push(p(`  ${pc.punt}p — ${pc.criterium}`));
+    const punten = q?.punten ?? "?";
+    const stam = (q?.stam || "").trim();
+    const kop = stam
+      ? `${punten}p  ${n.nummer}  ${stam}`
+      : `${punten}p  ${n.nummer}`;
+    out.push(
+      new Paragraph({
+        spacing: { before: 200, after: 80, line: 276, lineRule: "auto" },
+        indent: { left: 709, hanging: 709 },
+        children: [
+          new TextRun({ text: kop, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
+        ],
+      }),
+    );
+    out.push(p(`Modelantwoord: ${n.modelantwoord}`, { after: 60 }));
+    for (const pc of n.puntenverdeling) {
+      out.push(
+        new Paragraph({
+          spacing: { after: 40, line: 276, lineRule: "auto" },
+          indent: { left: 709 },
+          children: [
+            new TextRun({
+              text: `${pc.punt}p — ${pc.criterium}`,
+              font: FONT,
+              size: BODY_SIZE,
+              color: INK,
+            }),
+          ],
+        }),
+      );
+    }
+    if (n.nietToekennen?.length) {
+      out.push(p(`Niet toekennen: ${n.nietToekennen.join("; ")}`, { size: SMALL_SIZE, italics: true }));
+    }
   }
   return out;
 }
@@ -338,7 +374,7 @@ export async function downloadPakketDocx(toets: GegenereerdeToets) {
     styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
     sections: [
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: toetsParagrafen(t) },
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Nakijkmodel"), children: nakijkParagrafen(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: nakijkParagrafen(t) },
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Toetsmatrijs"), children: matrijsBlocks(t) },
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Cijferomzetting"), children: cijferParagrafen(t) },
     ],
