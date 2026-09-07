@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FileDown, Loader2 } from "lucide-react";
+import { FileDown, Loader2, Plus } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/app-shell";
@@ -8,6 +8,9 @@ import { MatrijsSheet } from "@/components/toets/matrijs-sheet";
 import { NakijkSheet } from "@/components/toets/nakijk-sheet";
 import { ToetsSheet } from "@/components/toets/toets-sheet";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { generateExtraQuestions } from "@/lib/toets/generate";
 import { withDefaults } from "@/lib/toets/defaults";
 import { maakVoorbeeldToets } from "@/lib/toets/sample";
 import { cesuurPunten, formuleTekst } from "@/lib/toets/cijfer";
@@ -62,7 +65,11 @@ function ToetsPage() {
   const [tab, setTab] = useState<TabId>("toets");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [extraCount, setExtraCount] = useState(1);
+  const [extraBusy, setExtraBusy] = useState(false);
   const ensureVoorbeeld = useToetsStore((s) => s.ensureVoorbeeld);
+  const upsert = useToetsStore((s) => s.upsert);
+  const stuurdocument = useToetsStore((s) => s.stuurdocument);
 
   useEffect(() => {
     if (id === "voorbeeld-fotosynthese" && !stored) ensureVoorbeeld();
@@ -121,6 +128,51 @@ function ToetsPage() {
     }
   }
 
+  async function addExtraVragen() {
+    if (isMatrijs || extraBusy) return;
+    const count = Math.min(8, Math.max(1, Math.floor(extraCount) || 1));
+    setExtraBusy(true);
+    try {
+      const startNummer =
+        (current.vragen.reduce((m, q) => Math.max(m, q.nummer || 0), 0) || current.vragen.length) + 1;
+      const result = await generateExtraQuestions({
+        data: {
+          count,
+          vak: current.meta.vak,
+          leerweg: current.meta.leerweg,
+          leerjaar: current.meta.leerjaar,
+          moeilijkheid: current.meta.moeilijkheid,
+          rttiDoel: current.matrijs.doelverdeling,
+          bronmateriaal: current.bronmateriaal,
+          extraEisen: current.extraEisen,
+          stuurdocument: stuurdocument.trim() || undefined,
+          bestaandeVragen: current.vragen.map((q) => ({
+            nummer: q.nummer,
+            type: q.type,
+            stam: q.stam,
+            rtti: q.rtti,
+          })),
+          startNummer,
+        },
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      upsert({
+        ...current,
+        vragen: [...current.vragen, ...result.vragen],
+        nakijkmodel: [...current.nakijkmodel, ...result.nakijkmodel],
+      });
+      const n = result.vragen.length;
+      toast.success(n === 1 ? "1 extra vraag toegevoegd" : `${n} extra vragen toegevoegd`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Extra vragen maken mislukt");
+    } finally {
+      setExtraBusy(false);
+    }
+  }
+
   return (
     <AppShell printHidden>
       <div className="print:hidden">
@@ -137,7 +189,7 @@ function ToetsPage() {
                   : `${toets.meta.vak} · ${toets.meta.leerweg} klas ${toets.meta.leerjaar} · versie ${toets.meta.versie}`}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-end gap-2">
               {isMatrijs ? null : (
                 <>
                   <Button type="button" variant={editing ? "default" : "ghost"} onClick={() => setEditing((v) => !v)}>
@@ -148,6 +200,29 @@ function ToetsPage() {
                       Wijzigingen
                     </Link>
                   </Button>
+                  <div className="flex items-end gap-2">
+                    <div className="grid gap-1">
+                      <Label htmlFor="extra-vragen-count" className="text-xs text-muted">
+                        Aantal
+                      </Label>
+                      <Input
+                        id="extra-vragen-count"
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={extraCount}
+                        disabled={extraBusy}
+                        onChange={(e) =>
+                          setExtraCount(Math.min(8, Math.max(1, Number(e.target.value) || 1)))
+                        }
+                        className="h-11 w-16 px-2 text-center"
+                      />
+                    </div>
+                    <Button type="button" variant="secondary" disabled={extraBusy} onClick={addExtraVragen}>
+                      {extraBusy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                      Extra vraag(en)
+                    </Button>
+                  </div>
                 </>
               )}
               <Button type="button" disabled={saving} onClick={saveDocx}>
