@@ -159,3 +159,38 @@ export const matrijsPayloadSchema = z.object({
   vragen: z.array(vraagSchema).min(2),
   kwaliteit: kwaliteitSchema.optional(),
 });
+
+export const extraQuestionsInputSchema = z.object({
+  count: z.coerce.number().int().min(1).max(8),
+  mcVragen: z.coerce.number().int().min(0).max(8).optional(),
+  openVragen: z.coerce.number().int().min(0).max(8).optional(),
+  vak: z.string().max(80).optional().default(""),
+  leerweg,
+  leerjaar: z.coerce.number().int().min(1).max(4),
+  moeilijkheid: z.enum(["makkelijk", "normaal", "moeilijk"]).default("normaal"),
+  rttiDoel: z.object({
+    R: z.coerce.number(),
+    T1: z.coerce.number(),
+    T2: z.coerce.number(),
+    I: z.coerce.number(),
+  }),
+  bronmateriaal: z.string().max(100000).optional().default(""),
+  extraEisen: z.string().max(4000).optional().default(""),
+  stuurdocument: z.string().max(20000).optional(),
+  bestaandeVragen: z
+    .array(
+      z.object({
+        nummer: z.coerce.number(),
+        type: z.string().max(40),
+        stam: z.string().max(600),
+        rtti: z.string().max(8).optional(),
+      }),
+    )
+    .max(80),
+  startNummer: z.coerce.number().int().min(1).max(200),
+});
+
+export const extraQuestionsPayloadSchema = z.object({
+  vragen: z.array(vraagSchema).min(1).max(8),
+  nakijkmodel: z.array(nakijkSchema).min(1).max(8),
+});

@@ -2,10 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { SCHOOL } from "./constants";
 import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
-import { generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
-import { bouwSystemPrompt } from "./stuurdocument";
+import { extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
+import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
 import { balanceMcAntwoorden } from "./mc-balance";
-import type { GegenereerdeToets } from "./types";
+import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 
 function stripJsonFence(raw: string): string {
   const trimmed = raw.trim();
@@ -399,3 +399,163 @@ ${bron}`;
       return { ok: false, error: vriendelijkeAiFout(err).replace("toets", "matrijs") };
     }
   });
+
+
+function tokensVoorExtraVragen(n: number): number {
+  const aantal = Math.max(1, Math.min(8, Math.floor(n || 1)));
+  return Math.min(8000, Math.max(1800, 900 + aantal * 450));
+}
+
+const EXTRA_JSON_SCHEMA = `Antwoord ALLEEN met één JSON-object, geen markdown. Schema:
+{
+  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}] }],
+  "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }]
+}
+Geef precies het gevraagde aantal vragen. Nummers starten bij het opgegeven startnummer. Geen meta, cesuur of kwaliteit.`;
+
+function extraUserPrompt(input: {
+  count: number;
+  mcVragen?: number;
+  openVragen?: number;
+  vak?: string;
+  leerweg: string;
+  leerjaar: number;
+  moeilijkheid?: string;
+  rttiDoel: { R: number; T1: number; T2: number; I: number };
+  extraEisen?: string;
+  startNummer: number;
+  bestaandeVragen: { nummer: number; type: string; stam: string; rtti?: string }[];
+}, bron: string): string {
+  const rtti = normaliseer(input.rttiDoel);
+  const moe = input.moeilijkheid ?? "normaal";
+  const moeTekst =
+    moe === "makkelijk"
+      ? "MAKKELIJK: korte zinnen, meer steun, meer R/T1."
+      : moe === "moeilijk"
+        ? "MOEILIJK: meer T2/I, grotere denkstappen."
+        : "NORMAAL: passend bij leerjaar en leerweg.";
+  const mcN = input.mcVragen;
+  const openN = input.openVragen;
+  let verdelingTekst: string;
+  if (mcN != null && openN != null) {
+    verdelingTekst = `VAST: ${mcN} meerkeuze + ${openN} open/andere (totaal ${mcN + openN}).`;
+  } else if (mcN != null) {
+    verdelingTekst = `VAST: ${mcN} meerkeuze; vul aan met open/andere tot ${input.count} vragen.`;
+  } else if (openN != null) {
+    verdelingTekst = `VAST: ${openN} open/andere; vul aan met meerkeuze tot ${input.count} vragen waar passend.`;
+  } else {
+    verdelingTekst = `AUTO: kies MC vs open passend bij de bestaande toets en de lesstof (totaal precies ${input.count}).`;
+  }
+  const bestaande = input.bestaandeVragen
+    .map((q) => `${q.nummer}. [${q.type}${q.rtti ? `/${q.rtti}` : ""}] ${q.stam.slice(0, 220)}`)
+    .join("\n");
+  return `Voeg ${input.count} NIEUWE originele vraag/vragen toe aan een BESTAANDE VMBO-toets.
+Je maakt GEEN volledige toets opnieuw. Alleen de extra vragen + nakijkmodel daarvoor.
+
+School: ${SCHOOL}
+Vak: ${input.vak?.trim() || "(leid af uit de lesstof)"}
+Niveau: ${input.leerweg}
+Leerjaar: ${input.leerjaar}
+Moeilijkheid: ${moeTekst}
+RTTI-doel (richtlijn voor de nieuwe vragen): R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
+Vraagverdeling: ${verdelingTekst}
+Startnummer: ${input.startNummer} (nummer de nieuwe vragen opeenvolgend vanaf hier)
+Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
+
+Bestaande vragen (NIET herhalen, niet parafraseren; maak iets anders met andere namen/getallen/situaties):
+${bestaande || "(geen)"}
+
+Extra eisen van de docent:
+${input.extraEisen?.trim() || "(geen)"}
+
+Leerlingboek / lesstof (KADER: leerdoelen/begrippen/formules én vraagSTIJL ter inspiratie — NOOIT 1:1 dezelfde vragen; geen "zoals in het boek"):
+${bron.trim() || "(geen bron)"}`;
+}
+
+/**
+ * Genereert 1–N extra vragen voor een bestaande toets (zonder de hele toets opnieuw te maken).
+ * Client voegt resultaat toe en hernummert/herbouw matrijs via de store.
+ */
+export const generateExtraQuestions = createServerFn({ method: "POST" })
+  .validator((input: unknown) => extraQuestionsInputSchema.parse(input))
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      { ok: true; vragen: Vraag[]; nakijkmodel: NakijkItem[] } | { ok: false; error: string }
+    > => {
+      try {
+        const bron = (data.bronmateriaal ?? "").slice(0, 100000);
+        if (!bron.trim()) {
+          return { ok: false, error: "Geen lesstof bij deze toets; extra vragen maken lukt dan niet." };
+        }
+        if (data.mcVragen != null && data.openVragen != null && data.mcVragen + data.openVragen !== data.count) {
+          return { ok: false, error: "MC + open moet gelijk zijn aan het aantal extra vragen." };
+        }
+        const stuur = data.stuurdocument?.trim() || stuurdocumentTekst();
+        const system = `Je bent toetsconstructeur voor Ares058 VMBO Leeuwarden (groen vmbo: BB, KB en GT).
+Je volgt dit stuurdocument. Je voegt alleen extra vragen toe aan een bestaande toets.
+
+${stuur}
+
+${EXTRA_JSON_SCHEMA}`;
+        const messages = [
+          { role: "system", content: system },
+          { role: "user", content: extraUserPrompt(data, bron) },
+        ];
+        const maxTok = tokensVoorExtraVragen(data.count);
+        let raw = await callGrok(messages, maxTok);
+        let parsed: unknown;
+        try {
+          parsed = parseAiJson(raw);
+        } catch {
+          raw = await callGrok(
+            [
+              ...messages,
+              { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
+              {
+                role: "user",
+                content:
+                  "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object met alleen vragen en nakijkmodel, zonder markdown. Kap niet af.",
+              },
+            ],
+            maxTok,
+          );
+          parsed = parseAiJson(raw);
+        }
+        const payload = extraQuestionsPayloadSchema.parse(parsed);
+        const start = data.startNummer;
+        const vragenRaw = payload.vragen.slice(0, data.count).map((q, i) => ({
+          ...q,
+          nummer: start + i,
+          context: q.context || undefined,
+          opties: q.opties?.length ? q.opties : undefined,
+        }));
+        let nakijkRaw = payload.nakijkmodel.slice(0, data.count).map((n, i) => ({
+          ...n,
+          nummer: vragenRaw[i]?.nummer ?? start + i,
+        }));
+        // Vul ontbrekende nakijkregels bij zodat balance/merge stabiel blijft.
+        if (nakijkRaw.length < vragenRaw.length) {
+          const have = new Set(nakijkRaw.map((n) => n.nummer));
+          for (const q of vragenRaw) {
+            if (!have.has(q.nummer)) {
+              nakijkRaw.push({
+                nummer: q.nummer,
+                modelantwoord: "",
+                puntenverdeling: [{ punt: q.punten || 1, criterium: "Correct antwoord" }],
+                nietToekennen: [],
+              });
+            }
+          }
+        }
+        const { vragen, nakijkmodel } = balanceMcAntwoorden(vragenRaw, nakijkRaw);
+        if (vragen.length < 1) {
+          return { ok: false, error: "De AI leverde geen bruikbare extra vragen." };
+        }
+        return { ok: true, vragen, nakijkmodel };
+      } catch (err) {
+        return { ok: false, error: vriendelijkeAiFout(err) };
+      }
+    },
+  );
