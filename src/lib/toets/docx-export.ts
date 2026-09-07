@@ -4,6 +4,7 @@ import {
   Document,
   HeadingLevel,
   Packer,
+  PageBreak,
   PageNumber,
   Paragraph,
   Table,
@@ -169,17 +170,106 @@ function headerFooter(label: string) {
   };
 }
 
-function toetsParagrafen(toets: GegenereerdeToets): Paragraph[] {
+
+/** Voorblad-cel: label + waarde (of invullijn). */
+function voorbladCel(
+  label: string,
+  value: string,
+  opts?: { width?: number; blankLine?: boolean; rowSpan?: number },
+) {
+  const kids = [
+    new Paragraph({
+      spacing: { after: 60 },
+      children: [new TextRun({ text: label, font: FONT, size: SMALL_SIZE, bold: true, color: INK })],
+    }),
+  ];
+  if (opts?.blankLine) {
+    kids.push(
+      new Paragraph({
+        spacing: { after: 80 },
+        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999", space: 1 } },
+        children: [new TextRun({ text: " ", font: FONT, size: BODY_SIZE })],
+      }),
+    );
+  } else {
+    kids.push(
+      new Paragraph({
+        spacing: { after: 40 },
+        children: [new TextRun({ text: value || " ", font: FONT, size: BODY_SIZE, color: INK })],
+      }),
+    );
+  }
+  return new TableCell({
+    borders,
+    width: opts?.width ? { size: opts.width, type: WidthType.DXA } : undefined,
+    children: kids,
+  });
+}
+
+function voorbladBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const t = withDefaults(toets);
   const m = t.meta;
   const max = totaalPunten(t.vragen);
-  const out: Paragraph[] = [
-    // Alleen toets-titel + vraagpunten vet; rest regular.
-    p(m.titel, { bold: true, size: 28, after: 80 }),
-    p(`${m.vak} · ${m.leerweg} klas ${m.leerjaar}`, { size: SMALL_SIZE, after: 40 }),
-    p(`Tijd: ${m.duurMinuten} minuten. Maximumscore: ${max} punten.`, { size: SMALL_SIZE, after: 40 }),
-    p("Naam: ________________________    Klas: ________    Datum: ________", { after: 200 }),
+  const cesuur = cesuurPunten(max, t.cijferNorm);
+  const hulpmiddelen = (m.hulpmiddelen?.length ? m.hulpmiddelen : ["Binas", "Rekenmachine"]).join(", ");
+  const w = 4680;
+  const rows: TableRow[] = [
+    new TableRow({
+      children: [
+        voorbladCel("Vak", m.vak || "—", { width: w }),
+        voorbladCel("Naam", "", { width: w, blankLine: true }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        voorbladCel("Toets titel / onderwerp en toetscode", m.titel || "—", { width: w }),
+        voorbladCel("Klas", `${m.leerjaar}${m.leerweg}`, { width: w }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        voorbladCel("Toetsduur", `${m.duurMinuten} minuten`, { width: w }),
+        voorbladCel("Datum", "", { width: w, blankLine: true }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        voorbladCel("Extra tijd 20%", "Ja", { width: w }),
+        voorbladCel("Behaalde aantal punten", "", { width: w, blankLine: true }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        voorbladCel("Hulpmiddelen", hulpmiddelen, { width: w }),
+        voorbladCel("Eindresultaat", "", { width: w, blankLine: true }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        voorbladCel("Totaal te behalen punten", String(max), { width: w }),
+        voorbladCel("School", m.school || SCHOOL, { width: w }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        voorbladCel("Cesuur", `5,5 bij ${cesuur} punten`, { width: w }),
+        voorbladCel("", "", { width: w }),
+      ],
+    }),
   ];
+  return [
+    p(SCHOOL, { bold: true, size: 28, after: 200 }),
+    new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: [w, w], rows }),
+    new Paragraph({
+      children: [new PageBreak()],
+    }),
+  ];
+}
+
+function toetsParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
+  const t = withDefaults(toets);
+  const m = t.meta;
+  const out: (Paragraph | Table)[] = [...voorbladBlocks(t)];
   if (m.instructies.length) {
     out.push(p("Instructie", { after: 60 }));
     for (const s of m.instructies) out.push(p(s, { size: SMALL_SIZE, after: 40 }));
