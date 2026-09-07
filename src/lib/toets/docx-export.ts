@@ -37,9 +37,9 @@ const SMALL_SIZE = 20; // 10pt
 const PAGE_MARGINS = { top: 1418, right: 1418, bottom: 1134, left: 1418 };
 const PAGE_A4 = { width: 11906, height: 16838 };
 
-function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number }) {
+function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number; before?: number }) {
   return new Paragraph({
-    spacing: { after: opts?.after ?? 120, line: 276, lineRule: "auto" },
+    spacing: { before: opts?.before, after: opts?.after ?? 120, line: 276, lineRule: "auto" },
     children: [
       new TextRun({
         text,
@@ -277,9 +277,13 @@ function toetsParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   }
   for (const q of t.vragen) {
     const stam = (q.stam || "").trim();
+    // Cito/school: inleiding/context eerst, daarna de genummerde vraagstam.
+    if (q.context?.trim()) {
+      out.push(p(q.context.trim(), { size: BODY_SIZE, before: 200, after: 80 }));
+    }
     out.push(
       new Paragraph({
-        spacing: { before: 200, after: 80, line: 276, lineRule: "auto" },
+        spacing: { before: q.context?.trim() ? 40 : 200, after: 80, line: 276, lineRule: "auto" },
         indent: { left: 709, hanging: 709 },
         children: [
           new TextRun({ text: `${q.punten}p`, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
@@ -292,9 +296,6 @@ function toetsParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
         ],
       }),
     );
-    if (q.context?.trim()) {
-      out.push(p(q.context.trim(), { size: BODY_SIZE, after: 80 }));
-    }
     if (q.opties?.length) {
       for (const o of q.opties) {
         out.push(

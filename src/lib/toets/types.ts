@@ -53,7 +53,9 @@ export interface Vraag {
   domein: string;
   leerdoel: string;
   punten: number;
+  /** Optionele situatieschets/inleiding; wordt vóór de stam getoond (Cito-volgorde). */
   context?: string;
+  /** Vraagtekst: bij lege context eerst inleiding, daarna vraagzin — nooit omgekeerd. */
   stam: string;
   opties?: VraagOptie[];
 }

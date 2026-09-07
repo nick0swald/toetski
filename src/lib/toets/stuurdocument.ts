@@ -50,6 +50,8 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Geen dubbele ontkenningen, geen strikvragen, één opdracht per deelvraag.",
       "Meerkeuze: vier opties A–D, één beste antwoord; standaard 1 punt. Spreid juiste antwoorden over A–D (niet steeds dezelfde letter).",
       "Open vragen: commando’s als Noem, Geef, Leg uit, Bereken, Verklaar.",
+      "Vraagstam (Cito/school): EERST situatieschets/inleiding (wie/wat/waar), DAARNA de vraagzin of opdracht. NOOIT andersom — geen vraag eerst en verhaal erna.",
+      "Veld context = optionele inleiding vóór de stam; veld stam = de eigenlijke vraagtekst. Situatieschets óf in context óf aan het begin van stam; nooit ná de vraagzin.",
     ],
   },
   {
@@ -102,7 +104,8 @@ export const JSON_SCHEMA_PROMPT = `Antwoord ALLEEN met één JSON-object, geen m
   "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }],
   "cesuur": { "nTerm": 1, "cesuurPunten": number, "toelichting": string, "formule": string },
   "kwaliteit": { "samenvatting": string, "punten": [{"criterium": string, "oordeel": "voldoet"|"aandacht"|"ontbreekt", "toelichting": string}] }
-}`;
+}
+Velden per vraag (volgorde op het blad): "context" = optionele situatieschets/inleiding (wordt VOOR de stam getoond); "stam" = vraagtekst. In "stam": als je context leeg laat, begint stam met inleiding en eindigt met de vraagzin — NOOIT omgekeerd (geen vraag eerst, verhaal erna).`;
 
 export function bouwSystemPrompt(stuur?: string | null): string {
   const body = stuur?.trim() || stuurdocumentTekst();

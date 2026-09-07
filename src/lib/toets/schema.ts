@@ -78,7 +78,9 @@ const vraagSchema = z.object({
   domein: z.string().default("Algemeen"),
   leerdoel: z.string().default(""),
   punten: z.coerce.number().min(0).default(1),
+  /** Situatieschets/inleiding vóór de stam (Cito-volgorde). */
   context: z.string().optional().default(""),
+  /** Vraagtekst; bij lege context: eerst inleiding, daarna vraagzin. */
   stam: z.string().default(""),
   opties: z
     .array(z.object({ letter: z.string(), tekst: z.string() }))

@@ -18,6 +18,18 @@ function stripJsonFence(raw: string): string {
 }
 
 /** Grotere toetsen (veel MC) knappen anders midden in JSON af. */
+
+/** Trim context/stam; lege context wordt weggelaten. Volgorde (inleiding→vraag) wordt via prompts afgedwongen. */
+function normaliseerVraagTekst<T extends { context?: string; stam: string }>(q: T): T {
+  const context = (q.context ?? "").trim();
+  const stam = (q.stam ?? "").trim();
+  return {
+    ...q,
+    context: context || undefined,
+    stam,
+  } as T;
+}
+
 function tokensVoorAantalVragen(n: number): number {
   const aantal = Math.max(4, Math.min(80, Math.floor(n || 10)));
   return Math.min(16000, Math.max(5000, 3000 + aantal * 450));
@@ -178,6 +190,7 @@ Aantal vragen (richtlijn): ${input.aantalVragen}
 Vraagverdeling: ${verdelingTekst}
 Streefmaximum: ${input.doelPunten} punten (richtlijn; passend bij toetsduur en moeilijkheid, tenzij de docent anders stuurt)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
+Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 Versie: ${input.versie ?? "A"}
 Moeilijkheid: ${moeTekst}
 RTTI-doel: R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
@@ -239,12 +252,13 @@ export const generateToets = createServerFn({ method: "POST" })
       }
       const payload = generatedPayloadSchema.parse(parsed);
       const rttiDoel = normaliseer(data.rttiDoel);
-      const vragenRaw = payload.vragen.map((q, i) => ({
-        ...q,
-        nummer: q.nummer || i + 1,
-        context: q.context || undefined,
-        opties: q.opties?.length ? q.opties : undefined,
-      }));
+      const vragenRaw = payload.vragen.map((q, i) =>
+        normaliseerVraagTekst({
+          ...q,
+          nummer: q.nummer || i + 1,
+          opties: q.opties?.length ? q.opties : undefined,
+        }),
+      );
       // MC-sleutels husselen: voorkomt dat antwoorden op één letter clusteren (klassieke LLM-bias).
       const { vragen, nakijkmodel } = balanceMcAntwoorden(vragenRaw, payload.nakijkmodel);
       const max = totaalPunten(vragen);
@@ -349,13 +363,14 @@ ${bron}`;
         parsed = parseAiJson(raw);
       }
       const payload = matrijsPayloadSchema.parse(parsed);
-      const vragen = payload.vragen.map((q, i) => ({
-        ...q,
-        nummer: q.nummer || i + 1,
-        stam: q.stam || q.leerdoel || `Vraag ${q.nummer || i + 1}`,
-        context: q.context || undefined,
-        opties: q.opties?.length ? q.opties : undefined,
-      }));
+      const vragen = payload.vragen.map((q, i) =>
+        normaliseerVraagTekst({
+          ...q,
+          nummer: q.nummer || i + 1,
+          stam: q.stam || q.leerdoel || `Vraag ${q.nummer || i + 1}`,
+          opties: q.opties?.length ? q.opties : undefined,
+        }),
+      );
       const max = totaalPunten(vragen);
       const cijferNorm = { model: "lineair" as const, cesuurPct: 55, exponent: 1 };
       const kwaliteit = data.feedbackGewenst
@@ -411,7 +426,8 @@ const EXTRA_JSON_SCHEMA = `Antwoord ALLEEN met één JSON-object, geen markdown.
   "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}] }],
   "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }]
 }
-Geef precies het gevraagde aantal vragen. Nummers starten bij het opgegeven startnummer. Geen meta, cesuur of kwaliteit.`;
+Geef precies het gevraagde aantal vragen. Nummers starten bij het opgegeven startnummer. Geen meta, cesuur of kwaliteit.
+Velden per vraag (volgorde op het blad): "context" = optionele situatieschets/inleiding (VOOR de stam); "stam" = vraagtekst. Stam = EERST inleiding/situatie, DAARNA vraagzin — NOOIT omgekeerd.`;
 
 function extraUserPrompt(input: {
   count: number;
@@ -461,6 +477,7 @@ RTTI-doel (richtlijn voor de nieuwe vragen): R ${rtti.R}% · T1 ${rtti.T1}% · T
 Vraagverdeling: ${verdelingTekst}
 Startnummer: ${input.startNummer} (nummer de nieuwe vragen opeenvolgend vanaf hier)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
+Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 
 Bestaande vragen (NIET herhalen, niet parafraseren; maak iets anders met andere namen/getallen/situaties):
 ${bestaande || "(geen)"}
@@ -525,12 +542,13 @@ ${EXTRA_JSON_SCHEMA}`;
         }
         const payload = extraQuestionsPayloadSchema.parse(parsed);
         const start = data.startNummer;
-        const vragenRaw = payload.vragen.slice(0, data.count).map((q, i) => ({
-          ...q,
-          nummer: start + i,
-          context: q.context || undefined,
-          opties: q.opties?.length ? q.opties : undefined,
-        }));
+        const vragenRaw = payload.vragen.slice(0, data.count).map((q, i) =>
+          normaliseerVraagTekst({
+            ...q,
+            nummer: start + i,
+            opties: q.opties?.length ? q.opties : undefined,
+          }),
+        );
         let nakijkRaw = payload.nakijkmodel.slice(0, data.count).map((n, i) => ({
           ...n,
           nummer: vragenRaw[i]?.nummer ?? start + i,
