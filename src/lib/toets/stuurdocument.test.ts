@@ -12,7 +12,9 @@ describe("stuurdocument", () => {
     const tekst = stuurdocumentTekst();
     assert.match(tekst, /Lesstof is leidend/);
     assert.match(tekst, /cijfer = 1 \+ 9/);
+    assert.match(tekst, /EERST situatieschets\/inleiding/);
     assert.match(SYSTEM_PROMPT, /JSON-object/);
+    assert.match(SYSTEM_PROMPT, /wordt VOOR de stam getoond/);
     for (const s of STUUR_SECTIES) {
       assert.equal(SYSTEM_PROMPT.includes(s.titel), true, s.titel);
     }
