@@ -190,6 +190,7 @@ Aantal vragen (richtlijn): ${input.aantalVragen}
 Vraagverdeling: ${verdelingTekst}
 Streefmaximum: ${input.doelPunten} punten (richtlijn; passend bij toetsduur en moeilijkheid, tenzij de docent anders stuurt)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
+MC-sleutel: zet het juiste antwoord niet standaard op B. Opties in willekeurige inhoudelijke volgorde. modelantwoord = letter + tekst (bijv. "C. 12 N"). De app husselt de opties daarna.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 Versie: ${input.versie ?? "A"}
 Moeilijkheid: ${moeTekst}
@@ -477,6 +478,7 @@ RTTI-doel (richtlijn voor de nieuwe vragen): R ${rtti.R}% · T1 ${rtti.T1}% · T
 Vraagverdeling: ${verdelingTekst}
 Startnummer: ${input.startNummer} (nummer de nieuwe vragen opeenvolgend vanaf hier)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
+MC-sleutel: zet het juiste antwoord niet standaard op B. Opties in willekeurige inhoudelijke volgorde. modelantwoord = letter + tekst (bijv. "C. 12 N"). De app husselt de opties daarna.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 
 Bestaande vragen (NIET herhalen, niet parafraseren; maak iets anders met andere namen/getallen/situaties):
