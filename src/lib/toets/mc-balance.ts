@@ -21,28 +21,84 @@ function lettersForCount(count: number): string[] {
   return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
 }
 
-/** Zoek welk optie-index het modelantwoord bedoelt. -1 = onbekend. */
-export function findCorrectOptionIndex(opties: VraagOptie[], modelantwoord: string): number {
-  const m = (modelantwoord || "").trim();
-  if (!m || !opties.length) return -1;
-  const letterHit = m.match(/^([A-Za-z])\b/);
-  if (letterHit) {
-    const L = letterHit[1].toUpperCase();
-    const idx = opties.findIndex((o) => o.letter.toUpperCase() === L);
-    if (idx >= 0) return idx;
-  }
-  const stripped = m.replace(/^[A-Za-z]\s*[.):\-–—]?\s*/, "").trim();
-  if (stripped) {
-    const byText = opties.findIndex(
-      (o) => o.tekst.trim() === stripped || stripped.includes(o.tekst.trim()) || o.tekst.trim().includes(stripped),
-    );
-    if (byText >= 0) return byText;
-  }
-  return -1;
+/** "B.", "b)", " A " → "B". Leeg als geen MC-letter. */
+export function canonLetter(raw: string): string {
+  const m = (raw || "").trim().toUpperCase().match(/([A-D])/);
+  return m ? m[1] : "";
+}
+
+function normText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[“”"']/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[.,;:!?]+$/g, "")
+    .trim();
 }
 
 /**
- * Husselt MC-opties en zet sleutelantwoorden ongeveer gelijk over A–D.
+ * Zoek welk optie-index het modelantwoord bedoelt. -1 = onbekend.
+ * Herkent o.a. "B", "B.", "B) tekst", "Antwoord: B", en de optietekst zelf.
+ */
+export function findCorrectOptionIndex(opties: VraagOptie[], modelantwoord: string): number {
+  const m = (modelantwoord || "").trim();
+  if (!m || !opties.length) return -1;
+
+  const byLetter = (L: string) => opties.findIndex((o) => canonLetter(o.letter) === L);
+
+  const start = m.match(/^\*{0,2}\s*([A-Da-d])(?:\s*[.):\-–—]|\s|$)/);
+  if (start) {
+    const idx = byLetter(start[1].toUpperCase());
+    if (idx >= 0) return idx;
+  }
+
+  const labeled = m.match(
+    /(?:juiste\s+)?(?:antwoord|sleutel|optie|keuze)\s*(?:is|=|:)?\s*\*{0,2}\s*([A-Da-d])\b/i,
+  );
+  if (labeled) {
+    const idx = byLetter(labeled[1].toUpperCase());
+    if (idx >= 0) return idx;
+  }
+
+  const stripped = m.replace(/^\*{0,2}\s*[A-Da-d]\s*[.):\-–—]?\s*/, "").trim();
+  const nStrip = normText(stripped);
+  if (nStrip.length >= 2) {
+    const byText = opties.findIndex((o) => {
+      const t = normText(o.tekst);
+      if (!t) return false;
+      return t === nStrip || nStrip.includes(t) || t.includes(nStrip);
+    });
+    if (byText >= 0) return byText;
+  }
+
+  return -1;
+}
+
+function rewriteModelantwoord(old: string, letter: string, correctTekst: string): string {
+  const m = (old || "").trim();
+  const rest = m
+    .replace(/^\*{0,2}\s*[A-Da-d]\s*[.):\-–—]?\s*/, "")
+    .replace(/^(?:juiste\s+)?(?:antwoord|sleutel|optie|keuze)\s*(?:is|=|:)?\s*\*{0,2}\s*[A-Da-d]\b\s*[.):\-–—]?\s*/i, "")
+    .trim();
+  if (!rest || normText(rest) === normText(correctTekst) || normText(rest).includes(normText(correctTekst))) {
+    return `${letter}. ${correctTekst}`;
+  }
+  if (normText(correctTekst).includes(normText(rest))) {
+    return `${letter}. ${correctTekst}`;
+  }
+  return `${letter}. ${correctTekst}`;
+}
+
+function nakijkVoor(
+  nakijk: NakijkItem[],
+  vraag: Vraag,
+  index: number,
+): NakijkItem | undefined {
+  return nakijk.find((n) => n.nummer === vraag.nummer) ?? nakijk[index];
+}
+
+/**
+ * Husselt MC-opties altijd na het opstellen en zet sleutelantwoorden ongeveer gelijk over A–D.
  * Nakijkmodel.modelantwoord wordt meegenomen (nieuwe letter + tekst).
  */
 export function balanceMcAntwoorden(
@@ -59,16 +115,18 @@ export function balanceMcAntwoorden(
     nietToekennen: n.nietToekennen ? [...n.nietToekennen] : undefined,
   }));
 
-  const mcFour = nextVragen.filter((q) => (q.opties?.length ?? 0) >= 4);
-  const targets4 = balancedLetterTargets(mcFour.length, ["A", "B", "C", "D"]);
+  const mc = nextVragen.filter((q) => (q.opties?.length ?? 0) >= 2);
+  const four = mc.filter((q) => (q.opties?.length ?? 0) >= 4);
+  const targets4 = balancedLetterTargets(fourCount(four), ["A", "B", "C", "D"]);
   let t4 = 0;
 
-  for (const q of nextVragen) {
+  nextVragen.forEach((q, i) => {
     const opties = q.opties;
-    if (!opties || opties.length < 2) continue;
-    const nakijk = nextNakijk.find((n) => n.nummer === q.nummer);
+    if (!opties || opties.length < 2) return;
+
+    const nakijk = nakijkVoor(nextNakijk, q, i);
     const correctIdx = findCorrectOptionIndex(opties, nakijk?.modelantwoord ?? "");
-    if (correctIdx < 0) continue;
+    if (correctIdx < 0) return;
 
     const letters = lettersForCount(opties.length);
     const targetLetter =
@@ -78,17 +136,21 @@ export function balanceMcAntwoorden(
     const targetIdx = Math.max(0, letters.indexOf(targetLetter));
 
     const correctTekst = opties[correctIdx].tekst;
-    const others = shuffle(opties.filter((_, i) => i !== correctIdx).map((o) => o.tekst));
+    const others = shuffle(opties.filter((_, oi) => oi !== correctIdx).map((o) => o.tekst));
     const texts: string[] = [];
     let oi = 0;
-    for (let i = 0; i < opties.length; i++) {
-      texts.push(i === targetIdx ? correctTekst : others[oi++]);
+    for (let k = 0; k < opties.length; k++) {
+      texts.push(k === targetIdx ? correctTekst : others[oi++]);
     }
-    q.opties = texts.map((tekst, i) => ({ letter: letters[i], tekst }));
+    q.opties = texts.map((tekst, k) => ({ letter: letters[k], tekst }));
     if (nakijk) {
-      nakijk.modelantwoord = `${letters[targetIdx]}. ${correctTekst}`;
+      nakijk.modelantwoord = rewriteModelantwoord(nakijk.modelantwoord, letters[targetIdx], correctTekst);
     }
-  }
+  });
 
   return { vragen: nextVragen, nakijkmodel: nextNakijk };
+}
+
+function fourCount(items: { opties?: unknown[] | null }[]): number {
+  return items.length;
 }
