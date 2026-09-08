@@ -10,6 +10,7 @@ import { generateMatrijs } from "@/lib/toets/generate";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { VOORBEELD_TOETS_TEKST } from "@/lib/toets/sample";
 import { persistToetsBeforeNavigate } from "@/store/toets-store";
+import { PageIntro } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 
 export function MatrijsForm() {
@@ -120,13 +121,11 @@ export function MatrijsForm() {
   }
 
   return (
+    <>
+    <PageIntro title="Matrijsmaker" className="mb-6">
+      Lever een bestaande toets in. Notities komen in het veld.
+    </PageIntro>
     <form onSubmit={onSubmit} className="grid min-w-0 gap-5">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight text-brand sm:text-4xl">Matrijsmaker</h1>
-        <p className="mt-3 max-w-xl text-pretty leading-relaxed text-muted">
-          Lever een bestaande toets in (bestand of plak). Het tekstveld blijft leeg voor notities.
-        </p>
-      </header>
       <div className="grid min-w-0 gap-4 rounded-[var(--radius-xl)] bg-surface p-6 sm:p-8">
         <div>
           <Label htmlFor="matrijs-notities">Notities / sturing</Label>
@@ -223,5 +222,7 @@ export function MatrijsForm() {
         {busy ? <Loader2 className="size-6 animate-spin" /> : <ArrowRight className="size-6" />}
       </Button>
     </form>
+    </>
+
   );
 }
