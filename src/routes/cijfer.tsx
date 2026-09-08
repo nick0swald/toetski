@@ -14,8 +14,8 @@ function CijferPage() {
   return (
     <AppShell>
       <Page>
-        <PageIntro title="Cijfer berekenen">
-          Punten omzetten zonder een toets te maken. De tabel download je als Word.
+        <PageIntro title="Cijfer">
+          Punten omzetten. De tabel download je als Word.
         </PageIntro>
         <div className="rounded-[var(--radius-xl)] bg-surface p-6 sm:p-8">
           <CijferPanel
