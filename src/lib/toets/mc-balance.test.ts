@@ -20,6 +20,18 @@ describe("mc-balance", () => {
     ];
     expect(findCorrectOptionIndex(opties, "B")).toBe(1);
     expect(findCorrectOptionIndex(opties, "B. kalium")).toBe(1);
+    expect(findCorrectOptionIndex(opties, "Antwoord: B")).toBe(1);
+    expect(findCorrectOptionIndex(opties, "Juiste antwoord is B")).toBe(1);
+  });
+
+  it("finds correct option when letter field is B.", () => {
+    const opties = [
+      { letter: "A.", tekst: "fout" },
+      { letter: "B.", tekst: "goed" },
+      { letter: "C.", tekst: "fout2" },
+      { letter: "D.", tekst: "fout3" },
+    ];
+    expect(findCorrectOptionIndex(opties, "B")).toBe(1);
   });
 
   it("reletters so keys are not all B", () => {
@@ -40,7 +52,7 @@ describe("mc-balance", () => {
     }));
     const nakijk: NakijkItem[] = vragen.map((q) => ({
       nummer: q.nummer,
-      modelantwoord: "B",
+      modelantwoord: "Antwoord: B",
       puntenverdeling: [{ punt: 1, criterium: "juist" }],
     }));
     const { vragen: out, nakijkmodel } = balanceMcAntwoorden(vragen, nakijk);
@@ -52,5 +64,31 @@ describe("mc-balance", () => {
       const opt = out[i].opties!.find((o) => o.letter === letter);
       expect(opt?.tekst).toBe(`goed${i}`);
     }
+  });
+
+  it("matches nakijk by index when nummers differ", () => {
+    const vragen: Vraag[] = [
+      {
+        nummer: 3,
+        type: "meerkeuze",
+        rtti: "R",
+        domein: "x",
+        leerdoel: "y",
+        punten: 1,
+        stam: "Vraag",
+        opties: [
+          { letter: "A", tekst: "fout" },
+          { letter: "B", tekst: "goed" },
+          { letter: "C", tekst: "fout2" },
+          { letter: "D", tekst: "fout3" },
+        ],
+      },
+    ];
+    const nakijk: NakijkItem[] = [
+      { nummer: 1, modelantwoord: "B", puntenverdeling: [{ punt: 1, criterium: "juist" }] },
+    ];
+    const { vragen: out, nakijkmodel } = balanceMcAntwoorden(vragen, nakijk);
+    const letter = nakijkmodel[0].modelantwoord.charAt(0);
+    expect(out[0].opties!.find((o) => o.letter === letter)?.tekst).toBe("goed");
   });
 });
