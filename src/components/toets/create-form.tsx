@@ -35,6 +35,7 @@ import { VOORBEELD_LESSTOF } from "@/lib/toets/sample";
 import { DEFAULT_CIJFER } from "@/lib/toets/cijfer";
 import type { CijferNorm, GenerateInput, Leerweg, Moeilijkheid, RttiVerdeling } from "@/lib/toets/types";
 import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
+import { PageIntro } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 
 const STAPPEN = ["Lesstof lezen", "Toetsmatrijs met RTTI", "Vragen in Cito-stijl", "Nakijkmodel en Word-bestand"];
@@ -359,13 +360,11 @@ export function CreateForm() {
     "flex h-12 w-full rounded-[var(--radius-md)] border border-transparent bg-paper px-4 text-sm text-fg";
 
   return (
+    <>
+    <PageIntro title="Toets maken" className="mb-6">
+      Drop lesstof of notities. Daarna: Toets maken.
+    </PageIntro>
     <form onSubmit={onSubmit} className="grid min-w-0 gap-5">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight text-brand sm:text-4xl">Toets maken</h1>
-        <p className="mt-3 max-w-xl text-pretty leading-relaxed text-muted">
-          Drop het leerlingboek, antwoordenboek of notities. Ook een scan zonder tekstlaag. Daarna: Toets maken.
-        </p>
-      </header>
 
       <div
         onDragEnter={(e) => {
@@ -661,5 +660,7 @@ export function CreateForm() {
       </details>
 
     </form>
+    </>
+
   );
 }
