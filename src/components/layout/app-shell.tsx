@@ -132,16 +132,20 @@ export function Page({
 export function PageIntro({
   title,
   children,
+  className,
 }: {
   title: string;
   children?: ReactNode;
+  className?: string;
 }) {
   return (
-    <header className="mb-6">
+    <header className={cn("mb-6 min-h-[6.75rem] sm:min-h-[7.25rem]", className)}>
       <h1 className="text-3xl font-bold tracking-tight text-brand sm:text-4xl">{title}</h1>
       {children ? (
         <p className="mt-3 max-w-xl text-pretty leading-relaxed text-muted">{children}</p>
-      ) : null}
+      ) : (
+        <p className="mt-3">&nbsp;</p>
+      )}
     </header>
   );
 }
