@@ -24,11 +24,12 @@ export const STUUR_SECTIES: StuurSectie[] = [
     id: "origineel",
     titel: "Originele vragen",
     punten: [
-      "Vragen mogen in ZELFDE STIJL zijn als voorbeeldoefeningen in de lesstof (Cito-achtig, zelfde soort opdracht), maar NOOIT 1:1 hetzelfde.",
-      "Als een boekopgave ter inspiratie dient: pas ALTIJD namen, getallen, eenheden-waarden en concrete situaties aan. Zelfde leerdoel/RTTI, andere oppervlakte.",
+      "Vragen mogen in ZELFDE STIJL zijn als voorbeeldoefeningen in de lesstof (Cito-achtig, zelfde soort opdracht), maar NOOIT 1:1 hetzelfde — en ook geen near-copy (zelfde verhaal met één getal of naam gewisseld).",
+      "Als een boekopgave ter inspiratie dient: pas ALTIJD namen, getallen, eenheden-waarden én de concrete situatie/context aan. Zelfde leerdoel/RTTI, duidelijk andere oppervlakte.",
       "Neem geen vraagstammen, opties of modelantwoorden letterlijk over uit leerlingboek, werkboek of antwoordenboek.",
       "Vermijd formuleringen als \"zoals in het boek\", \"uit de lesstof\", \"zoals in het voorbeeld\" of \"zoals hierboven in de tekst\".",
       "Bij berekeningen: andere getallen dan in de aangeleverde voorbeelden, met dezelfde soort redenering en moeilijkheid.",
+      "Klassieke modelcontexten (cv-ketel, waterpomp, tractorband, kasverwarming, trekker op helling, enz.): gebruik een DUIDELIJK ANDERE praktijkcontext met andere getallen — niet het boekvoorbeeld licht herschrijven.",
     ],
   },
   {
@@ -72,7 +73,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Eenvoudige open vraag (één kort antwoord, noem/geef): 1–2 punten.",
       "Overige open/berekening/bronvragen: punten = aantal zinvolle nakijkstappen (1 punt per stap/criterium), passend bij RTTI-zwaarte.",
       "Totaal dicht bij het gevraagde maximum.",
-      "Vraagverdeling: tenzij de docent aantallen vastzet — hoofdstuktoets met voldoende stof → relatief veel MC; dictee/schrijf/luister/spreek → vooral open, weinig of geen MC.",
+      "Vraagverdeling: tenzij de docent aantallen vastzet — hoofdstuktoets met voldoende stof → ≥50% meerkeuze/juist-onjuist; dictee/schrijf/luister/spreek → vooral open, weinig of geen MC.",
       "Volgorde op het blad (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen anders als de docent dat expliciet vraagt (bijv. open eerst, gemengde volgorde).",
       "Nakijkmodel: per vraag een modelantwoord én puntenverdeelsleutel.",
       "Cesuur-formule standaard: cijfer = 1 + 9 × (score / maximum), tenzij de docent een ander model kiest.",
@@ -83,6 +84,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
     titel: "NaSk en exacte vakken",
     punten: [
       "Neem formules, eenheden, significantie, tabel- of grafiekbronnen, meetonzekerheid en eenvoudige labcontext mee als de lesstof dat toelaat.",
+      "Hoofdstuktoets NaSk / exact: zorg dat minstens één vraag een echte figuur heeft (tabel, grafiek of schemaFiguur) — liever aflezen/meten dan alleen tekst.",
       "Noemt de lesstof een grafiek of tabel: zet een echte gestructureerde tabel (veld tabel) en/of grafiek (veld grafiek) in de JSON — geen alleen-tekstverwijzing.",
       "Bij schakelingen, krachten of blokkenschema's: gebruik schemaFiguur (soort circuit|krachten|blokken) met korte labels. Alleen eenvoudige lijnkunst, nooit boekillustraties kopiëren.",
     ],
@@ -91,7 +93,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
     id: "figuren",
     titel: "Illustraties en figuren",
     punten: [
-      "Voeg alleen een figuur toe als die de vraag écht helpt (aflezen, meten, schema). Niet bij elke vraag.",
+      "Voeg een figuur toe als die de vraag écht helpt (aflezen, meten, schema). Niet bij elke vraag — wel minstens één bij een NaSk-hoofdstuktoets met voldoende stof.",
       "Figuren zijn ORIGINEEL en exam-stijl (eenvoudige tabel, grafiek of lijn-schema). Nooit boekplaatjes, foto's of auteursrechtelijk materiaal natekenen.",
       "Volgorde op het blad: context → figuur (tabel/grafiek/schema) → stam.",
     ],

@@ -15,6 +15,23 @@ function isMcLike(type: VraagType | string): boolean {
 }
 
 /**
+ * True als MC en open door elkaar staan (niet: alle MC eerst, daarna rest).
+ * Gebruikt voor de knop «MC eerst» op de toetspagina.
+ */
+export function isVolgordeGemengd(vragen: Vraag[]): boolean {
+  if (vragen.length < 2) return false;
+  let seenOpen = false;
+  for (const q of vragen) {
+    if (isMcLike(q.type)) {
+      if (seenOpen) return true;
+    } else {
+      seenOpen = true;
+    }
+  }
+  return false;
+}
+
+/**
  * Standaard: meerkeuze/juist-onjuist eerst (relatieve volgorde behouden), daarna open/rest.
  * Herberekent nummers 1…n en houdt nakijkmodel in sync.
  */

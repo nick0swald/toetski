@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FileDown, Loader2, Plus } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { ArrowUpDown, FileDown, Loader2, Plus, Sparkles } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/app-shell";
+import { DekkingHintBanner } from "@/components/toets/dekking-hint";
 import { KwaliteitPanel } from "@/components/toets/kwaliteit-panel";
 import { MatrijsSheet } from "@/components/toets/matrijs-sheet";
 import { NakijkSheet } from "@/components/toets/nakijk-sheet";
@@ -10,11 +11,13 @@ import { ToetsSheet } from "@/components/toets/toets-sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { generateExtraQuestions } from "@/lib/toets/generate";
+import { Textarea } from "@/components/ui/textarea";
+import { bijschavenToets, generateExtraQuestions } from "@/lib/toets/generate";
 import { withDefaults } from "@/lib/toets/defaults";
 import { maakVoorbeeldToets } from "@/lib/toets/sample";
 import { cesuurPunten, formuleTekst } from "@/lib/toets/cijfer";
 import { totaalPunten } from "@/lib/toets/rtti";
+import { isVolgordeGemengd, ordenVragenMcEerst } from "@/lib/toets/vraag-volgorde";
 import { useToetsStore } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +70,8 @@ function ToetsPage() {
   const [saving, setSaving] = useState(false);
   const [extraCount, setExtraCount] = useState(1);
   const [extraBusy, setExtraBusy] = useState(false);
+  const [bijschavenTekst, setBijschavenTekst] = useState("");
+  const [bijschavenBusy, setBijschavenBusy] = useState(false);
   const ensureVoorbeeld = useToetsStore((s) => s.ensureVoorbeeld);
   const upsert = useToetsStore((s) => s.upsert);
   const stuurdocument = useToetsStore((s) => s.stuurdocument);
@@ -80,6 +85,10 @@ function ToetsPage() {
   }, [id, stored?.soort]);
 
   const titel = toets?.meta.titel ?? "Toets";
+  const gemengdeVolgorde = useMemo(
+    () => (toets && toets.soort !== "matrijs" ? isVolgordeGemengd(toets.vragen) : false),
+    [toets],
+  );
 
   if (!hydrated || (!toets && retryTick < 12)) {
     return (
@@ -125,6 +134,52 @@ function ToetsPage() {
       toast.error(err instanceof Error ? err.message : "Download mislukt");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function applyMcEerst() {
+    if (isMatrijs) return;
+    const { vragen, nakijkmodel } = ordenVragenMcEerst(current.vragen, current.nakijkmodel);
+    upsert({ ...current, vragen, nakijkmodel });
+    toast.success("Vragen geordend: MC eerst (nakijk/matrijs bijgewerkt)");
+  }
+
+  async function runBijschaven() {
+    if (isMatrijs || bijschavenBusy) return;
+    const instructie = bijschavenTekst.trim();
+    if (instructie.length < 3) {
+      toast.error("Typ een korte instructie (bijv. «vraag 3 korter» of «punten herverdelen»).");
+      return;
+    }
+    setBijschavenBusy(true);
+    try {
+      const result = await bijschavenToets({
+        data: {
+          instructie,
+          vak: current.meta.vak,
+          leerweg: current.meta.leerweg,
+          leerjaar: current.meta.leerjaar,
+          bronmateriaal: current.bronmateriaal,
+          stuurdocument: stuurdocument.trim() || undefined,
+          vragen: current.vragen,
+          nakijkmodel: current.nakijkmodel,
+        },
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      upsert({
+        ...current,
+        vragen: result.vragen,
+        nakijkmodel: result.nakijkmodel,
+      });
+      setBijschavenTekst("");
+      toast.success(result.toelichting || "Bijgeschaafd");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bijschaven mislukt");
+    } finally {
+      setBijschavenBusy(false);
     }
   }
 
@@ -195,6 +250,12 @@ function ToetsPage() {
                   <Button type="button" variant={editing ? "default" : "ghost"} onClick={() => setEditing((v) => !v)}>
                     {editing ? "Klaar" : "Bewerken"}
                   </Button>
+                  {gemengdeVolgorde ? (
+                    <Button type="button" variant="secondary" onClick={applyMcEerst}>
+                      <ArrowUpDown className="size-4" />
+                      MC eerst
+                    </Button>
+                  ) : null}
                   <Button asChild variant="ghost">
                     <Link to="/feedback" search={{ id: toets.id }}>
                       Wijzigingen
@@ -231,6 +292,35 @@ function ToetsPage() {
               </Button>
             </div>
           </div>
+          {isMatrijs ? null : (
+            <div className="mt-4 grid gap-2 rounded-[var(--radius-lg)] bg-surface p-4">
+              <Label htmlFor="bijschaven" className="text-sm font-semibold text-brand">
+                Bijschaven
+              </Label>
+              <p className="text-xs text-muted">
+                Korte instructie → gerichte AI-fix (volgorde, punten, één vraag). Geen volledige regeneratie.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <Textarea
+                  id="bijschaven"
+                  value={bijschavenTekst}
+                  onChange={(e) => setBijschavenTekst(e.target.value)}
+                  placeholder="Bijv. vraag 4 herschrijven met andere context · MC eerst · vraag 2 naar 2 punten"
+                  className="min-h-16 flex-1 bg-paper"
+                  disabled={bijschavenBusy}
+                />
+                <Button
+                  type="button"
+                  disabled={bijschavenBusy}
+                  onClick={() => void runBijschaven()}
+                  className="shrink-0"
+                >
+                  {bijschavenBusy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                  Bijschaven
+                </Button>
+              </div>
+            </div>
+          )}
           {tabs.length > 1 ? (
             <nav className="mt-6 flex gap-1 overflow-x-auto rounded-[var(--radius-lg)] bg-surface p-1">
               {tabs.map((t) => (
@@ -252,7 +342,10 @@ function ToetsPage() {
       </div>
       <div className="mx-auto max-w-[210mm] px-3 py-8 sm:px-6">
         {visibleTab === "toets" ? (
-          <ToetsSheet toets={toets} editing={editing} onStam={(nummer, stam) => updateVraag(toets.id, nummer, { stam })} />
+          <>
+            <ToetsSheet toets={toets} editing={editing} onStam={(nummer, stam) => updateVraag(toets.id, nummer, { stam })} />
+            {isMatrijs ? null : <DekkingHintBanner toets={toets} />}
+          </>
         ) : null}
         {visibleTab === "nakijk" ? (
           <NakijkSheet
