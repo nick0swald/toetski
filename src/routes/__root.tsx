@@ -22,7 +22,7 @@ export const Route = createRootRoute({
         content:
           "Toetsmaker voor Ares058 VMBO Leeuwarden: Cito-opmaak, nakijkmodel en RTTI-toetsmatrijs.",
       },
-      { name: "theme-color", content: "#004422" },
+      { name: "theme-color", content: "#ffcc00" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -36,7 +36,7 @@ export const Route = createRootRoute({
     ],
   }),
   component: () => (
-    <html lang="nl" className="antialiased" suppressHydrationWarning>
+    <html lang="nl" className="antialiased" data-theme="poki-balloon" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
