@@ -74,6 +74,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Totaal dicht bij het gevraagde maximum.",
       "Vraagverdeling: tenzij de docent aantallen vastzet — hoofdstuktoets met voldoende stof → relatief veel MC; dictee/schrijf/luister/spreek → vooral open, weinig of geen MC.",
       "Nakijkmodel: per vraag een modelantwoord én puntenverdeelsleutel.",
+      "Cesuur-formule standaard: cijfer = 1 + 9 × (score / maximum), tenzij de docent een ander model kiest.",
     ],
   },
   {
@@ -81,7 +82,17 @@ export const STUUR_SECTIES: StuurSectie[] = [
     titel: "NaSk en exacte vakken",
     punten: [
       "Neem formules, eenheden, significantie, tabel- of grafiekbronnen, meetonzekerheid en eenvoudige labcontext mee als de lesstof dat toelaat.",
-      "Noemt de lesstof een grafiek of tabel: zet een echte tabel of ASCII/SVG-grafiek in de toets, geen alleen-tekstverwijzing.",
+      "Noemt de lesstof een grafiek of tabel: zet een echte gestructureerde tabel (veld tabel) en/of grafiek (veld grafiek) in de JSON — geen alleen-tekstverwijzing.",
+      "Bij schakelingen, krachten of blokkenschema's: gebruik schemaFiguur (soort circuit|krachten|blokken) met korte labels. Alleen eenvoudige lijnkunst, nooit boekillustraties kopiëren.",
+    ],
+  },
+  {
+    id: "figuren",
+    titel: "Illustraties en figuren",
+    punten: [
+      "Voeg alleen een figuur toe als die de vraag écht helpt (aflezen, meten, schema). Niet bij elke vraag.",
+      "Figuren zijn ORIGINEEL en exam-stijl (eenvoudige tabel, grafiek of lijn-schema). Nooit boekplaatjes, foto's of auteursrechtelijk materiaal natekenen.",
+      "Volgorde op het blad: context → figuur (tabel/grafiek/schema) → stam.",
     ],
   },
   {
@@ -99,13 +110,13 @@ export function stuurdocumentTekst(): string {
 
 export const JSON_SCHEMA_PROMPT = `Antwoord ALLEEN met één JSON-object, geen markdown. Schema:
 {
-  "meta": { "titel": string, "vak": string, "leerweg": "BB"|"KB"|"GT", "leerjaar": 1|2|3|4, "duurMinuten": number, "hulpmiddelen": string[], "instructies": string[], "onderwerp": string },
-  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}] }],
+  "meta": { "titel": string, "vak": string, "leerweg": "BB"|"KB"|"GT", "leerjaar": 1|2|3|4, "duurMinuten": number, "hulpmiddelen": string[], "instructies": string[], "onderwerp": string, "extraTijd": string },
+  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] } }],
   "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }],
   "cesuur": { "nTerm": 1, "cesuurPunten": number, "toelichting": string, "formule": string },
   "kwaliteit": { "samenvatting": string, "punten": [{"criterium": string, "oordeel": "voldoet"|"aandacht"|"ontbreekt", "toelichting": string}] }
 }
-Velden per vraag (volgorde op het blad): "context" = optionele situatieschets/inleiding (wordt VOOR de stam getoond); "stam" = vraagtekst. In "stam": als je context leeg laat, begint stam met inleiding en eindigt met de vraagzin — NOOIT omgekeerd (geen vraag eerst, verhaal erna).`;
+Velden per vraag (volgorde op het blad): "context" = optionele situatieschets/inleiding (wordt VOOR de stam getoond); daarna optioneel "tabel"/"grafiek"/"schemaFiguur"; daarna "stam" = vraagtekst. Figuren alleen als nuttig — niet bij elke vraag; origineel exam-stijl, nooit boekkunst. In "stam": als je context leeg laat, begint stam met inleiding en eindigt met de vraagzin — NOOIT omgekeerd. "extraTijd" in meta alleen invullen als de docent dat expliciet vraagt (anders weglaten/leeg).`;
 
 export function bouwSystemPrompt(stuur?: string | null): string {
   const body = stuur?.trim() || stuurdocumentTekst();
