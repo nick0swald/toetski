@@ -3,6 +3,7 @@ import {
   BorderStyle,
   Document,
   HeadingLevel,
+  ImageRun,
   Packer,
   PageBreak,
   PageNumber,
@@ -20,7 +21,8 @@ import { RTTI_META, RTTI_ORDER, SCHOOL } from "./constants";
 import { cesuurPunten, formuleTekst, modelLabel, omzetTabel, voldoendeHint } from "./cijfer";
 import { totaalPunten } from "./rtti";
 import { slug } from "./text";
-import type { CijferNorm, GegenereerdeToets } from "./types";
+import { grafiekSvg, schemaFiguurSvg } from "./figuur-svg";
+import type { CijferNorm, GegenereerdeToets, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
 
 const GREEN = "004422";
@@ -36,6 +38,96 @@ const SMALL_SIZE = 20; // 10pt
 /** ~2.5cm / 2cm in twips (1cm ≈ 567). */
 const PAGE_MARGINS = { top: 1418, right: 1418, bottom: 1134, left: 1418 };
 const PAGE_A4 = { width: 11906, height: 16838 };
+
+type DocChild = Paragraph | Table;
+
+/** SVG → PNG via browser canvas (docx-export draait client-side). */
+async function svgToPngBytes(svg: string, width: number, height: number): Promise<Uint8Array> {
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("SVG kon niet worden geladen"));
+      el.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas niet beschikbaar");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL("image/png");
+    const b64 = dataUrl.split(",")[1] ?? "";
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function vraagTabelDocx(tabel: VraagTabel): Table {
+  const cols = Math.max(1, tabel.koppen.length);
+  const colW = Math.floor(9360 / cols);
+  const header = new TableRow({
+    children: tabel.koppen.map((k) =>
+      cell(k, { bold: true, fill: "E8F0EA", width: colW, center: true }),
+    ),
+  });
+  const rows = [
+    header,
+    ...tabel.rijen.map(
+      (rij) =>
+        new TableRow({
+          children: Array.from({ length: cols }, (_, j) =>
+            cell(rij[j] ?? "", { width: colW, center: true }),
+          ),
+        }),
+    ),
+  ];
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: Array.from({ length: cols }, () => colW),
+    rows,
+  });
+}
+
+async function svgImageParagraph(svg: string, widthPx: number, heightPx: number): Promise<Paragraph> {
+  const png = await svgToPngBytes(svg, widthPx, heightPx);
+  return new Paragraph({
+    spacing: { before: 80, after: 120 },
+    children: [
+      new ImageRun({
+        type: "png",
+        data: png,
+        transformation: { width: Math.round(widthPx * 0.75), height: Math.round(heightPx * 0.75) },
+        altText: { title: "Figuur", description: "Toetsfiguur", name: "figuur" },
+      }),
+    ],
+  });
+}
+
+async function vraagFiguurBlocks(q: Vraag): Promise<DocChild[]> {
+  const out: DocChild[] = [];
+  if (q.tabel?.koppen?.length) {
+    out.push(vraagTabelDocx(q.tabel));
+    out.push(p("", { after: 80 }));
+  }
+  if (q.grafiek && q.grafiek.punten.length >= 2) {
+    const svg = grafiekSvg(q.grafiek, 420, 240);
+    if (svg) out.push(await svgImageParagraph(svg, 420, 240));
+  }
+  if (q.schemaFiguur) {
+    const svg = schemaFiguurSvg(q.schemaFiguur as SchemaFiguur, 420, 220);
+    if (svg) out.push(await svgImageParagraph(svg, 420, 220));
+  }
+  return out;
+}
 
 function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number; before?: number }) {
   return new Paragraph({
@@ -234,7 +326,9 @@ function voorbladBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
     }),
     new TableRow({
       children: [
-        voorbladCel("Extra tijd 20%", "Ja", { width: w }),
+        (m.extraTijd?.trim()
+          ? voorbladCel("Extra tijd 20%", m.extraTijd.trim(), { width: w })
+          : voorbladCel("Extra tijd 20%", "", { width: w, blankLine: true })),
         voorbladCel("Behaalde aantal punten", "", { width: w, blankLine: true }),
       ],
     }),
@@ -266,10 +360,10 @@ function voorbladBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
   ];
 }
 
-function toetsParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
+async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
   const t = withDefaults(toets);
   const m = t.meta;
-  const out: (Paragraph | Table)[] = [...voorbladBlocks(t)];
+  const out: DocChild[] = [...voorbladBlocks(t)];
   if (m.instructies.length) {
     out.push(p("Instructie", { after: 60 }));
     for (const s of m.instructies) out.push(p(s, { size: SMALL_SIZE, after: 40 }));
@@ -277,13 +371,14 @@ function toetsParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   }
   for (const q of t.vragen) {
     const stam = (q.stam || "").trim();
-    // Cito/school: inleiding/context eerst, daarna de genummerde vraagstam.
+    // Cito/school: context → figuur → genummerde vraagstam.
     if (q.context?.trim()) {
       out.push(p(q.context.trim(), { size: BODY_SIZE, before: 200, after: 80 }));
     }
+    out.push(...(await vraagFiguurBlocks(q)));
     out.push(
       new Paragraph({
-        spacing: { before: q.context?.trim() ? 40 : 200, after: 80, line: 276, lineRule: "auto" },
+        spacing: { before: q.context?.trim() || q.tabel || q.grafiek || q.schemaFiguur ? 40 : 200, after: 80, line: 276, lineRule: "auto" },
         indent: { left: 709, hanging: 709 },
         children: [
           new TextRun({ text: `${q.punten}p`, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
@@ -615,14 +710,22 @@ export async function downloadKwaliteitDocx(toets: GegenereerdeToets) {
 
 export async function downloadPakketDocx(toets: GegenereerdeToets) {
   const t = withDefaults(toets);
+  const leerling = await toetsParagrafen(t);
   const doc = new Document({
     styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
     sections: [
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: toetsParagrafen(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: leerling },
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: nakijkParagrafen(t) },
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Toetsmatrijs"), children: matrijsBlocks(t) },
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Cijferomzetting"), children: cijferParagrafen(t) },
     ],
   });
   await saveDoc(doc, `${slug(t.meta.titel)}-versie-${t.meta.versie}-pakket.docx`);
+}
+
+/** Alleen leerlingblad (voorblad + vragen), met figuren. */
+export async function downloadLeerlingDocx(toets: GegenereerdeToets) {
+  const t = withDefaults(toets);
+  const leerling = await toetsParagrafen(t);
+  await saveDoc(docOf(leerling, `Toets versie ${t.meta.versie}`), `${slug(t.meta.titel)}-versie-${t.meta.versie}.docx`);
 }
