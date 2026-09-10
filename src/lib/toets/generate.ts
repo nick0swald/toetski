@@ -2,11 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { SCHOOL } from "./constants";
 import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
-import { extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
+import { bijschavenInputSchema, bijschavenPayloadSchema, extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
 import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
 import { balanceMcAntwoorden } from "./mc-balance";
 import { ordenVragenMcEerst, wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { detectVakProfiel, verzekerBronFiguren } from "./bron-figuren";
+import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 
 function stripJsonFence(raw: string): string {
@@ -164,7 +165,7 @@ function userPrompt(
   } else if (openN != null) {
     verdelingTekst = `VAST: ${openN} open/andere; vul aan met meerkeuze tot ongeveer ${input.aantalVragen} vragen totaal waar passend.`;
   } else {
-    verdelingTekst = `AUTO (~${input.aantalVragen} vragen): kies MC vs open op basis van de lesstof. Dictee/schrijf/luister/spreek → vooral open, weinig of geen MC. Hoofdstuktoets met voldoende stof → relatief veel MC (≥ helft). Anders gemengd.`;
+    verdelingTekst = `AUTO (~${input.aantalVragen} vragen): kies MC vs open op basis van de lesstof. Dictee/schrijf/luister/spreek → vooral open, weinig of geen MC. Hoofdstuktoets met voldoende stof → ${mcShareDoelTekst()} Anders gemengd.`;
   }
   let feedbackBlok = "";
   if (input.feedback?.trim() || input.vorigeSamenvatting?.trim()) {
@@ -195,6 +196,7 @@ Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); ee
 MC-sleutel: zet het juiste antwoord niet standaard op B. Opties in willekeurige inhoudelijke volgorde. modelantwoord = letter + tekst (bijv. "C. 12 N"). De app husselt de opties daarna.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
+NaSk/exacte vakken: bij hoofdstuktoets met voldoende stof minstens één vraag met tabel, grafiek of schemaFiguur (origineel exam-stijl).
 Versie: ${input.versie ?? "A"}
 Moeilijkheid: ${moeTekst}
 RTTI-doel: R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
@@ -204,7 +206,7 @@ Cijfernorm: ${input.cijferNorm?.model ?? "lineair"}
 Extra eisen van de docent:
 ${input.extraEisen?.trim() || "(geen)"}
 ${feedbackBlok}
-Leerlingboek / lesstof (KADER: leerdoelen/begrippen/formules én vraagSTIJL ter inspiratie — maak vergelijkbare maar NOOIT 1:1 dezelfde vragen; namen/getallen/situaties altijd aanpassen; geen "zoals in het boek"; kopieer geen antwoorden naar de leerlingtoets):
+Leerlingboek / lesstof (KADER: leerdoelen/begrippen/formules én vraagSTIJL ter inspiratie — maak vergelijkbare maar NOOIT 1:1 of near-copy; namen/getallen/én context altijd aanpassen; klassieke modellen zoals cv/pomp → andere praktijkcontext; geen "zoals in het boek"; kopieer geen antwoorden naar de leerlingtoets):
 ${bron.trim() || "(geen bron)"}
 ${
   input.antwoordenmateriaal?.trim()
@@ -314,7 +316,18 @@ export const generateToets = createServerFn({ method: "POST" })
           formule: formuleTekst(cijferNorm, max),
         },
         matrijs: bouwMatrijs(vragen, rttiDoel),
-        kwaliteit: payload.kwaliteit,
+        kwaliteit: annoteerMcAandeel(
+          payload.kwaliteit,
+          vragen,
+          wilHogeMcShare({
+            bron,
+            extraEisen: data.extraEisen,
+            titel: data.titel || payload.meta.titel,
+            vak: data.vak || payload.meta.vak,
+            mcVragen: data.mcVragen,
+            openVragen: data.openVragen,
+          }),
+        ),
       };
       return { ok: true, toets };
     } catch (err) {
@@ -604,6 +617,140 @@ ${EXTRA_JSON_SCHEMA}`;
           return { ok: false, error: "De AI leverde geen bruikbare extra vragen." };
         }
         return { ok: true, vragen, nakijkmodel };
+      } catch (err) {
+        return { ok: false, error: vriendelijkeAiFout(err) };
+      }
+    },
+  );
+const BIJSCHAVEN_JSON = `Antwoord ALLEEN met één JSON-object, geen markdown. Schema:
+{
+  "vragen": [ /* ALLE vragen van de toets, eventueel aangepast */ ],
+  "nakijkmodel": [ /* ALLE nakijkregels, nummers synchroon met vragen */ ],
+  "toelichting": string
+}
+Behoud hetzelfde aantal vragen tenzij de instructie expliciet vraagt om te schrappen of te splitsen.
+Nummers 1…n opeenvolgend. Figuurvelden (tabel/grafiek/schemaFiguur) behouden tenzij de instructie die wijzigt.
+Geen meta, cesuur of kwaliteit.
+`;
+
+/**
+ * Gericht bijschaven: herschikken, punten, of één/enkele vraag — géén volledige regeneratie.
+ */
+export const bijschavenToets = createServerFn({ method: "POST" })
+  .validator((input: unknown) => bijschavenInputSchema.parse(input))
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      | { ok: true; vragen: Vraag[]; nakijkmodel: NakijkItem[]; toelichting: string }
+      | { ok: false; error: string }
+    > => {
+      try {
+        const instructie = data.instructie.trim();
+        if (!instructie) return { ok: false, error: "Typ een korte instructie voor het bijschaven." };
+        const stuur = data.stuurdocument?.trim() || stuurdocumentTekst();
+        const system = `Je bent toetsconstructeur voor Ares058 VMBO Leeuwarden.
+Je BIJSCHAAFT een bestaande toets op basis van een korte docentinstructie.
+Je maakt GEEN nieuwe toets van scratch. Wijzig alleen wat nodig is (volgorde/punten/één of enkele vragen/nakijk).
+Houd nakijkmodel synchroon met vraagnummers. RTTI/domein/leerdoel behouden tenzij de instructie die raakt.
+
+${stuur}
+
+${BIJSCHAVEN_JSON}`;
+
+        const bestaande = data.vragen
+          .map((q) => {
+            const opt =
+              q.opties?.length ? ` | opties: ${q.opties.map((o) => `${o.letter}:${o.tekst}`).join("; ")}` : "";
+            return `${q.nummer}. [${q.type}/${q.rtti}] ${q.punten}p · ${q.domein} · ${q.leerdoel}\ncontext: ${q.context || "—"}\nstam: ${q.stam}${opt}`;
+          })
+          .join("\n\n");
+        const nakijk = data.nakijkmodel
+          .map(
+            (n) =>
+              `v${n.nummer}: ${n.modelantwoord} | ${n.puntenverdeling.map((p) => `${p.punt}p:${p.criterium}`).join("; ")}`,
+          )
+          .join("\n");
+
+        const user = `Bijschaaf-instructie van de docent:
+${instructie}
+
+Vak: ${data.vak?.trim() || "(onbekend)"} · ${data.leerweg} klas ${data.leerjaar}
+
+Huidige vragen:
+${bestaande}
+
+Huidig nakijkmodel:
+${nakijk || "(leeg)"}
+
+Lesstof (alleen raadplegen bij inhoudelijke wijziging van een vraag; niet alles herschrijven):
+${(data.bronmateriaal ?? "").trim().slice(0, 12000) || "(geen)"}
+
+Lever ALLE vragen + nakijkmodel terug (aangepast of ongewijzigd).`;
+
+        const messages = [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ];
+        const maxTok = Math.min(14000, Math.max(4000, 2000 + data.vragen.length * 400));
+        let raw = await callGrok(messages, maxTok);
+        let parsed: unknown;
+        try {
+          parsed = parseAiJson(raw);
+        } catch {
+          raw = await callGrok(
+            [
+              ...messages,
+              { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
+              {
+                role: "user",
+                content:
+                  "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object met vragen, nakijkmodel en toelichting. Kap niet af.",
+              },
+            ],
+            maxTok,
+          );
+          parsed = parseAiJson(raw);
+        }
+        const payload = bijschavenPayloadSchema.parse(parsed);
+        const vragenRaw = payload.vragen.map((q, i) =>
+          normaliseerVraagTekst({
+            ...q,
+            nummer: q.nummer || i + 1,
+            opties: q.opties?.length ? q.opties : undefined,
+          }),
+        );
+        let nakijkRaw = payload.nakijkmodel.map((n, i) => ({
+          ...n,
+          nummer: n.nummer || vragenRaw[i]?.nummer || i + 1,
+        }));
+        if (nakijkRaw.length < vragenRaw.length) {
+          const have = new Set(nakijkRaw.map((n) => n.nummer));
+          for (const q of vragenRaw) {
+            if (!have.has(q.nummer)) {
+              const old = data.nakijkmodel.find((n) => n.nummer === q.nummer);
+              nakijkRaw.push(
+                old ?? {
+                  nummer: q.nummer,
+                  modelantwoord: "",
+                  puntenverdeling: [{ punt: q.punten || 1, criterium: "Correct antwoord" }],
+                  nietToekennen: [],
+                },
+              );
+            }
+          }
+        }
+        const balanced = balanceMcAntwoorden(vragenRaw, nakijkRaw);
+        const skipMcEerst = wilGemengdeOfOpenEerst(instructie);
+        const geordend = ordenVragenMcEerst(balanced.vragen, balanced.nakijkmodel, {
+          skip: skipMcEerst,
+        });
+        return {
+          ok: true,
+          vragen: geordend.vragen,
+          nakijkmodel: geordend.nakijkmodel,
+          toelichting: payload.toelichting?.trim() || "Bijgeschaafd.",
+        };
       } catch (err) {
         return { ok: false, error: vriendelijkeAiFout(err) };
       }

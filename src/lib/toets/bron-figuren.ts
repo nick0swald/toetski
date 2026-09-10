@@ -1,4 +1,4 @@
-import type { Vraag, VraagGrafiek, VraagTabel, VakProfiel } from "./types";
+import type { SchemaFiguur, Vraag, VraagGrafiek, VraagTabel, VakProfiel } from "./types";
 
 function parseNlNumber(s: string): number | null {
   const t = s.trim().replace(/\s/g, "").replace(",", ".");
@@ -20,9 +20,14 @@ function isSeparator(line: string): boolean {
 }
 
 function noemtFiguur(text: string): boolean {
-  return /tabel|grafiek|diagram|figuur|meetreeks|meetwaarden|schema|schakeling|krachten/i.test(
+  return /tabel|grafiek|diagram|figuur|meetreeks|meetwaarden|schema|schakeling|krachten|blokken(?:schema)?|stroomkring/i.test(
     text,
   );
+}
+
+/** Genoeg lesstof voor een hoofdstuktoets (figuur-heuristiek). */
+export function isRuimeBron(bron: string): boolean {
+  return bron.trim().length >= 800 || /\bhoofdstuk\b|\bparagraaf\b/i.test(bron.slice(0, 2500));
 }
 
 /** Herkent NaSk/exacte vakken voor figuur-heuristieken. */
@@ -89,19 +94,59 @@ export function extractBronFiguren(bron: string): {
   return grafiek ? { tabel, grafiek } : { tabel };
 }
 
-/** Als NaSk-lesstof een tabel/grafiek noemt maar de AI die weglaat, plak hem op een vraag. */
+/** Stelt een eenvoudig schema voor op basis van trefwoorden in de lesstof. */
+export function suggestSchemaFiguur(bron: string): SchemaFiguur | null {
+  const t = bron.toLowerCase();
+  if (/schakeling|stroomkring|weerstand|amp[eè]re|voltmeter|serieschakeling|parallelschakeling/.test(t)) {
+    return {
+      soort: "circuit",
+      titel: "Eenvoudige stroomkring",
+      labels: ["bron", "lamp", "schakelaar"],
+    };
+  }
+  if (/kracht(?:en)?|zwaartekracht|normaalkracht|wrijving|veer(?:kracht)?|resulterend/.test(t)) {
+    return {
+      soort: "krachten",
+      titel: "Krachten op een voorwerp",
+      labels: ["Fz", "Fn", "Fw"],
+    };
+  }
+  if (/blokken(?:schema)?|energiestroom|omzetting|fotosynthese|proces/.test(t)) {
+    return {
+      soort: "blokken",
+      titel: "Blokkenschema",
+      labels: ["in", "proces", "uit"],
+    };
+  }
+  return null;
+}
+
+function heeftFiguur(q: Vraag): boolean {
+  return Boolean(q.tabel || q.grafiek || q.schemaFiguur);
+}
+
+/**
+ * Als NaSk-lesstof figuren noemt (of ruim genoeg is voor een hoofdstuktoets)
+ * maar de AI die weglaat: plak tabel/grafiek uit de bron of een eenvoudig schema.
+ * Doel: hoofdstuktoetsen vaker ≥1 schema/tabel/grafiek.
+ */
 export function verzekerBronFiguren(
   vragen: Vraag[],
   bron: string,
   vakProfiel?: VakProfiel,
 ): Vraag[] {
   if (vakProfiel !== "nask") return vragen;
-  if (!noemtFiguur(bron)) return vragen;
-  if (vragen.some((q) => q.tabel || q.grafiek || q.schemaFiguur)) return vragen;
+  if (vragen.some(heeftFiguur)) return vragen;
+
+  const wilFiguur = noemtFiguur(bron) || isRuimeBron(bron);
+  if (!wilFiguur) return vragen;
+
   const fig = extractBronFiguren(bron);
-  if (!fig) return vragen;
+  const schema = fig ? null : suggestSchemaFiguur(bron);
+  if (!fig && !schema) return vragen;
+
   const idx = vragen.findIndex((q) =>
-    noemtFiguur(`${q.stam} ${q.context ?? ""} ${q.leerdoel}`),
+    noemtFiguur(`${q.stam} ${q.context ?? ""} ${q.leerdoel} ${q.domein}`),
   );
   const i = idx >= 0 ? idx : 0;
   const q = vragen[i];
@@ -109,8 +154,9 @@ export function verzekerBronFiguren(
   const next = vragen.slice();
   next[i] = {
     ...q,
-    tabel: q.tabel ?? fig.tabel,
-    grafiek: q.grafiek ?? fig.grafiek,
+    tabel: q.tabel ?? fig?.tabel,
+    grafiek: q.grafiek ?? fig?.grafiek,
+    schemaFiguur: q.schemaFiguur ?? schema ?? undefined,
   };
   return next;
 }

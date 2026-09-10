@@ -13,6 +13,10 @@ describe("stuurdocument", () => {
     assert.match(tekst, /Lesstof is leidend/);
     assert.match(tekst, /cijfer = 1 \+ 9/);
     assert.match(tekst, /EERST situatieschets\/inleiding/);
+    assert.match(tekst, /near-copy|NOOIT 1:1/);
+    assert.match(tekst, /≥50%|minimaal de helft/);
+    assert.match(tekst, /cv-ketel|waterpomp|andere praktijkcontext/);
+    assert.match(tekst, /minstens één vraag een echte figuur/);
     assert.match(SYSTEM_PROMPT, /JSON-object/);
     assert.match(SYSTEM_PROMPT, /wordt VOOR de stam getoond/);
     for (const s of STUUR_SECTIES) {

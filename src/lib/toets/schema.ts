@@ -223,3 +223,20 @@ export const extraQuestionsPayloadSchema = z.object({
   vragen: z.array(vraagSchema).min(1).max(8),
   nakijkmodel: z.array(nakijkSchema).min(1).max(8),
 });
+
+export const bijschavenInputSchema = z.object({
+  instructie: z.string().min(3).max(2000),
+  vak: z.string().max(80).optional().default(""),
+  leerweg,
+  leerjaar: z.coerce.number().int().min(1).max(4),
+  bronmateriaal: z.string().max(100000).optional().default(""),
+  stuurdocument: z.string().max(20000).optional(),
+  vragen: z.array(vraagSchema).min(1).max(80),
+  nakijkmodel: z.array(nakijkSchema).min(0).max(80),
+});
+
+export const bijschavenPayloadSchema = z.object({
+  vragen: z.array(vraagSchema).min(1).max(80),
+  nakijkmodel: z.array(nakijkSchema).min(0).max(80),
+  toelichting: z.string().max(500).optional().default(""),
+});

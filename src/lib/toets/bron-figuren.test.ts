@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { detectVakProfiel, extractBronFiguren, verzekerBronFiguren } from "./bron-figuren.ts";
+import {
+  detectVakProfiel,
+  extractBronFiguren,
+  suggestSchemaFiguur,
+  verzekerBronFiguren,
+} from "./bron-figuren.ts";
 import type { Vraag } from "./types.ts";
 
 const LESSTOF = `Lesstof klas 2 KB NaSk — Temperatuur
@@ -70,8 +75,20 @@ describe("verzekerBronFiguren", () => {
     const out = verzekerBronFiguren(kaal, LESSTOF, "generiek");
     assert.equal(out[0]?.tabel, undefined);
   });
+
+  it("plakt schema bij ruime NaSk-stof over schakelingen zonder pijptabel", () => {
+    const bron = `Hoofdstuk 5 Elektriciteit\n${"De stroomkring en de schakeling. ".repeat(40)}`;
+    const out = verzekerBronFiguren(kaal, bron, "nask");
+    assert.ok(out[0]?.schemaFiguur);
+    assert.equal(out[0]?.schemaFiguur?.soort, "circuit");
+  });
 });
 
+describe("suggestSchemaFiguur", () => {
+  it("kiest circuit bij schakeling", () => {
+    assert.equal(suggestSchemaFiguur("serieschakeling met lamp").soort, "circuit");
+  });
+});
 
 describe("detectVakProfiel", () => {
   it("herkent NaSk", () => {
