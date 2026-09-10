@@ -20,7 +20,21 @@ function isSeparator(line: string): boolean {
 }
 
 function noemtFiguur(text: string): boolean {
-  return /tabel|grafiek|diagram|figuur|meetreeks|meetwaarden/i.test(text);
+  return /tabel|grafiek|diagram|figuur|meetreeks|meetwaarden|schema|schakeling|krachten/i.test(
+    text,
+  );
+}
+
+/** Herkent NaSk/exacte vakken voor figuur-heuristieken. */
+export function detectVakProfiel(vak: string, bron = ""): VakProfiel {
+  const t = `${vak} ${bron.slice(0, 2000)}`.toLowerCase();
+  if (
+    /\bnask\b|natuur-?\s*en\s*scheikunde|natuurkunde|scheikunde|n\/?sk\b|fysica|chemie/.test(t)
+  ) {
+    return "nask";
+  }
+  if (/\bbiologie\b|\bbio\b/.test(t)) return "biologie";
+  return "generiek";
 }
 
 /** Haalt een pijptabel (en eventueel een 2-kolomsgrafiek) uit lesstof. */
@@ -83,7 +97,7 @@ export function verzekerBronFiguren(
 ): Vraag[] {
   if (vakProfiel !== "nask") return vragen;
   if (!noemtFiguur(bron)) return vragen;
-  if (vragen.some((q) => q.tabel || q.grafiek)) return vragen;
+  if (vragen.some((q) => q.tabel || q.grafiek || q.schemaFiguur)) return vragen;
   const fig = extractBronFiguren(bron);
   if (!fig) return vragen;
   const idx = vragen.findIndex((q) =>
