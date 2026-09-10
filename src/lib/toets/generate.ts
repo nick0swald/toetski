@@ -5,6 +5,7 @@ import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
 import { extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
 import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
 import { balanceMcAntwoorden } from "./mc-balance";
+import { ordenVragenMcEerst, wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { detectVakProfiel, verzekerBronFiguren } from "./bron-figuren";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 
@@ -193,6 +194,7 @@ Streefmaximum: ${input.doelPunten} punten (richtlijn; passend bij toetsduur en m
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
 MC-sleutel: zet het juiste antwoord niet standaard op B. Opties in willekeurige inhoudelijke volgorde. modelantwoord = letter + tekst (bijv. "C. 12 N"). De app husselt de opties daarna.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
+Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
 Versie: ${input.versie ?? "A"}
 Moeilijkheid: ${moeTekst}
 RTTI-doel: R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
@@ -267,8 +269,15 @@ export const generateToets = createServerFn({ method: "POST" })
         data.vak?.trim() || payload.meta.vak || "",
         bron,
       );
-      const vragen = verzekerBronFiguren(balanced.vragen, bron, vakProfiel);
-      const nakijkmodel = balanced.nakijkmodel;
+      const metFiguren = verzekerBronFiguren(balanced.vragen, bron, vakProfiel);
+      const skipMcEerst = wilGemengdeOfOpenEerst(
+        `${data.extraEisen ?? ""}\n${data.feedback ?? ""}`,
+      );
+      const geordend = ordenVragenMcEerst(metFiguren, balanced.nakijkmodel, {
+        skip: skipMcEerst,
+      });
+      const vragen = geordend.vragen;
+      const nakijkmodel = geordend.nakijkmodel;
       const max = totaalPunten(vragen);
       const cijferNorm = data.cijferNorm;
       const cesuurP = cesuurPunten(max, cijferNorm);
@@ -488,6 +497,7 @@ Startnummer: ${input.startNummer} (nummer de nieuwe vragen opeenvolgend vanaf hi
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
 MC-sleutel: zet het juiste antwoord niet standaard op B. Opties in willekeurige inhoudelijke volgorde. modelantwoord = letter + tekst (bijv. "C. 12 N"). De app husselt de opties daarna.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
+Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
 
 Bestaande vragen (NIET herhalen, niet parafraseren; maak iets anders met andere namen/getallen/situaties):
 ${bestaande || "(geen)"}
@@ -579,8 +589,17 @@ ${EXTRA_JSON_SCHEMA}`;
         }
         const balanced = balanceMcAntwoorden(vragenRaw, nakijkRaw);
         const vakProfiel = detectVakProfiel(data.vak?.trim() || "", data.bronmateriaal || "");
-        const vragen = verzekerBronFiguren(balanced.vragen, data.bronmateriaal || "", vakProfiel);
-        const nakijkmodel = balanced.nakijkmodel;
+        const metFiguren = verzekerBronFiguren(
+          balanced.vragen,
+          data.bronmateriaal || "",
+          vakProfiel,
+        );
+        const skipMcEerst = wilGemengdeOfOpenEerst(data.extraEisen ?? "");
+        const geordend = ordenVragenMcEerst(metFiguren, balanced.nakijkmodel, {
+          skip: skipMcEerst,
+        });
+        const vragen = geordend.vragen;
+        const nakijkmodel = geordend.nakijkmodel;
         if (vragen.length < 1) {
           return { ok: false, error: "De AI leverde geen bruikbare extra vragen." };
         }

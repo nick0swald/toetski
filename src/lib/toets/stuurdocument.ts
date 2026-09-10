@@ -73,6 +73,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Overige open/berekening/bronvragen: punten = aantal zinvolle nakijkstappen (1 punt per stap/criterium), passend bij RTTI-zwaarte.",
       "Totaal dicht bij het gevraagde maximum.",
       "Vraagverdeling: tenzij de docent aantallen vastzet — hoofdstuktoets met voldoende stof → relatief veel MC; dictee/schrijf/luister/spreek → vooral open, weinig of geen MC.",
+      "Volgorde op het blad (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen anders als de docent dat expliciet vraagt (bijv. open eerst, gemengde volgorde).",
       "Nakijkmodel: per vraag een modelantwoord én puntenverdeelsleutel.",
       "Cesuur-formule standaard: cijfer = 1 + 9 × (score / maximum), tenzij de docent een ander model kiest.",
     ],
