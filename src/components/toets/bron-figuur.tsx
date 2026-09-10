@@ -1,4 +1,5 @@
-import type { VraagGrafiek, VraagTabel } from "@/lib/toets/types";
+import type { SchemaFiguur, VraagGrafiek, VraagTabel } from "@/lib/toets/types";
+import { schemaFiguurSvg } from "@/lib/toets/figuur-svg";
 
 export function BronTabel({ tabel }: { tabel: VraagTabel }) {
   if (!tabel.koppen.length) return null;
@@ -111,5 +112,44 @@ export function BronGrafiek({ grafiek }: { grafiek: VraagGrafiek }) {
         </text>
       </svg>
     </figure>
+  );
+}
+
+export function BronSchemaFiguur({ figuur }: { figuur: SchemaFiguur }) {
+  const svg = schemaFiguurSvg(figuur, 360, 200);
+  // Strip XML declaration for inline React HTML
+  const html = svg.replace(/^<\?xml[^>]*>\s*/i, "");
+  return (
+    <figure className="mt-3 rounded-[var(--radius-sm)] border border-border bg-bg/60 p-3">
+      {figuur.titel ? (
+        <figcaption className="mb-1 text-sm font-semibold text-brand">{figuur.titel}</figcaption>
+      ) : null}
+      <div
+        className="w-full max-w-md text-foreground [&_svg]:h-auto [&_svg]:w-full"
+        dangerouslySetInnerHTML={{ __html: html }}
+        role="img"
+        aria-label={figuur.titel || `Schema ${figuur.soort}`}
+      />
+    </figure>
+  );
+}
+
+/** Alle figuren bij een vraag: tabel, grafiek en/of schema (preview). */
+export function VraagFiguren({
+  tabel,
+  grafiek,
+  schemaFiguur,
+}: {
+  tabel?: VraagTabel;
+  grafiek?: VraagGrafiek;
+  schemaFiguur?: SchemaFiguur;
+}) {
+  if (!tabel && !grafiek && !schemaFiguur) return null;
+  return (
+    <div className="grid gap-2">
+      {tabel ? <BronTabel tabel={tabel} /> : null}
+      {grafiek ? <BronGrafiek grafiek={grafiek} /> : null}
+      {schemaFiguur ? <BronSchemaFiguur figuur={schemaFiguur} /> : null}
+    </div>
   );
 }

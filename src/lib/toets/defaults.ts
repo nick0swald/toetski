@@ -18,6 +18,7 @@ export function withDefaults(t: GegenereerdeToets): GegenereerdeToets {
       moeilijkheid: t.meta.moeilijkheid ?? "normaal",
       hulpmiddelen: t.meta.hulpmiddelen ?? [],
       instructies: t.meta.instructies ?? [],
+      extraTijd: t.meta.extraTijd?.trim() || undefined,
     },
   };
 }

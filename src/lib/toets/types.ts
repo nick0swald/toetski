@@ -14,6 +14,12 @@ export type ToetsVersie = "A" | "B";
 export type Moeilijkheid = "makkelijk" | "normaal" | "moeilijk";
 export type CijferModel = "lineair" | "gebroken" | "exponentieel";
 
+/** Vakprofiel voor figuur/bron-heuristieken (NaSk e.d.). */
+export type VakProfiel = "nask" | "biologie" | "generiek";
+
+/** Eenvoudige school-lijnfiguren (geen boekillustratie). */
+export type SchemaFiguurSoort = "circuit" | "krachten" | "blokken";
+
 export interface RttiVerdeling {
   R: number;
   T1: number;
@@ -39,11 +45,38 @@ export interface ToetsMeta {
   onderwerp: string;
   versie: ToetsVersie;
   moeilijkheid: Moeilijkheid;
+  /**
+   * Extra tijd op het voorblad (bijv. "20%" of "Ja").
+   * Leeg/undefined = invullijn op het Word-voorblad (niet hard "Ja").
+   */
+  extraTijd?: string;
 }
 
 export interface VraagOptie {
   letter: string;
   tekst: string;
+}
+
+/** Meet-/bron tabel in de leerlingtoets. */
+export interface VraagTabel {
+  koppen: string[];
+  rijen: string[][];
+}
+
+/** Eenvoudige x/y-grafiek (B&W-vriendelijk SVG → Word-PNG). */
+export interface VraagGrafiek {
+  titel?: string;
+  xLabel: string;
+  yLabel: string;
+  punten: { x: number; y: number }[];
+}
+
+/** Schema/lijnfiguur: circuit, krachten of blokken. */
+export interface SchemaFiguur {
+  soort: SchemaFiguurSoort;
+  titel?: string;
+  /** Optionele labels bij onderdelen (max ~4). */
+  labels?: string[];
 }
 
 export interface Vraag {
@@ -58,6 +91,12 @@ export interface Vraag {
   /** Vraagtekst: bij lege context eerst inleiding, daarna vraagzin — nooit omgekeerd. */
   stam: string;
   opties?: VraagOptie[];
+  /** Optionele bron-tabel (na context, vóór stam). */
+  tabel?: VraagTabel;
+  /** Optionele bron-grafiek (na context, vóór stam). */
+  grafiek?: VraagGrafiek;
+  /** Optioneel eenvoudig schema (circuit/krachten/blokken). */
+  schemaFiguur?: SchemaFiguur;
 }
 
 export interface PuntenCriterium {

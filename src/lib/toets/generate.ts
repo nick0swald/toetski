@@ -5,6 +5,7 @@ import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
 import { extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
 import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
 import { balanceMcAntwoorden } from "./mc-balance";
+import { detectVakProfiel, verzekerBronFiguren } from "./bron-figuren";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 
 function stripJsonFence(raw: string): string {
@@ -261,7 +262,13 @@ export const generateToets = createServerFn({ method: "POST" })
         }),
       );
       // MC-sleutels husselen: voorkomt dat antwoorden op één letter clusteren (klassieke LLM-bias).
-      const { vragen, nakijkmodel } = balanceMcAntwoorden(vragenRaw, payload.nakijkmodel);
+      const balanced = balanceMcAntwoorden(vragenRaw, payload.nakijkmodel);
+      const vakProfiel = detectVakProfiel(
+        data.vak?.trim() || payload.meta.vak || "",
+        bron,
+      );
+      const vragen = verzekerBronFiguren(balanced.vragen, bron, vakProfiel);
+      const nakijkmodel = balanced.nakijkmodel;
       const max = totaalPunten(vragen);
       const cijferNorm = data.cijferNorm;
       const cesuurP = cesuurPunten(max, cijferNorm);
@@ -287,6 +294,7 @@ export const generateToets = createServerFn({ method: "POST" })
           onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
           versie: data.versie,
           moeilijkheid: data.moeilijkheid,
+          extraTijd: payload.meta.extraTijd?.trim() || undefined,
         },
         vragen,
         nakijkmodel,
@@ -424,11 +432,11 @@ function tokensVoorExtraVragen(n: number): number {
 
 const EXTRA_JSON_SCHEMA = `Antwoord ALLEEN met één JSON-object, geen markdown. Schema:
 {
-  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}] }],
+  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] } }],
   "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }]
 }
-Geef precies het gevraagde aantal vragen. Nummers starten bij het opgegeven startnummer. Geen meta, cesuur of kwaliteit.
-Velden per vraag (volgorde op het blad): "context" = optionele situatieschets/inleiding (VOOR de stam); "stam" = vraagtekst. Stam = EERST inleiding/situatie, DAARNA vraagzin — NOOIT omgekeerd.`;
+Geef precies het gevraagde aantal vragen. Nummers starten bij het opgegeven startnummer. Figuren alleen als nuttig. Geen meta, cesuur of kwaliteit.
+`;
 
 function extraUserPrompt(input: {
   count: number;
@@ -569,7 +577,10 @@ ${EXTRA_JSON_SCHEMA}`;
             }
           }
         }
-        const { vragen, nakijkmodel } = balanceMcAntwoorden(vragenRaw, nakijkRaw);
+        const balanced = balanceMcAntwoorden(vragenRaw, nakijkRaw);
+        const vakProfiel = detectVakProfiel(data.vak?.trim() || "", data.bronmateriaal || "");
+        const vragen = verzekerBronFiguren(balanced.vragen, data.bronmateriaal || "", vakProfiel);
+        const nakijkmodel = balanced.nakijkmodel;
         if (vragen.length < 1) {
           return { ok: false, error: "De AI leverde geen bruikbare extra vragen." };
         }

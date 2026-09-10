@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractBronFiguren, verzekerBronFiguren } from "./bron-figuren.ts";
+import { detectVakProfiel, extractBronFiguren, verzekerBronFiguren } from "./bron-figuren.ts";
 import type { Vraag } from "./types.ts";
 
 const LESSTOF = `Lesstof klas 2 KB NaSk — Temperatuur
@@ -69,5 +69,19 @@ describe("verzekerBronFiguren", () => {
   it("doet niets bij generiek profiel", () => {
     const out = verzekerBronFiguren(kaal, LESSTOF, "generiek");
     assert.equal(out[0]?.tabel, undefined);
+  });
+});
+
+
+describe("detectVakProfiel", () => {
+  it("herkent NaSk", () => {
+    assert.equal(detectVakProfiel("NaSk", ""), "nask");
+    assert.equal(detectVakProfiel("Natuurkunde", "schakeling"), "nask");
+  });
+  it("herkent biologie", () => {
+    assert.equal(detectVakProfiel("Biologie", ""), "biologie");
+  });
+  it("valt terug op generiek", () => {
+    assert.equal(detectVakProfiel("Nederlands", ""), "generiek");
   });
 });

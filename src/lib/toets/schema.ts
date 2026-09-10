@@ -86,6 +86,32 @@ const vraagSchema = z.object({
     .array(z.object({ letter: z.string(), tekst: z.string() }))
     .nullish()
     .transform((v) => v ?? []),
+  tabel: z
+    .object({
+      koppen: z.array(z.string()).min(1),
+      rijen: z.array(z.array(z.string())).min(1),
+    })
+    .nullish()
+    .transform((v) => v ?? undefined),
+  grafiek: z
+    .object({
+      titel: z.string().optional().default(""),
+      xLabel: z.string().default("x"),
+      yLabel: z.string().default("y"),
+      punten: z
+        .array(z.object({ x: z.coerce.number(), y: z.coerce.number() }))
+        .min(2),
+    })
+    .nullish()
+    .transform((v) => v ?? undefined),
+  schemaFiguur: z
+    .object({
+      soort: z.enum(["circuit", "krachten", "blokken"]),
+      titel: z.string().optional().default(""),
+      labels: z.array(z.string()).optional().default([]),
+    })
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 const nakijkSchema = z.object({
@@ -121,6 +147,7 @@ export const generatedPayloadSchema = z.object({
     hulpmiddelen: z.array(z.string()).default([]),
     instructies: z.array(z.string()).default([]),
     onderwerp: z.string().default(""),
+    extraTijd: z.string().optional().default(""),
   }),
   vragen: z.array(vraagSchema).min(3),
   nakijkmodel: z.array(nakijkSchema).min(3),
