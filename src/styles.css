@@ -35,41 +35,49 @@
 }
 
 /*
- * TESTBALLON: Poki-achtige look.
+ * TESTBALLON: Poki-achtige look (aqua canvas + witte pill/kaarten).
  * Aan:  <html data-theme="poki-balloon">
  * Uit:  attribute verwijderen → klassieke Ares058-kleuren terug.
  */
 html[data-theme="poki-balloon"] {
-  --color-bg: #f3f4f8;
+  --color-bg: #42e8c8;
   --color-surface: #ffffff;
   --color-paper: #ffffff;
-  --color-field: #ffffff;
+  --color-field: #f7f8fc;
   --color-fg: #1a1a2e;
   --color-ink: #1a1a2e;
   --color-brand: #1a1a2e;
-  --color-muted: #5c5c72;
-  --color-primary: #ffcc00;
-  --color-primary-fg: #1a1a2e;
-  --color-border: #e2e4ec;
-  --color-leaf: #ffcc00;
-  --color-sky: #d6e8ff;
+  --color-muted: #3d3d55;
+  --color-primary: #1a1a2e;
+  --color-primary-fg: #ffffff;
+  --color-border: rgba(26, 26, 46, 0.08);
+  --color-leaf: #42e8c8;
+  --color-sky: #ffffff;
   --color-warn: #c45c1a;
   --color-rtti-r: #1a1a2e;
-  --color-rtti-t1: #3ecf8e;
-  --color-rtti-t2: #5b9fd4;
+  --color-rtti-t1: #2ecf8a;
+  --color-rtti-t2: #4aa3e0;
   --color-rtti-i: #7c5cff;
 
-  --radius-sm: 14px;
-  --radius-md: 18px;
-  --radius-lg: 24px;
-  --radius-xl: 36px;
+  --radius-sm: 16px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-xl: 40px;
 
-  --poki-tile-1: #ffe566;
-  --poki-tile-2: #9ad7ff;
-  --poki-tile-3: #b8f0c8;
-  --poki-tile-4: #ffc4e0;
-  --poki-shadow: 0 4px 14px rgba(26, 26, 46, 0.08);
-  --poki-shadow-hover: 0 10px 28px rgba(26, 26, 46, 0.14);
+  --poki-tile-1: #ffffff;
+  --poki-tile-2: #ffffff;
+  --poki-tile-3: #ffffff;
+  --poki-shadow: 0 6px 18px rgba(0, 40, 50, 0.12);
+  --poki-shadow-hover: 0 12px 28px rgba(0, 40, 50, 0.18);
+}
+
+html[data-theme="poki-balloon"] body {
+  /* subtiel geometrisch tegelpatroon zoals Poki */
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(rgba(0, 60, 70, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 60, 70, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 @layer base {
@@ -109,7 +117,6 @@ html[data-theme="poki-balloon"] {
   }
 }
 
-/* Speelse kaarten (alleen actief onder poki-balloon) */
 html[data-theme="poki-balloon"] .poki-card {
   background: var(--color-paper);
   border-radius: var(--radius-lg);
@@ -120,18 +127,23 @@ html[data-theme="poki-balloon"] .poki-card {
 }
 
 html[data-theme="poki-balloon"] .poki-card:hover {
-  transform: translateY(-2px);
   box-shadow: var(--poki-shadow-hover);
+}
+
+html[data-theme="poki-balloon"] .poki-pill-header {
+  background: #ffffff;
+  border-radius: 999px;
+  box-shadow: var(--poki-shadow);
 }
 
 html[data-theme="poki-balloon"] .poki-nav-tile {
   border-radius: var(--radius-lg);
   box-shadow: var(--poki-shadow);
   font-weight: 700;
+  background: #ffffff;
   transition:
     transform var(--motion-quick) var(--ease-out),
-    box-shadow var(--motion-quick) var(--ease-out),
-    filter var(--motion-quick) var(--ease-out);
+    box-shadow var(--motion-quick) var(--ease-out);
 }
 
 html[data-theme="poki-balloon"] .poki-nav-tile:hover {
@@ -140,7 +152,6 @@ html[data-theme="poki-balloon"] .poki-nav-tile:hover {
 }
 
 html[data-theme="poki-balloon"] .poki-nav-tile[data-active="true"] {
-  outline: 3px solid var(--color-brand);
+  outline: 3px solid #1a1a2e;
   outline-offset: 2px;
-  filter: brightness(1.02);
 }
