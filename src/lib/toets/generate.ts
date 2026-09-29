@@ -4,8 +4,8 @@ import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
 import { bijschavenInputSchema, bijschavenPayloadSchema, extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
 import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
-import { balanceMcAntwoorden } from "./mc-balance";
-import { ordenVragenMcEerst, wilGemengdeOfOpenEerst } from "./vraag-volgorde";
+import { finalizeVragen } from "./mc-balance";
+import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { detectVakProfiel, verzekerBronFiguren } from "./bron-figuren";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
@@ -193,7 +193,7 @@ Aantal vragen (richtlijn): ${input.aantalVragen}
 Vraagverdeling: ${verdelingTekst}
 Streefmaximum: ${input.doelPunten} punten (richtlijn; passend bij toetsduur en moeilijkheid, tenzij de docent anders stuurt)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
-MC-sleutel: zet het juiste antwoord niet standaard op B. Opties in willekeurige inhoudelijke volgorde. modelantwoord = letter + tekst (bijv. "C. 12 N"). De app husselt de opties daarna.
+MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en verdeelt de sleutel gelijk over A–D. modelantwoord = letter + tekst (bijv. "C. 12 N"). Uitleg, puntenverdeling en niet-toekennen noemen de inhoud, niet de letter (schrijf niet "B is juist").
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
 NaSk/exacte vakken: bij hoofdstuktoets met voldoende stof minstens één vraag met tabel, grafiek of schemaFiguur (origineel exam-stijl).
@@ -265,18 +265,17 @@ export const generateToets = createServerFn({ method: "POST" })
           opties: q.opties?.length ? q.opties : undefined,
         }),
       );
-      // MC-sleutels husselen: voorkomt dat antwoorden op één letter clusteren (klassieke LLM-bias).
-      const balanced = balanceMcAntwoorden(vragenRaw, payload.nakijkmodel);
       const vakProfiel = detectVakProfiel(
         data.vak?.trim() || payload.meta.vak || "",
         bron,
       );
-      const metFiguren = verzekerBronFiguren(balanced.vragen, bron, vakProfiel);
+      const metFiguren = verzekerBronFiguren(vragenRaw, bron, vakProfiel);
       const skipMcEerst = wilGemengdeOfOpenEerst(
         `${data.extraEisen ?? ""}\n${data.feedback ?? ""}`,
       );
-      const geordend = ordenVragenMcEerst(metFiguren, balanced.nakijkmodel, {
-        skip: skipMcEerst,
+      // Choke point: finalizeVragen ordent en husselt elke MC-sleutel.
+      const geordend = finalizeVragen(metFiguren, payload.nakijkmodel, {
+        skipOrder: skipMcEerst,
       });
       const vragen = geordend.vragen;
       const nakijkmodel = geordend.nakijkmodel;
@@ -508,7 +507,7 @@ RTTI-doel (richtlijn voor de nieuwe vragen): R ${rtti.R}% · T1 ${rtti.T1}% · T
 Vraagverdeling: ${verdelingTekst}
 Startnummer: ${input.startNummer} (nummer de nieuwe vragen opeenvolgend vanaf hier)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
-MC-sleutel: zet het juiste antwoord niet standaard op B. Opties in willekeurige inhoudelijke volgorde. modelantwoord = letter + tekst (bijv. "C. 12 N"). De app husselt de opties daarna.
+MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en verdeelt de sleutel gelijk over A–D. modelantwoord = letter + tekst (bijv. "C. 12 N"). Uitleg, puntenverdeling en niet-toekennen noemen de inhoud, niet de letter (schrijf niet "B is juist").
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
 
@@ -582,7 +581,7 @@ ${EXTRA_JSON_SCHEMA}`;
             opties: q.opties?.length ? q.opties : undefined,
           }),
         );
-        let nakijkRaw = payload.nakijkmodel.slice(0, data.count).map((n, i) => ({
+        const nakijkRaw = payload.nakijkmodel.slice(0, data.count).map((n, i) => ({
           ...n,
           nummer: vragenRaw[i]?.nummer ?? start + i,
         }));
@@ -600,17 +599,10 @@ ${EXTRA_JSON_SCHEMA}`;
             }
           }
         }
-        const balanced = balanceMcAntwoorden(vragenRaw, nakijkRaw);
         const vakProfiel = detectVakProfiel(data.vak?.trim() || "", data.bronmateriaal || "");
-        const metFiguren = verzekerBronFiguren(
-          balanced.vragen,
-          data.bronmateriaal || "",
-          vakProfiel,
-        );
-        const skipMcEerst = wilGemengdeOfOpenEerst(data.extraEisen ?? "");
-        const geordend = ordenVragenMcEerst(metFiguren, balanced.nakijkmodel, {
-          skip: skipMcEerst,
-        });
+        const metFiguren = verzekerBronFiguren(vragenRaw, data.bronmateriaal || "", vakProfiel);
+        // Zelfde choke point. Niet hernummeren: de client voegt deze vragen achter de bestaande toets.
+        const geordend = finalizeVragen(metFiguren, nakijkRaw, { skipOrder: true });
         const vragen = geordend.vragen;
         const nakijkmodel = geordend.nakijkmodel;
         if (vragen.length < 1) {
@@ -653,6 +645,7 @@ export const bijschavenToets = createServerFn({ method: "POST" })
 Je BIJSCHAAFT een bestaande toets op basis van een korte docentinstructie.
 Je maakt GEEN nieuwe toets van scratch. Wijzig alleen wat nodig is (volgorde/punten/één of enkele vragen/nakijk).
 Houd nakijkmodel synchroon met vraagnummers. RTTI/domein/leerdoel behouden tenzij de instructie die raakt.
+Meerkeuze: het juiste antwoord mag op elke letter staan. De software husselt de opties daarna. Verwijs in uitleg naar de inhoud, niet naar de letter.
 
 ${stuur}
 
@@ -720,7 +713,7 @@ Lever ALLE vragen + nakijkmodel terug (aangepast of ongewijzigd).`;
             opties: q.opties?.length ? q.opties : undefined,
           }),
         );
-        let nakijkRaw = payload.nakijkmodel.map((n, i) => ({
+        const nakijkRaw = payload.nakijkmodel.map((n, i) => ({
           ...n,
           nummer: n.nummer || vragenRaw[i]?.nummer || i + 1,
         }));
@@ -740,11 +733,9 @@ Lever ALLE vragen + nakijkmodel terug (aangepast of ongewijzigd).`;
             }
           }
         }
-        const balanced = balanceMcAntwoorden(vragenRaw, nakijkRaw);
         const skipMcEerst = wilGemengdeOfOpenEerst(instructie);
-        const geordend = ordenVragenMcEerst(balanced.vragen, balanced.nakijkmodel, {
-          skip: skipMcEerst,
-        });
+        // Zelfde choke point als genereren en extra vragen.
+        const geordend = finalizeVragen(vragenRaw, nakijkRaw, { skipOrder: skipMcEerst });
         return {
           ok: true,
           vragen: geordend.vragen,

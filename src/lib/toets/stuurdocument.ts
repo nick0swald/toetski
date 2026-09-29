@@ -49,7 +49,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Validiteit: elke vraag dekt een leerdoel; geen triviale of off-topic items.",
       "Betrouwbaarheid: eenduidige vragen plus nakijkmodel waarmee twee docenten tot dezelfde score komen.",
       "Geen dubbele ontkenningen, geen strikvragen, één opdracht per deelvraag.",
-      "Meerkeuze: vier opties A–D, één beste antwoord; standaard 1 punt. Zet het juiste antwoord NIET standaard op B — kies de letter willekeurig. modelantwoord begint met die letter plus de optietekst, bijv. C. 12 N. De software husselt de opties daarna nog.",
+      "Meerkeuze: vier opties A–D, één beste antwoord; standaard 1 punt. Het juiste antwoord mag op elke letter staan (A, B, C of D) — niet steeds dezelfde. De software husselt de opties daarna en verdeelt de sleutel gelijk. modelantwoord begint met letter plus optietekst, bijv. C. 12 N. In uitleg, puntenverdeling en niet-toekennen: noem de inhoud, niet de letter (schrijf niet \"B is juist\").",
       "Open vragen: commando’s als Noem, Geef, Leg uit, Bereken, Verklaar.",
       "Vraagstam (Cito/school): EERST situatieschets/inleiding (wie/wat/waar), DAARNA de vraagzin of opdracht. NOOIT andersom — geen vraag eerst en verhaal erna.",
       "Veld context = optionele inleiding vóór de stam; veld stam = de eigenlijke vraagtekst. Situatieschets óf in context óf aan het begin van stam; nooit ná de vraagzin.",
