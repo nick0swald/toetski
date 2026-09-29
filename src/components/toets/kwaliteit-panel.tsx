@@ -7,6 +7,7 @@ const label: Record<KwaliteitOordeel, string> = {
   voldoet: "Voldoet",
   aandacht: "Aandacht",
   ontbreekt: "Ontbreekt",
+  "let op": "Let op",
 };
 
 export function KwaliteitPanel({ toets }: { toets: GegenereerdeToets }) {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { grafiekSvg, schemaFiguurSvg } from "./figuur-svg.ts";
+import { ghsPictogramSvg, grafiekSvg, maatcilinderSvg, schemaFiguurSvg } from "./figuur-svg.ts";
+import { GHS_SYMBOLEN } from "./types.ts";
 
 describe("grafiekSvg", () => {
   it("maakt B&W SVG met assen", () => {
@@ -17,6 +18,30 @@ describe("grafiekSvg", () => {
     assert.match(svg, /<svg/);
     assert.match(svg, /T tegen t/);
     assert.match(svg, /stroke="#000000"/);
+  });
+});
+
+describe("ghs en maatcilinder", () => {
+  it("tekent elk GHS-symbool als ruit", () => {
+    for (const soort of GHS_SYMBOLEN) {
+      const svg = ghsPictogramSvg(soort);
+      assert.match(svg, /<svg/);
+      assert.match(svg, /polygon/);
+    }
+  });
+
+  it("zet mL-standen op de maatcilinder", () => {
+    const svg = maatcilinderSvg({
+      titel: "Maatcilinder",
+      maxMl: 100,
+      standen: [
+        { label: "begin", ml: 34 },
+        { label: "na onderdompelen", ml: 61 },
+      ],
+    });
+    assert.match(svg, /begin/);
+    assert.match(svg, /na onderdompelen/);
+    assert.match(svg, /mL/);
   });
 });
 

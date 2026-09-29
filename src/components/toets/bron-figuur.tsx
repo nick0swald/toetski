@@ -1,5 +1,9 @@
-import type { SchemaFiguur, VraagGrafiek, VraagTabel } from "@/lib/toets/types";
-import { schemaFiguurSvg } from "@/lib/toets/figuur-svg";
+import type { GhsSymbool, MaatcilinderFiguur, SchemaFiguur, VraagGrafiek, VraagTabel } from "@/lib/toets/types";
+import { ghsPictogramSvg, maatcilinderSvg, schemaFiguurSvg } from "@/lib/toets/figuur-svg";
+
+function inlineSvg(svg: string): string {
+  return svg.replace(/^<\?xml[^>]*>\s*/i, "");
+}
 
 export function BronTabel({ tabel }: { tabel: VraagTabel }) {
   if (!tabel.koppen.length) return null;
@@ -134,20 +138,54 @@ export function BronSchemaFiguur({ figuur }: { figuur: SchemaFiguur }) {
   );
 }
 
-/** Alle figuren bij een vraag: tabel, grafiek en/of schema (preview). */
-export function VraagFiguren({
-  tabel,
+export function BronPictogram({ soort }: { soort: GhsSymbool }) {
+  const html = inlineSvg(ghsPictogramSvg(soort));
+  return (
+    <figure className="mt-3 w-fit rounded-[var(--radius-sm)] border border-border bg-bg/60 p-3">
+      <div
+        className="w-36 text-foreground [&_svg]:h-auto [&_svg]:w-full"
+        dangerouslySetInnerHTML={{ __html: html }}
+        role="img"
+        aria-label={`Gevarensymbool ${soort}`}
+      />
+    </figure>
+  );
+}
+
+export function BronMaatcilinder({ figuur }: { figuur: MaatcilinderFiguur }) {
+  const html = inlineSvg(maatcilinderSvg(figuur));
+  return (
+    <figure className="mt-3 rounded-[var(--radius-sm)] border border-border bg-bg/60 p-3">
+      {figuur.titel ? (
+        <figcaption className="mb-1 text-sm font-semibold text-brand">{figuur.titel}</figcaption>
+      ) : null}
+      <div
+        className="w-full max-w-xs text-foreground [&_svg]:h-auto [&_svg]:w-full"
+        dangerouslySetInnerHTML={{ __html: html }}
+        role="img"
+        aria-label={figuur.titel || "Maatcilinder"}
+      />
+    </figure>
+  );
+}
+
+/** Stimulusfiguur vóór de stam: pictogram, maatcilinder, grafiek of schema. Een tabel hoort hier niet. */
+export function StimulusFiguren({
   grafiek,
   schemaFiguur,
+  pictogram,
+  maatcilinder,
 }: {
-  tabel?: VraagTabel;
   grafiek?: VraagGrafiek;
   schemaFiguur?: SchemaFiguur;
+  pictogram?: GhsSymbool;
+  maatcilinder?: MaatcilinderFiguur;
 }) {
-  if (!tabel && !grafiek && !schemaFiguur) return null;
+  if (!grafiek && !schemaFiguur && !pictogram && !maatcilinder) return null;
   return (
     <div className="grid gap-2">
-      {tabel ? <BronTabel tabel={tabel} /> : null}
+      {pictogram ? <BronPictogram soort={pictogram} /> : null}
+      {maatcilinder ? <BronMaatcilinder figuur={maatcilinder} /> : null}
       {grafiek ? <BronGrafiek grafiek={grafiek} /> : null}
       {schemaFiguur ? <BronSchemaFiguur figuur={schemaFiguur} /> : null}
     </div>

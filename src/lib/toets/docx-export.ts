@@ -21,7 +21,8 @@ import { RTTI_META, RTTI_ORDER, SCHOOL } from "./constants";
 import { cesuurPunten, formuleTekst, modelLabel, omzetTabel, voldoendeHint } from "./cijfer";
 import { totaalPunten } from "./rtti";
 import { slug } from "./text";
-import { grafiekSvg, schemaFiguurSvg } from "./figuur-svg";
+import { ghsPictogramSvg, grafiekSvg, maatcilinderSvg, schemaFiguurSvg } from "./figuur-svg";
+import { blokkenVoorVraag } from "./blad-volgorde";
 import type { CijferNorm, GegenereerdeToets, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
 
@@ -112,12 +113,8 @@ async function svgImageParagraph(svg: string, widthPx: number, heightPx: number)
   });
 }
 
-async function vraagFiguurBlocks(q: Vraag): Promise<DocChild[]> {
+async function stimulusBlocks(q: Vraag): Promise<DocChild[]> {
   const out: DocChild[] = [];
-  if (q.tabel?.koppen?.length) {
-    out.push(vraagTabelDocx(q.tabel));
-    out.push(p("", { after: 80 }));
-  }
   if (q.grafiek && q.grafiek.punten.length >= 2) {
     const svg = grafiekSvg(q.grafiek, 420, 240);
     if (svg) out.push(await svgImageParagraph(svg, 420, 240));
@@ -126,7 +123,20 @@ async function vraagFiguurBlocks(q: Vraag): Promise<DocChild[]> {
     const svg = schemaFiguurSvg(q.schemaFiguur as SchemaFiguur, 420, 220);
     if (svg) out.push(await svgImageParagraph(svg, 420, 220));
   }
+  if (q.pictogram) {
+    const svg = ghsPictogramSvg(q.pictogram, 220, 220);
+    if (svg) out.push(await svgImageParagraph(svg, 220, 220));
+  }
+  if (q.maatcilinder) {
+    const svg = maatcilinderSvg(q.maatcilinder, 280, 320);
+    if (svg) out.push(await svgImageParagraph(svg, 280, 320));
+  }
   return out;
+}
+
+function tabelBlocks(q: Vraag): DocChild[] {
+  if (!q.tabel?.koppen?.length) return [];
+  return [vraagTabelDocx(q.tabel), p("", { after: 80 })];
 }
 
 function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number; before?: number }) {
@@ -371,36 +381,26 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
   }
   for (const q of t.vragen) {
     const stam = (q.stam || "").trim();
-    // Cito/school: context → figuur → genummerde vraagstam.
-    if (q.context?.trim()) {
-      out.push(p(q.context.trim(), { size: BODY_SIZE, before: 200, after: 80 }));
-    }
-    out.push(...(await vraagFiguurBlocks(q)));
-    out.push(
-      new Paragraph({
-        spacing: { before: q.context?.trim() || q.tabel || q.grafiek || q.schemaFiguur ? 40 : 200, after: 80, line: 276, lineRule: "auto" },
-        indent: { left: 709, hanging: 709 },
-        children: [
-          new TextRun({ text: `${q.punten}p`, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
-          new TextRun({
-            text: stam ? `  ${q.nummer}  ${stam}` : `  ${q.nummer}`,
-            font: FONT,
-            size: BODY_SIZE,
-            color: INK,
-          }),
-        ],
-      }),
-    );
-    if (q.opties?.length) {
-      for (const o of q.opties) {
+    // context → stimulusfiguur → punten/nummer/stam → tabel. Invultabel = antwoordgebied.
+    for (const blok of blokkenVoorVraag(q)) {
+      if (blok === "context" && q.context?.trim()) {
+        out.push(p(q.context.trim(), { size: BODY_SIZE, before: 200, after: 80 }));
+      } else if (blok === "stimulus") {
+        out.push(...(await stimulusBlocks(q)));
+      } else if (blok === "stam") {
         out.push(
           new Paragraph({
-            spacing: { after: 40, line: 276, lineRule: "auto" },
-            indent: { left: 709 },
+            spacing: {
+              before: q.context?.trim() || q.grafiek || q.schemaFiguur || q.pictogram || q.maatcilinder ? 40 : 200,
+              after: 80,
+              line: 276,
+              lineRule: "auto",
+            },
+            indent: { left: 709, hanging: 709 },
             children: [
+              new TextRun({ text: `${q.punten}p`, font: FONT, size: BODY_SIZE, bold: true, color: INK }),
               new TextRun({
-                // Leeg vierkant om aan te kruisen vóór de letter.
-                text: `☐  ${o.letter}  ${o.tekst}`,
+                text: stam ? `  ${q.nummer}  ${stam}` : `  ${q.nummer}`,
                 font: FONT,
                 size: BODY_SIZE,
                 color: INK,
@@ -408,12 +408,30 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
             ],
           }),
         );
-      }
-    } else {
-      // Open: aantal antwoordlijnen ≈ punten + 1 (minimaal 2).
-      const lijnen = Math.max(2, (Number(q.punten) || 1) + 1);
-      for (let i = 0; i < lijnen; i++) {
-        out.push(p("__________________________________________________________________", { after: 40 }));
+      } else if (blok === "tabel") {
+        out.push(...tabelBlocks(q));
+      } else if (blok === "opties" && q.opties?.length) {
+        for (const o of q.opties) {
+          out.push(
+            new Paragraph({
+              spacing: { after: 40, line: 276, lineRule: "auto" },
+              indent: { left: 709 },
+              children: [
+                new TextRun({
+                  text: `☐  ${o.letter}  ${o.tekst}`,
+                  font: FONT,
+                  size: BODY_SIZE,
+                  color: INK,
+                }),
+              ],
+            }),
+          );
+        }
+      } else if (blok === "antwoordlijnen") {
+        const lijnen = Math.max(2, (Number(q.punten) || 1) + 1);
+        for (let i = 0; i < lijnen; i++) {
+          out.push(p("__________________________________________________________________", { after: 40 }));
+        }
       }
     }
   }

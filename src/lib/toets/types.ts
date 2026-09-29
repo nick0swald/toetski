@@ -9,7 +9,7 @@ export type VraagType =
   | "berekening"
   | "bronvraag";
 
-export type KwaliteitOordeel = "voldoet" | "aandacht" | "ontbreekt";
+export type KwaliteitOordeel = "voldoet" | "aandacht" | "ontbreekt" | "let op";
 export type ToetsVersie = "A" | "B";
 export type Moeilijkheid = "makkelijk" | "normaal" | "moeilijk";
 export type CijferModel = "lineair" | "gebroken" | "exponentieel";
@@ -19,6 +19,30 @@ export type VakProfiel = "nask" | "biologie" | "generiek";
 
 /** Eenvoudige school-lijnfiguren (geen boekillustratie). */
 export type SchemaFiguurSoort = "circuit" | "krachten" | "blokken";
+
+/** GHS-gevarensymbool, zelf getekend (geen boekplaatje). */
+export type GhsSymbool =
+  | "ontvlambaar"
+  | "giftig"
+  | "bijtend"
+  | "milieu"
+  | "schadelijk"
+  | "explosief"
+  | "oxiderend"
+  | "gas-onder-druk"
+  | "gezondheidsgevaar";
+
+export const GHS_SYMBOLEN: GhsSymbool[] = [
+  "ontvlambaar",
+  "giftig",
+  "bijtend",
+  "milieu",
+  "schadelijk",
+  "explosief",
+  "oxiderend",
+  "gas-onder-druk",
+  "gezondheidsgevaar",
+];
 
 export interface RttiVerdeling {
   R: number;
@@ -79,6 +103,14 @@ export interface SchemaFiguur {
   labels?: string[];
 }
 
+/** Maatcilinder om standen af te lezen (onderdompelmethode). */
+export interface MaatcilinderFiguur {
+  titel?: string;
+  /** Schaalmaximum in mL. */
+  maxMl: number;
+  standen: { label: string; ml: number }[];
+}
+
 export interface Vraag {
   nummer: number;
   type: VraagType;
@@ -91,12 +123,16 @@ export interface Vraag {
   /** Vraagtekst: bij lege context eerst inleiding, daarna vraagzin — nooit omgekeerd. */
   stam: string;
   opties?: VraagOptie[];
-  /** Optionele bron-tabel (na context, vóór stam). */
+  /** Tabel ná de stam. Een invultabel is het antwoordgebied. */
   tabel?: VraagTabel;
   /** Optionele bron-grafiek (na context, vóór stam). */
   grafiek?: VraagGrafiek;
   /** Optioneel eenvoudig schema (circuit/krachten/blokken). */
   schemaFiguur?: SchemaFiguur;
+  /** GHS-pictogram bij een gevarensymboolvraag. De stam beschrijft het symbool niet. */
+  pictogram?: GhsSymbool;
+  /** Maatcilinderfiguur (aflezen), geen tabel. */
+  maatcilinder?: MaatcilinderFiguur;
 }
 
 export interface PuntenCriterium {

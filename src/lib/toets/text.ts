@@ -25,12 +25,13 @@ export function kwaliteitAlsTekst(toets: GegenereerdeToets): string {
     voldoet: "VOLDOET",
     aandacht: "AANDACHT",
     ontbreekt: "ONTBREEKT",
+    "let op": "LET OP",
   };
   const regels = [
     `Kwaliteitscheck van Ares058 Toetsmaker bij «${toets.meta.titel}»`,
     k.samenvatting ? `Samenvatting: ${k.samenvatting}` : "",
     "",
-    "Pas de toets aan op punten met AANDACHT of ONTBREEKT. Wat VOLDOET, laat staan.",
+    "Pas de toets aan op punten met LET OP, AANDACHT of ONTBREEKT. Wat VOLDOET, laat staan.",
     "",
   ];
   for (const p of k.punten) {

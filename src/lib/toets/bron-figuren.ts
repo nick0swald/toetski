@@ -1,4 +1,5 @@
-import type { SchemaFiguur, Vraag, VraagGrafiek, VraagTabel, VakProfiel } from "./types";
+import type { GhsSymbool, MaatcilinderFiguur, NakijkItem, SchemaFiguur, Vraag, VraagGrafiek, VraagTabel, VakProfiel } from "./types";
+import { heeftEchtFiguur } from "./blad-volgorde.ts";
 
 function parseNlNumber(s: string): number | null {
   const t = s.trim().replace(/\s/g, "").replace(",", ".");
@@ -121,42 +122,162 @@ export function suggestSchemaFiguur(bron: string): SchemaFiguur | null {
   return null;
 }
 
-function heeftFiguur(q: Vraag): boolean {
-  return Boolean(q.tabel || q.grafiek || q.schemaFiguur);
+function inferGhs(tekst: string): GhsSymbool | null {
+  const t = tekst.toLowerCase();
+  if (/ontvlambaar|brandbaar|\bvlam/.test(t)) return "ontvlambaar";
+  if (/giftig|doodshoofd|schedel|toxisch/.test(t)) return "giftig";
+  if (/bijtend|corros/.test(t)) return "bijtend";
+  if (/milieu|milieugevaar/.test(t)) return "milieu";
+  if (/explos/.test(t)) return "explosief";
+  if (/oxider/.test(t)) return "oxiderend";
+  if (/gas onder druk|gasfles/.test(t)) return "gas-onder-druk";
+  if (/gezondheidsgevaar|kankerverwekk/.test(t)) return "gezondheidsgevaar";
+  if (/schadelijk|irriterend|uitroepteken/.test(t)) return "schadelijk";
+  return null;
+}
+
+export function isPictogramVraag(q: Vraag): boolean {
+  return /pictogram|gevarensymbool|gevaarsymbool|gevarenteken/i.test(
+    `${q.stam} ${q.context ?? ""} ${q.leerdoel}`,
+  );
+}
+
+function schrapSymboolbeschrijving(s: string): string {
+  return s
+    .replace(/een rood(?:e)? pictogram met vlammen/gi, "dit gevarensymbool")
+    .replace(/rood(?:e)? pictogram met vlammen/gi, "dit gevarensymbool")
+    .replace(/doodshoofd-?pictogram/gi, "dit gevarensymbool")
+    .replace(/pictogram met (?:een )?(?:vlammen|doodshoofd|vlam|schedel)/gi, "dit gevarensymbool")
+    .replace(/\b(?:vlammen|doodshoofd|schedel en gekruiste beenderen)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.])/g, "$1")
+    .trim();
+}
+
+/** Elke pictogramvraag krijgt het GHS-symbool; de stam beschrijft het niet. */
+export function plaatsPictogrammen(vragen: Vraag[], nakijk: NakijkItem[] = []): Vraag[] {
+  return vragen.map((q) => {
+    if (!isPictogramVraag(q) && !q.pictogram) return q;
+    const n = nakijk.find((item) => item.nummer === q.nummer);
+    const soort =
+      q.pictogram ??
+      inferGhs(n?.modelantwoord ?? "") ??
+      inferGhs(`${q.context ?? ""} ${q.stam} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`);
+    if (!soort) return q;
+    return {
+      ...q,
+      pictogram: soort,
+      context: q.context ? schrapSymboolbeschrijving(q.context) : q.context,
+      stam: schrapSymboolbeschrijving(q.stam),
+    };
+  });
+}
+
+function parseMl(tekst: string): number[] {
+  const out: number[] = [];
+  const re = /(\d+(?:[.,]\d+)?)\s*m(?:l|L)\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(tekst))) {
+    const n = Number(m[1]!.replace(",", "."));
+    if (Number.isFinite(n)) out.push(n);
+  }
+  return out;
+}
+
+function isOnderdompel(q: Vraag): boolean {
+  return /onderdompel|maatcilinder/i.test(`${q.stam} ${q.context ?? ""} ${q.leerdoel}`);
+}
+
+/** Onderdompelvragen: maatcilinder aflezen. De standen staan in de figuur. */
+export function plaatsMaatcilinders(vragen: Vraag[]): Vraag[] {
+  return vragen.map((q) => {
+    if (q.maatcilinder || !isOnderdompel(q)) return q;
+    const nrs = parseMl(`${q.context ?? ""} ${q.stam}`);
+    const begin = nrs[0] ?? 30;
+    const eind = nrs[1] ?? begin + 18;
+    const fig: MaatcilinderFiguur = {
+      titel: "Maatcilinder",
+      maxMl: Math.max(100, Math.ceil((eind + 10) / 10) * 10),
+      standen: [
+        { label: "begin", ml: begin },
+        { label: "na onderdompelen", ml: eind },
+      ],
+    };
+    let stam = q.stam;
+    if (nrs.length >= 2) {
+      stam = stam
+        .replace(/de beginstand[^.]{0,80}\./gi, "")
+        .replace(/na het onderdompelen[^.]{0,80}\./gi, "")
+        .replace(/\d+(?:[.,]\d+)?\s*m(?:l|L)\b/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      if (!/af van de maatcilinder|figuur/i.test(stam)) {
+        stam = `Lees de beginstand en de stand na het onderdompelen af van de maatcilinder. ${stam}`.trim();
+      }
+    }
+    return { ...q, stam, maatcilinder: fig };
+  });
 }
 
 /**
  * Als NaSk-lesstof figuren noemt (of ruim genoeg is voor een hoofdstuktoets)
- * maar de AI die weglaat: plak tabel/grafiek uit de bron of een eenvoudig schema.
- * Doel: hoofdstuktoetsen vaker ≥1 schema/tabel/grafiek.
+ * maar de AI die weglaat: plak grafiek/schema uit de bron.
+ * Een tabel alleen telt niet als figuur.
  */
 export function verzekerBronFiguren(
   vragen: Vraag[],
   bron: string,
   vakProfiel?: VakProfiel,
+  nakijk: NakijkItem[] = [],
 ): Vraag[] {
-  if (vakProfiel !== "nask") return vragen;
-  if (vragen.some(heeftFiguur)) return vragen;
+  let next = plaatsPictogrammen(vragen, nakijk);
+  next = plaatsMaatcilinders(next);
+  if (vakProfiel !== "nask") return next;
+  if (next.some(heeftEchtFiguur)) return next;
 
   const wilFiguur = noemtFiguur(bron) || isRuimeBron(bron);
-  if (!wilFiguur) return vragen;
+  if (!wilFiguur) return verzekerMinimaalFiguur(next);
 
   const fig = extractBronFiguren(bron);
-  const schema = fig ? null : suggestSchemaFiguur(bron);
-  if (!fig && !schema) return vragen;
+  const schema = fig?.grafiek ? null : suggestSchemaFiguur(bron);
+  if (fig?.grafiek || schema) {
+    const idx = next.findIndex((q) =>
+      noemtFiguur(`${q.stam} ${q.context ?? ""} ${q.leerdoel} ${q.domein}`),
+    );
+    const i = idx >= 0 ? idx : 0;
+    const q = next[i];
+    if (!q) return next;
+    const copy = next.slice();
+    copy[i] = {
+      ...q,
+      tabel: q.tabel ?? fig?.tabel,
+      grafiek: q.grafiek ?? fig?.grafiek,
+      schemaFiguur: q.schemaFiguur ?? schema ?? undefined,
+    };
+    return copy;
+  }
+  return verzekerMinimaalFiguur(next);
+}
 
-  const idx = vragen.findIndex((q) =>
-    noemtFiguur(`${q.stam} ${q.context ?? ""} ${q.leerdoel} ${q.domein}`),
-  );
-  const i = idx >= 0 ? idx : 0;
+/** Laatste redmiddel: één maatcilinder of het blijft zonder echte figuur niet "voldoet". */
+function verzekerMinimaalFiguur(vragen: Vraag[]): Vraag[] {
+  if (vragen.some(heeftEchtFiguur)) return vragen;
+  const idx = vragen.findIndex((q) => /volume|water|cilinder|dichtheid/i.test(`${q.stam} ${q.leerdoel}`));
+  const i = idx >= 0 ? idx : vragen.findIndex((q) => q.type === "berekening" || q.type === "open");
+  if (i < 0) return vragen;
   const q = vragen[i];
   if (!q) return vragen;
-  const next = vragen.slice();
-  next[i] = {
+  const copy = vragen.slice();
+  copy[i] = {
     ...q,
-    tabel: q.tabel ?? fig?.tabel,
-    grafiek: q.grafiek ?? fig?.grafiek,
-    schemaFiguur: q.schemaFiguur ?? schema ?? undefined,
+    maatcilinder: {
+      titel: "Maatcilinder",
+      maxMl: 100,
+      standen: [
+        { label: "begin", ml: 28 },
+        { label: "na onderdompelen", ml: 53 },
+      ],
+    },
   };
-  return next;
+  return copy;
 }
