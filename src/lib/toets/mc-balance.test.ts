@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  antwoordLettersInNakijk,
   balancedLetterTargets,
   finalizeVragen,
   findCorrectOptionIndex,
@@ -188,12 +189,13 @@ describe("mc-balance", () => {
       const nat = opties.find((o) => o.tekst === "natrium")!.letter;
       const model = nakijkmodel[0]!.modelantwoord;
       const criterium = nakijkmodel[0]!.puntenverdeling[0]!.criterium;
-      assert.match(model, /kalium/);
-      assert.match(model, new RegExp(`\\b${L}\\b`));
-      const juist = model.match(/\b([A-D]) is juist/);
-      if (juist) assert.equal(juist[1], L);
-      assert.match(criterium, new RegExp(`^${L}\\b`));
-      assert.match(nakijkmodel[0]!.nietToekennen![0]!, new RegExp(`\\b${nat}\\b`));
+      assert.equal(model, `${L}. kalium`);
+      assert.equal(criterium, `Juiste keuze ${L}`);
+      assert.deepEqual(nakijkmodel[0]!.nietToekennen, ["andere letters"]);
+      for (const letter of antwoordLettersInNakijk(nakijkmodel[0]!)) {
+        assert.equal(letter, L);
+      }
+      assert.notEqual(nat, "");
       if (L !== "B") changed++;
     }
     assert.ok(changed > 0, "sleutel bleef altijd B");
@@ -218,6 +220,39 @@ describe("mc-balance", () => {
     const sleutel = sleutelVan(comboOut.vragen[0]!, comboOut.nakijkmodel[0]!);
     assert.equal(sleutel.letter, comboOpt.letter);
     assert.equal(sleutel.tekst, comboOpt.tekst);
+  });
+
+  it("elke letter in een MC-nakijkregel is de sleutel, ook als de LLM een andere letter schreef", () => {
+    let andereSleutel = 0;
+    for (let trial = 0; trial < 20; trial++) {
+      const vraag: Vraag = {
+        ...mc(1),
+        stam: "Welke grootheid is een stofeigenschap?",
+        opties: [
+          { letter: "A", tekst: "massa van dit voorwerp" },
+          { letter: "B", tekst: "vorm" },
+          { letter: "C", tekst: "dichtheid" },
+          { letter: "D", tekst: "temperatuur in het lokaal" },
+        ],
+      };
+      const nakijk: NakijkItem = {
+        nummer: 1,
+        modelantwoord: "C. dichtheid",
+        puntenverdeling: [{ punt: 1, criterium: "Juiste keuze B" }],
+        nietToekennen: ["niet A", "letter D is fout"],
+      };
+      const { vragen, nakijkmodel } = shuffleMcAnswers([vraag], [nakijk]);
+      const item = nakijkmodel[0]!;
+      const L = vragen[0]!.opties!.find((o) => o.tekst === "dichtheid")!.letter;
+      assert.equal(item.modelantwoord, `${L}. dichtheid`);
+      assert.equal(item.puntenverdeling[0]!.criterium, `Juiste keuze ${L}`);
+      assert.deepEqual(item.nietToekennen, ["andere letters"]);
+      const letters = antwoordLettersInNakijk(item);
+      assert.ok(letters.length >= 1);
+      for (const letter of letters) assert.equal(letter, L);
+      if (L !== "C") andereSleutel++;
+    }
+    assert.ok(andereSleutel > 0, "de sleutel bleef altijd C");
   });
 
   it("finalizeVragen is de choke point: MC eerst, open nakijk onaangeroerd", () => {

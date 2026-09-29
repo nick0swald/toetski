@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { normalizeLeerweg } from "./constants";
+import { normalizeLeerweg } from "./constants.ts";
+import { GHS_SYMBOLEN, type GhsSymbool } from "./types.ts";
 
 const rtti = z.enum(["R", "T1", "T2", "I"]);
 const leerweg = z
@@ -112,6 +113,18 @@ const vraagSchema = z.object({
     })
     .nullish()
     .transform((v) => v ?? undefined),
+  pictogram: z
+    .string()
+    .nullish()
+    .transform((v) => (v && (GHS_SYMBOLEN as string[]).includes(v) ? (v as GhsSymbool) : undefined)),
+  maatcilinder: z
+    .object({
+      titel: z.string().optional().default(""),
+      maxMl: z.coerce.number().positive().default(100),
+      standen: z.array(z.object({ label: z.string(), ml: z.coerce.number() })).min(1).max(4),
+    })
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 const nakijkSchema = z.object({
@@ -131,7 +144,7 @@ const kwaliteitSchema = z.object({
       oordeel: z
         .string()
         .transform((s) => s.toLowerCase())
-        .pipe(z.enum(["voldoet", "aandacht", "ontbreekt"])),
+        .pipe(z.enum(["voldoet", "aandacht", "ontbreekt", "let op"])),
       toelichting: z.string(),
     }),
   ),

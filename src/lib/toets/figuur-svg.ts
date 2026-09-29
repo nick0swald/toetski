@@ -1,4 +1,4 @@
-import type { SchemaFiguur, VraagGrafiek } from "./types";
+import type { GhsSymbool, MaatcilinderFiguur, SchemaFiguur, VraagGrafiek } from "./types";
 
 const INK = "#000000";
 const GRID = "#bbbbbb";
@@ -102,6 +102,100 @@ export function schemaFiguurSvg(fig: SchemaFiguur, W = 420, H = 220): string {
   <rect width="${W}" height="${H}" fill="#ffffff"/>
   ${titel}
   ${body}
+</svg>`;
+}
+
+/** GHS-ruit, zwart-wit lijntekening (printbaar, geen boekillustratie). */
+export function ghsPictogramSvg(soort: GhsSymbool, W = 220, H = 220): string {
+  const cx = W / 2;
+  const cy = H / 2 + 4;
+  const ruit = `<polygon points="${cx},${18} ${W - 18},${cy} ${cx},${H - 18} ${18},${cy}" fill="#ffffff" stroke="${INK}" stroke-width="3"/>`;
+  const sym = ghsSymboolPad(soort, cx, cy);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect width="${W}" height="${H}" fill="#ffffff"/>
+  ${ruit}
+  ${sym}
+</svg>`;
+}
+
+function ghsSymboolPad(soort: GhsSymbool, cx: number, cy: number): string {
+  if (soort === "ontvlambaar") {
+    return `<path d="M${cx} ${cy - 48} C ${cx + 8} ${cy - 20}, ${cx + 28} ${cy - 18}, ${cx + 22} ${cy + 8} C ${cx + 40} ${cy - 8}, ${cx + 36} ${cy - 36}, ${cx + 14} ${cy - 28} C ${cx + 18} ${cy - 46}, ${cx + 4} ${cy - 40}, ${cx} ${cy - 48} Z M${cx - 6} ${cy + 6} C ${cx - 22} ${cy - 8}, ${cx - 8} ${cy - 30}, ${cx + 2} ${cy - 16} C ${cx + 8} ${cy - 28}, ${cx + 22} ${cy - 10}, ${cx + 10} ${cy + 18} C ${cx + 28} ${cy + 8}, ${cx + 18} ${cy + 36}, ${cx} ${cy + 42} C ${cx - 20} ${cy + 36}, ${cx - 28} ${cy + 12}, ${cx - 6} ${cy + 6} Z" fill="${INK}"/>`;
+  }
+  if (soort === "giftig") {
+    return `
+      <circle cx="${cx}" cy="${cy - 10}" r="28" fill="none" stroke="${INK}" stroke-width="3"/>
+      <circle cx="${cx - 10}" cy="${cy - 16}" r="4" fill="${INK}"/>
+      <circle cx="${cx + 10}" cy="${cy - 16}" r="4" fill="${INK}"/>
+      <path d="M${cx - 10} ${cy - 2} Q ${cx} ${cy + 8} ${cx + 10} ${cy - 2}" fill="none" stroke="${INK}" stroke-width="2.5"/>
+      <path d="M${cx - 36} ${cy + 18} L${cx + 36} ${cy + 46} M${cx + 36} ${cy + 18} L${cx - 36} ${cy + 46}" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>
+    `;
+  }
+  if (soort === "bijtend") {
+    return `
+      <path d="M${cx - 28} ${cy - 20} L${cx - 8} ${cy - 36} L${cx + 6} ${cy - 10} L${cx + 22} ${cy - 28} L${cx + 30} ${cy - 8} L${cx + 8} ${cy + 36} L${cx - 18} ${cy + 20} Z" fill="none" stroke="${INK}" stroke-width="2.5"/>
+      <path d="M${cx - 22} ${cy + 28} q 10 16 28 8" fill="none" stroke="${INK}" stroke-width="2.5"/>
+      <path d="M${cx + 4} ${cy + 8} l 6 18 l 10 -8" fill="none" stroke="${INK}" stroke-width="2.5"/>
+    `;
+  }
+  if (soort === "milieu") {
+    return `
+      <path d="M${cx - 34} ${cy + 10} q 20 28 68 0" fill="none" stroke="${INK}" stroke-width="2.5"/>
+      <path d="M${cx - 20} ${cy + 8} q 6 -16 18 -8 q 4 10 16 0" fill="none" stroke="${INK}" stroke-width="2.5"/>
+      <path d="M${cx + 8} ${cy - 36} v 28 M${cx + 8} ${cy - 28} q 16 -8 16 8" fill="none" stroke="${INK}" stroke-width="2.5"/>
+      <circle cx="${cx - 8}" cy="${cy - 8}" r="7" fill="none" stroke="${INK}" stroke-width="2.5"/>
+    `;
+  }
+  if (soort === "explosief") {
+    return `<polygon points="${cx},${cy - 46} ${cx + 12},${cy - 12} ${cx + 44},${cy - 8} ${cx + 16},${cy + 10} ${cx + 28},${cy + 44} ${cx},${cy + 20} ${cx - 28},${cy + 44} ${cx - 16},${cy + 10} ${cx - 44},${cy - 8} ${cx - 12},${cy - 12}" fill="none" stroke="${INK}" stroke-width="2.5"/>`;
+  }
+  if (soort === "oxiderend") {
+    return `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="${INK}" stroke-width="3"/><circle cx="${cx}" cy="${cy}" r="10" fill="${INK}"/>`;
+  }
+  if (soort === "gas-onder-druk") {
+    return `<rect x="${cx - 16}" y="${cy - 40}" width="32" height="70" rx="10" fill="none" stroke="${INK}" stroke-width="3"/><rect x="${cx - 8}" y="${cy - 52}" width="16" height="14" fill="none" stroke="${INK}" stroke-width="3"/>`;
+  }
+  if (soort === "gezondheidsgevaar") {
+    return `<path d="M${cx} ${cy - 40} l 8 16 h 16 l -12 12 6 18 -18 -10 -18 10 6 -18 -12 -12 h 16 z" fill="none" stroke="${INK}" stroke-width="2.5"/>`;
+  }
+  return `<text x="${cx}" y="${cy + 16}" text-anchor="middle" font-family="Arial" font-size="64" font-weight="700" fill="${INK}">!</text>`;
+}
+
+/** Maatcilinder met af te lezen vloeistofstanden. */
+export function maatcilinderSvg(fig: MaatcilinderFiguur, W = 280, H = 320): string {
+  const max = Math.max(10, fig.maxMl || 100);
+  const top = 36;
+  const bottom = H - 28;
+  const left = 78;
+  const right = 150;
+  const yOf = (ml: number) => bottom - (Math.max(0, Math.min(max, ml)) / max) * (bottom - top);
+  const ticks: string[] = [];
+  const step = max <= 50 ? 10 : max <= 100 ? 20 : 50;
+  for (let ml = 0; ml <= max; ml += step) {
+    const y = yOf(ml);
+    ticks.push(
+      `<line x1="${left}" y1="${y.toFixed(1)}" x2="${left + 14}" y2="${y.toFixed(1)}" stroke="${INK}" stroke-width="1.2"/>`,
+      `<text x="${left - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="Arial" font-size="11" fill="${INK}">${ml}</text>`,
+    );
+  }
+  const liquids = (fig.standen ?? []).map((s) => {
+    const y = yOf(s.ml);
+    return `<line x1="${left + 2}" y1="${y.toFixed(1)}" x2="${right - 2}" y2="${y.toFixed(1)}" stroke="${INK}" stroke-width="2" stroke-dasharray="5 3"/>
+      <text x="${right + 8}" y="${(y + 4).toFixed(1)}" font-family="Arial" font-size="11" fill="${INK}">${escapeXml(s.label)}</text>`;
+  });
+  const titel = fig.titel
+    ? `<text x="${W / 2}" y="18" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="${INK}">${escapeXml(fig.titel)}</text>`
+    : "";
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect width="${W}" height="${H}" fill="#ffffff"/>
+  ${titel}
+  <path d="M${left} ${top} V${bottom} Q${(left + right) / 2} ${bottom + 16} ${right} ${bottom} V${top}" fill="none" stroke="${INK}" stroke-width="2"/>
+  <line x1="${left}" y1="${top}" x2="${right}" y2="${top}" stroke="${INK}" stroke-width="2"/>
+  ${ticks.join("")}
+  ${liquids.join("")}
+  <text x="${(left + right) / 2}" y="${H - 6}" text-anchor="middle" font-family="Arial" font-size="11" fill="${INK}">mL</text>
 </svg>`;
 }
 

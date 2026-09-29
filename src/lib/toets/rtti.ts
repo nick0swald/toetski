@@ -1,4 +1,4 @@
-import { RTTI_ORDER } from "./constants";
+import { RTTI_ORDER } from "./constants.ts";
 import type { GegenereerdeToets, Rtti, RttiVerdeling, Toetsmatrijs, Vraag } from "./types";
 
 export function somVerdeling(v: RttiVerdeling): number {

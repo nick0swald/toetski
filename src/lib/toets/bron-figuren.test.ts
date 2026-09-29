@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   detectVakProfiel,
   extractBronFiguren,
+  plaatsMaatcilinders,
+  plaatsPictogrammen,
   suggestSchemaFiguur,
   verzekerBronFiguren,
 } from "./bron-figuren.ts";
@@ -68,7 +70,8 @@ describe("verzekerBronFiguren", () => {
     ];
     const out = verzekerBronFiguren(met, LESSTOF, "nask");
     assert.deepEqual(out[0]?.tabel?.koppen, ["x"]);
-    assert.equal(out[0]?.grafiek, undefined);
+    assert.ok(out[0]?.grafiek, "een tabel telt niet als figuur; de brongrafiek komt erbij");
+    assert.equal(out[0]?.grafiek?.punten.length, 5);
   });
 
   it("doet niets bij generiek profiel", () => {
@@ -84,9 +87,73 @@ describe("verzekerBronFiguren", () => {
   });
 });
 
+describe("pictogram en maatcilinder", () => {
+  it("zet een GHS-pictogram en schrapt de beschrijving uit de stam", () => {
+    const vragen: Vraag[] = [
+      {
+        nummer: 4,
+        type: "meerkeuze",
+        rtti: "R",
+        domein: "Stoffen",
+        leerdoel: "gevarensymbool",
+        punten: 1,
+        stam: "Wat betekent het rode pictogram met vlammen op de fles?",
+        opties: [
+          { letter: "A", tekst: "ontvlambaar" },
+          { letter: "B", tekst: "giftig" },
+          { letter: "C", tekst: "bijtend" },
+          { letter: "D", tekst: "milieu" },
+        ],
+      },
+    ];
+    const out = plaatsPictogrammen(vragen, [
+      { nummer: 4, modelantwoord: "A. ontvlambaar", puntenverdeling: [{ punt: 1, criterium: "juist" }] },
+    ]);
+    assert.equal(out[0]?.pictogram, "ontvlambaar");
+    assert.doesNotMatch(out[0]!.stam, /vlammen|rood pictogram/i);
+    assert.match(out[0]!.stam, /gevarensymbool/i);
+  });
+
+  it("zet een doodshoofd als giftig pictogram", () => {
+    const vragen: Vraag[] = [
+      {
+        nummer: 8,
+        type: "open",
+        rtti: "R",
+        domein: "Stoffen",
+        leerdoel: "gevarensymbool",
+        punten: 1,
+        stam: "Wat betekent het doodshoofd-pictogram?",
+      },
+    ];
+    const out = plaatsPictogrammen(vragen);
+    assert.equal(out[0]?.pictogram, "giftig");
+    assert.doesNotMatch(out[0]!.stam, /doodshoofd/i);
+  });
+
+  it("laat de standen van de maatcilinder in de figuur staan, niet in de stam", () => {
+    const vragen: Vraag[] = [
+      {
+        nummer: 16,
+        type: "berekening",
+        rtti: "T2",
+        domein: "Volume",
+        leerdoel: "onderdompelmethode",
+        punten: 3,
+        stam: "De beginstand is 34 mL. Na het onderdompelen is de stand 61 mL. Bereken het volume.",
+      },
+    ];
+    const out = plaatsMaatcilinders(vragen);
+    assert.equal(out[0]?.maatcilinder?.standen[0]?.ml, 34);
+    assert.equal(out[0]?.maatcilinder?.standen[1]?.ml, 61);
+    assert.doesNotMatch(out[0]!.stam, /34|61/);
+    assert.match(out[0]!.stam, /maatcilinder/i);
+  });
+});
+
 describe("suggestSchemaFiguur", () => {
   it("kiest circuit bij schakeling", () => {
-    assert.equal(suggestSchemaFiguur("serieschakeling met lamp").soort, "circuit");
+    assert.equal(suggestSchemaFiguur("serieschakeling met lamp")?.soort, "circuit");
   });
 });
 

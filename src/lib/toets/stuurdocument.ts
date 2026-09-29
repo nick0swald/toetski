@@ -49,7 +49,12 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Validiteit: elke vraag dekt een leerdoel; geen triviale of off-topic items.",
       "Betrouwbaarheid: eenduidige vragen plus nakijkmodel waarmee twee docenten tot dezelfde score komen.",
       "Geen dubbele ontkenningen, geen strikvragen, één opdracht per deelvraag.",
-      "Meerkeuze: vier opties A–D, één beste antwoord; standaard 1 punt. Het juiste antwoord mag op elke letter staan (A, B, C of D) — niet steeds dezelfde. De software husselt de opties daarna en verdeelt de sleutel gelijk. modelantwoord begint met letter plus optietekst, bijv. C. 12 N. In uitleg, puntenverdeling en niet-toekennen: noem de inhoud, niet de letter (schrijf niet \"B is juist\").",
+      "Meerkeuze: vier opties A–D, precies één verdedigbaar antwoord; standaard 1 punt. Het juiste antwoord mag op elke letter staan (A, B, C of D) — niet steeds dezelfde. De software husselt de opties daarna, verdeelt de sleutel gelijk en zet de rubriek op 'Juiste keuze <letter>'. modelantwoord begint met letter plus optietekst, bijv. C. 12 N. Schrijf in de puntenverdeling geen letter.",
+      "Nooit twee goede antwoorden: een suspensie is ook een mengsel, een element is ook een zuivere stof — zet die niet allebei als optie.",
+      "Een afleider herhaalt niet wat de stam uitsluit ('in plaats van water' heeft geen optie water).",
+      "De stam en de context verklappen het antwoord niet (niet 'weegt op een weegschaal' als de vraag het instrument vraagt; niet 'troebele vloeistof' als troebel het kenmerk is).",
+      "Vragen beantwoorden elkaar niet: geen formulevraag plus dezelfde berekening, geen definitie plus dezelfde berekening, geen methode noemen plus die methode uitrekenen.",
+      "Veiligheid: beloon nooit onveilig handelen (onbekende vloeistof bij een vlam houden, proeven, ruiken) als 'veiligste' antwoord. Het etiket of gevarensymbool bekijken is veilig.",
       "Open vragen: commando’s als Noem, Geef, Leg uit, Bereken, Verklaar.",
       "Vraagstam (Cito/school): EERST situatieschets/inleiding (wie/wat/waar), DAARNA de vraagzin of opdracht. NOOIT andersom — geen vraag eerst en verhaal erna.",
       "Veld context = optionele inleiding vóór de stam; veld stam = de eigenlijke vraagtekst. Situatieschets óf in context óf aan het begin van stam; nooit ná de vraagzin.",
@@ -63,6 +68,8 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "KB: iets meer context, nog steeds helder.",
       "GT: zelfstandiger lezen.",
       "Waar het vak het toelaat: groene, Friese, praktijkgerichte context (kas, stal, erf, leerbedrijf Ares058).",
+      "Contextzin alleen als die iets toevoegt. Niet in elke vraag Aeres, en niet tien keer 'fles'. De situatie moet kunnen kloppen.",
+      "Genderneutraal: 'de leerling', niet 'hij'. Geen 'volgens de lesstof' of 'zoals in het boek'.",
     ],
   },
   {
@@ -71,7 +78,9 @@ export const STUUR_SECTIES: StuurSectie[] = [
     punten: [
       "Meerkeuze (en juist/onjuist): altijd max. 1 punt, tenzij de stam een andere/extra opdracht stelt (dan mag die extra opdracht apart meetellen).",
       "Eenvoudige open vraag (één kort antwoord, noem/geef): 1–2 punten.",
-      "Overige open/berekening/bronvragen: punten = aantal zinvolle nakijkstappen (1 punt per stap/criterium), passend bij RTTI-zwaarte.",
+      "Overige open/berekening/bronvragen: punten = aantal zinvolle nakijkstappen (1 punt per stap/criterium), passend bij RTTI-zwaarte. Alleen hele punten (geen 0,5 of 0,75). De rubriek telt exact op tot het puntenaantal van de vraag.",
+      "Rekenvraag volgens het boekschema: 1p gegevens en gevraagd, 1p formule, 1p uitwerking met antwoord en eenheid. Eén deling is geen 4-puntsvraag. Vraag niet om af te ronden als de uitkomst exact is.",
+      "Berekeningen gebruiken andere getallen dan de voorbeelden in de lesstof; de uitkomst mag niet het boekantwoord zijn (bijv. niet 1,2 g/cm³ of 2,7 g/cm³ als dat het voorbeeld is).",
       "Totaal dicht bij het gevraagde maximum.",
       "Vraagverdeling: tenzij de docent aantallen vastzet — hoofdstuktoets met voldoende stof → ≥50% meerkeuze/juist-onjuist; dictee/schrijf/luister/spreek → vooral open, weinig of geen MC.",
       "Volgorde op het blad (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen anders als de docent dat expliciet vraagt (bijv. open eerst, gemengde volgorde).",
@@ -84,8 +93,10 @@ export const STUUR_SECTIES: StuurSectie[] = [
     titel: "NaSk en exacte vakken",
     punten: [
       "Neem formules, eenheden, significantie, tabel- of grafiekbronnen, meetonzekerheid en eenvoudige labcontext mee als de lesstof dat toelaat.",
-      "Hoofdstuktoets NaSk / exact: zorg dat minstens één vraag een echte figuur heeft (tabel, grafiek of schemaFiguur) — liever aflezen/meten dan alleen tekst.",
-      "Noemt de lesstof een grafiek of tabel: zet een echte gestructureerde tabel (veld tabel) en/of grafiek (veld grafiek) in de JSON — geen alleen-tekstverwijzing.",
+      "Hoofdstuktoets NaSk / exact: zorg dat minstens één vraag een echte figuur heeft (pictogram, maatcilinder, grafiek of schemaFiguur) — liever aflezen/meten dan alleen tekst. Een tabel telt niet als figuur.",
+      "Gevarensymbool: zet veld pictogram (ontvlambaar, giftig, bijtend, milieu, schadelijk, explosief, oxiderend, gas-onder-druk of gezondheidsgevaar) en beschrijf het symbool niet in de stam of context.",
+      "Onderdompelmethode: veld maatcilinder met de af te lezen standen; de getallen staan in de figuur, niet als kant-en-klare zin in de stam.",
+      "Noemt de lesstof een grafiek: zet een grafiek (veld grafiek) in de JSON. Een tabel mag erbij, maar telt zelf niet als de verplichte figuur.",
       "Bij schakelingen, krachten of blokkenschema's: gebruik schemaFiguur (soort circuit|krachten|blokken) met korte labels. Alleen eenvoudige lijnkunst, nooit boekillustraties kopiëren.",
     ],
   },
@@ -93,9 +104,9 @@ export const STUUR_SECTIES: StuurSectie[] = [
     id: "figuren",
     titel: "Illustraties en figuren",
     punten: [
-      "Voeg een figuur toe als die de vraag écht helpt (aflezen, meten, schema). Niet bij elke vraag — wel minstens één bij een NaSk-hoofdstuktoets met voldoende stof.",
-      "Figuren zijn ORIGINEEL en exam-stijl (eenvoudige tabel, grafiek of lijn-schema). Nooit boekplaatjes, foto's of auteursrechtelijk materiaal natekenen.",
-      "Volgorde op het blad: context → figuur (tabel/grafiek/schema) → stam.",
+      "Voeg een figuur toe als die de vraag écht helpt (aflezen, meten, pictogram, schema). Niet bij elke vraag — wel minstens één echte figuur bij een NaSk-hoofdstuktoets met voldoende stof.",
+      "Figuren zijn ORIGINEEL en exam-stijl (GHS-pictogram, maatcilinder, grafiek of lijn-schema). Nooit boekplaatjes, foto's of auteursrechtelijk materiaal natekenen.",
+      "Volgorde op het blad: context → stimulusfiguur (pictogram/grafiek/schema/maatcilinder) → stam → tabel. Een invultabel komt ná de stam en is het antwoordgebied.",
     ],
   },
   {
@@ -103,6 +114,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
     titel: "Kwaliteitscheck",
     punten: [
       "Wees eerlijk. Minimaal: validiteit, betrouwbaarheid, RTTI-spreiding, taal, transparantie, Cito-opmaak.",
+      "In kwaliteit.samenvatting geen puntentotaal, geen RTTI-percentages, geen 'figuur voldoet' en geen 'dekt alle leerdoelen'. De app berekent die checks. Alleen een korte kwalitatieve opmerking.",
     ],
   },
 ];
@@ -114,12 +126,12 @@ export function stuurdocumentTekst(): string {
 export const JSON_SCHEMA_PROMPT = `Antwoord ALLEEN met één JSON-object, geen markdown. Schema:
 {
   "meta": { "titel": string, "vak": string, "leerweg": "BB"|"KB"|"GT", "leerjaar": 1|2|3|4, "duurMinuten": number, "hulpmiddelen": string[], "instructies": string[], "onderwerp": string, "extraTijd": string },
-  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] } }],
+  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] }, "pictogram": "ontvlambaar"|"giftig"|"bijtend"|"milieu"|"schadelijk"|"explosief"|"oxiderend"|"gas-onder-druk"|"gezondheidsgevaar", "maatcilinder": { "titel": string, "maxMl": number, "standen": [{"label": string, "ml": number}] } }],
   "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }],
   "cesuur": { "nTerm": 1, "cesuurPunten": number, "toelichting": string, "formule": string },
   "kwaliteit": { "samenvatting": string, "punten": [{"criterium": string, "oordeel": "voldoet"|"aandacht"|"ontbreekt", "toelichting": string}] }
 }
-Velden per vraag (volgorde op het blad): "context" = optionele situatieschets/inleiding (wordt VOOR de stam getoond); daarna optioneel "tabel"/"grafiek"/"schemaFiguur"; daarna "stam" = vraagtekst. Figuren alleen als nuttig — niet bij elke vraag; origineel exam-stijl, nooit boekkunst. In "stam": als je context leeg laat, begint stam met inleiding en eindigt met de vraagzin — NOOIT omgekeerd. "extraTijd" in meta alleen invullen als de docent dat expliciet vraagt (anders weglaten/leeg).`;
+Velden per vraag (volgorde op het blad): "context" = optionele situatieschets/inleiding (wordt VOOR de stam getoond); daarna een stimulusfiguur (grafiek, schemaFiguur, pictogram of maatcilinder); daarna "stam" = vraagtekst; een invultabel komt ná de stam. "domein" = paragraaf uit de leerdoelen, bijv. "2.1 Stoffen herkennen"; PLUS-leerdoelen markeer je in "leerdoel" met PLUS. Figuren alleen als nuttig — niet bij elke vraag; origineel exam-stijl, nooit boekkunst. Een tabel telt niet als de verplichte NaSk-figuur. In "stam": als je context leeg laat, begint stam met inleiding en eindigt met de vraagzin — NOOIT omgekeerd. "extraTijd" in meta alleen invullen als de docent dat expliciet vraagt (anders weglaten/leeg).`;
 
 export function bouwSystemPrompt(stuur?: string | null): string {
   const body = stuur?.trim() || stuurdocumentTekst();

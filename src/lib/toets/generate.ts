@@ -4,10 +4,10 @@ import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
 import { bijschavenInputSchema, bijschavenPayloadSchema, extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
 import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
-import { finalizeVragen } from "./mc-balance";
 import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
-import { detectVakProfiel, verzekerBronFiguren } from "./bron-figuren";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
+import { REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
+import { bouwKwaliteit } from "./kwaliteit-check";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 
 function stripJsonFence(raw: string): string {
@@ -193,10 +193,12 @@ Aantal vragen (richtlijn): ${input.aantalVragen}
 Vraagverdeling: ${verdelingTekst}
 Streefmaximum: ${input.doelPunten} punten (richtlijn; passend bij toetsduur en moeilijkheid, tenzij de docent anders stuurt)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
-MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en verdeelt de sleutel gelijk over A–D. modelantwoord = letter + tekst (bijv. "C. 12 N"). Uitleg, puntenverdeling en niet-toekennen noemen de inhoud, niet de letter (schrijf niet "B is juist").
-Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
+MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
+Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam, alleen als die iets toevoegt.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
-NaSk/exacte vakken: bij hoofdstuktoets met voldoende stof minstens één vraag met tabel, grafiek of schemaFiguur (origineel exam-stijl).
+NaSk/exacte vakken: minstens één ECHTE figuur (pictogram, maatcilinder, grafiek of schemaFiguur). Een tabel telt niet. Pictogramvraag: veld pictogram en beschrijf het symbool niet. Onderdompelen: veld maatcilinder met af te lezen standen.
+Kwaliteit in JSON: alleen een korte kwalitatieve opmerking. Verzin geen puntentotaal, RTTI-percentages, figuuraantal of "dekt alle leerdoelen" — de app rekent die zelf uit.
+Domein = paragraaf uit de leerdoelen (bijv. "2.1 Stoffen herkennen"), niet een losse deelvaardigheid. Zet PLUS in het leerdoel als het leerdoel PLUS is. Spelling: stofeigenschap.
 Versie: ${input.versie ?? "A"}
 Moeilijkheid: ${moeTekst}
 RTTI-doel: R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
@@ -265,20 +267,27 @@ export const generateToets = createServerFn({ method: "POST" })
           opties: q.opties?.length ? q.opties : undefined,
         }),
       );
-      const vakProfiel = detectVakProfiel(
-        data.vak?.trim() || payload.meta.vak || "",
-        bron,
-      );
-      const metFiguren = verzekerBronFiguren(vragenRaw, bron, vakProfiel);
+      const vakNaam = data.vak?.trim() || payload.meta.vak || "";
       const skipMcEerst = wilGemengdeOfOpenEerst(
         `${data.extraEisen ?? ""}\n${data.feedback ?? ""}`,
       );
-      // Choke point: finalizeVragen ordent en husselt elke MC-sleutel.
-      const geordend = finalizeVragen(metFiguren, payload.nakijkmodel, {
+      const af = await werkVragenAf({
+        vragen: vragenRaw,
+        nakijkmodel: payload.nakijkmodel,
+        bron,
+        vak: vakNaam,
         skipOrder: skipMcEerst,
+        repair: (prompt) =>
+          callGrok(
+            [
+              { role: "system", content: REPAIR_SYSTEM },
+              { role: "user", content: prompt },
+            ],
+            Math.min(8000, Math.max(2000, Math.ceil(prompt.length / 3))),
+          ).catch(() => null),
       });
-      const vragen = geordend.vragen;
-      const nakijkmodel = geordend.nakijkmodel;
+      const vragen = af.vragen;
+      const nakijkmodel = af.nakijkmodel;
       const max = totaalPunten(vragen);
       const cijferNorm = data.cijferNorm;
       const cesuurP = cesuurPunten(max, cijferNorm);
@@ -316,7 +325,15 @@ export const generateToets = createServerFn({ method: "POST" })
         },
         matrijs: bouwMatrijs(vragen, rttiDoel),
         kwaliteit: annoteerMcAandeel(
-          payload.kwaliteit,
+          bouwKwaliteit({
+            vragen,
+            nakijkmodel,
+            bron,
+            vak: vakNaam,
+            rttiDoel,
+            llm: payload.kwaliteit,
+            issues: af.issues,
+          }),
           vragen,
           wilHogeMcShare({
             bron,
@@ -453,7 +470,7 @@ function tokensVoorExtraVragen(n: number): number {
 
 const EXTRA_JSON_SCHEMA = `Antwoord ALLEEN met één JSON-object, geen markdown. Schema:
 {
-  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] } }],
+  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] }, "pictogram": "ontvlambaar"|"giftig"|"bijtend"|"milieu"|"schadelijk"|"explosief"|"oxiderend"|"gas-onder-druk"|"gezondheidsgevaar", "maatcilinder": { "titel": string, "maxMl": number, "standen": [{"label": string, "ml": number}] } }],
   "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }]
 }
 Geef precies het gevraagde aantal vragen. Nummers starten bij het opgegeven startnummer. Figuren alleen als nuttig. Geen meta, cesuur of kwaliteit.
@@ -507,7 +524,7 @@ RTTI-doel (richtlijn voor de nieuwe vragen): R ${rtti.R}% · T1 ${rtti.T1}% · T
 Vraagverdeling: ${verdelingTekst}
 Startnummer: ${input.startNummer} (nummer de nieuwe vragen opeenvolgend vanaf hier)
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
-MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en verdeelt de sleutel gelijk over A–D. modelantwoord = letter + tekst (bijv. "C. 12 N"). Uitleg, puntenverdeling en niet-toekennen noemen de inhoud, niet de letter (schrijf niet "B is juist").
+MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
 
@@ -599,12 +616,23 @@ ${EXTRA_JSON_SCHEMA}`;
             }
           }
         }
-        const vakProfiel = detectVakProfiel(data.vak?.trim() || "", data.bronmateriaal || "");
-        const metFiguren = verzekerBronFiguren(vragenRaw, data.bronmateriaal || "", vakProfiel);
-        // Zelfde choke point. Niet hernummeren: de client voegt deze vragen achter de bestaande toets.
-        const geordend = finalizeVragen(metFiguren, nakijkRaw, { skipOrder: true });
-        const vragen = geordend.vragen;
-        const nakijkmodel = geordend.nakijkmodel;
+        const af = await werkVragenAf({
+          vragen: vragenRaw,
+          nakijkmodel: nakijkRaw,
+          bron: data.bronmateriaal || "",
+          vak: data.vak?.trim() || "",
+          skipOrder: true,
+          repair: (prompt) =>
+            callGrok(
+              [
+                { role: "system", content: REPAIR_SYSTEM },
+                { role: "user", content: prompt },
+              ],
+              Math.min(8000, Math.max(1800, Math.ceil(prompt.length / 3))),
+            ).catch(() => null),
+        });
+        const vragen = af.vragen;
+        const nakijkmodel = af.nakijkmodel;
         if (vragen.length < 1) {
           return { ok: false, error: "De AI leverde geen bruikbare extra vragen." };
         }
@@ -734,12 +762,25 @@ Lever ALLE vragen + nakijkmodel terug (aangepast of ongewijzigd).`;
           }
         }
         const skipMcEerst = wilGemengdeOfOpenEerst(instructie);
-        // Zelfde choke point als genereren en extra vragen.
-        const geordend = finalizeVragen(vragenRaw, nakijkRaw, { skipOrder: skipMcEerst });
+        const af = await werkVragenAf({
+          vragen: vragenRaw,
+          nakijkmodel: nakijkRaw,
+          bron: data.bronmateriaal ?? "",
+          vak: data.vak?.trim() || "",
+          skipOrder: skipMcEerst,
+          repair: (prompt) =>
+            callGrok(
+              [
+                { role: "system", content: REPAIR_SYSTEM },
+                { role: "user", content: prompt },
+              ],
+              Math.min(8000, Math.max(1800, Math.ceil(prompt.length / 3))),
+            ).catch(() => null),
+        });
         return {
           ok: true,
-          vragen: geordend.vragen,
-          nakijkmodel: geordend.nakijkmodel,
+          vragen: af.vragen,
+          nakijkmodel: af.nakijkmodel,
           toelichting: payload.toelichting?.trim() || "Bijgeschaafd.",
         };
       } catch (err) {

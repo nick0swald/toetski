@@ -1,4 +1,5 @@
-import { VraagFiguren } from "@/components/toets/bron-figuur";
+import { BronTabel, StimulusFiguren } from "@/components/toets/bron-figuur";
+import { blokkenVoorVraag } from "@/lib/toets/blad-volgorde";
 import type { GegenereerdeToets } from "@/lib/toets/types";
 import { totaalPunten } from "@/lib/toets/rtti";
 
@@ -39,14 +40,24 @@ export function ToetsSheet({
         </p>
       ) : null}
       <ol className="mt-8 grid gap-8">
-        {toets.vragen.map((q) => (
+        {toets.vragen.map((q) => {
+          const blokken = blokkenVoorVraag(q);
+          return (
           <li key={q.nummer}>
-            <h3 className="text-base font-bold text-brand">
-              {q.nummer} ({q.punten}p)
+            {blokken.includes("context") && q.context ? (
+              <p className="text-sm italic text-muted">{q.context}</p>
+            ) : null}
+            {blokken.includes("stimulus") ? (
+              <StimulusFiguren
+                grafiek={q.grafiek}
+                schemaFiguur={q.schemaFiguur}
+                pictogram={q.pictogram}
+                maatcilinder={q.maatcilinder}
+              />
+            ) : null}
+            <h3 className="mt-2 text-base font-bold text-brand">
+              {q.punten}p {q.nummer}
             </h3>
-            {/* Schoolvolgorde: context → figuur → stam */}
-            {q.context ? <p className="mt-2 text-sm italic text-muted">{q.context}</p> : null}
-            <VraagFiguren tabel={q.tabel} grafiek={q.grafiek} schemaFiguur={q.schemaFiguur} />
             {editing ? (
               <textarea
                 className="mt-2 w-full min-h-24 rounded-[var(--radius-md)] bg-surface/50 p-3 text-sm"
@@ -56,6 +67,7 @@ export function ToetsSheet({
             ) : (
               <p className="mt-2 whitespace-pre-wrap leading-relaxed">{q.stam}</p>
             )}
+            {blokken.includes("tabel") && q.tabel ? <BronTabel tabel={q.tabel} /> : null}
             {q.opties?.length ? (
               <ul className="mt-3 grid gap-1">
                 {q.opties.map((o) => (
@@ -66,7 +78,8 @@ export function ToetsSheet({
               </ul>
             ) : null}
           </li>
-        ))}
+          );
+        })}
       </ol>
     </article>
   );

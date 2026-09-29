@@ -371,28 +371,43 @@ function placeOptions(
   return { opties: placed, map };
 }
 
-function isShortKey(rewritten: string, correctTekst: string): boolean {
-  const n = normText(rewritten);
-  const c = normText(correctTekst);
-  if (!n) return true;
-  if (/^[a-d]$/.test(n)) return true;
-  if (/^(antwoord|het antwoord|juiste antwoord|sleutel|optie|keuze)\s*(is|=|:)?\s*[a-d]?$/.test(n)) return true;
-  if (c && (n === c || n === `b ${c}` || n === `a ${c}` || n === `c ${c}` || n === `d ${c}`)) return true;
-  if (c && n.endsWith(c) && n.length <= c.length + 2) return true;
-  return false;
+/**
+ * Antwoordletters in nakijktekst (niet "vitamine A").
+ * Gebruikt om te controleren dat een MC-rubriek alleen de sleutel noemt.
+ */
+export function antwoordLettersInTekst(text: string): string[] {
+  const out: string[] = [];
+  if (!text) return out;
+  const re = /\b([A-Da-d])\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (isLetterRef(text, m.index, m[0].length)) out.push(m[1]!.toUpperCase());
+  }
+  return out;
 }
 
-function syncModelantwoord(old: string, newLetter: string, correctTekst: string, map: Record<string, string>): string {
-  const rewritten = rewriteLetterRefs(old || "", map).trim();
-  if (isShortKey(rewritten, correctTekst)) return `${newLetter}. ${correctTekst}`;
-  const n = normText(rewritten);
-  const c = normText(correctTekst);
-  const hasLetter = new RegExp(`(^|[^A-Za-z])${newLetter}([^A-Za-z]|$)`).test(rewritten);
-  const hasText = c.length >= 2 && n.includes(c);
-  if (hasLetter && hasText) return rewritten;
-  if (hasText && !hasLetter) return `${newLetter}. ${rewritten}`;
-  if (hasLetter && !hasText) return `${newLetter}. ${correctTekst} — ${rewritten}`;
-  return `${newLetter}. ${correctTekst}`;
+/** Alle antwoordletters in een nakijkregel (model, criteria, niet-toekennen). */
+export function antwoordLettersInNakijk(item: NakijkItem): string[] {
+  const delen = [
+    item.modelantwoord ?? "",
+    ...(item.puntenverdeling ?? []).map((p) => p.criterium),
+    ...(item.nietToekennen ?? []),
+  ];
+  return delen.flatMap((d) => antwoordLettersInTekst(d));
+}
+
+/**
+ * MC-rubriek deterministisch uit de uiteindelijke sleutel.
+ * Criterum en niet-toekennen komen niet uit LLM-tekst.
+ */
+export function zetMcRubriek(vraag: Vraag, nakijk: NakijkItem, key: string, correctTekst: string): void {
+  const letter = canonLetter(key) || "A";
+  const punten = Math.max(1, Math.round(Number(vraag.punten) || 1));
+  vraag.punten = punten;
+  const tekst = (correctTekst || "").trim();
+  nakijk.modelantwoord = tekst ? `${letter}. ${tekst}` : letter;
+  nakijk.puntenverdeling = [{ punt: punten, criterium: `Juiste keuze ${letter}` }];
+  nakijk.nietToekennen = ["andere letters"];
 }
 
 /**
@@ -445,14 +460,12 @@ export function shuffleMcAnswers(
       opties[job.correctIdx]!.tekst;
     const nakijk = nakijkVoor(nextNakijk, q, job.vraagIndex);
     if (!nakijk) return;
-    nakijk.modelantwoord = syncModelantwoord(nakijk.modelantwoord, canonLetter(target) || target, correctTekst, placed.map);
-    nakijk.puntenverdeling = nakijk.puntenverdeling.map((p) => ({
-      ...p,
-      criterium: rewriteLetterRefs(p.criterium, placed.map),
-    }));
-    if (nakijk.nietToekennen) {
-      nakijk.nietToekennen = nakijk.nietToekennen.map((s) => rewriteLetterRefs(s, placed.map));
-    }
+    const key =
+      canonLetter(placed.opties.find((o) => normText(o.tekst) === normText(correctTekst))?.letter ?? "") ||
+      canonLetter(target) ||
+      "A";
+    // Rubriek komt uit de sleutel ná het husselen, nooit uit de LLM-letter.
+    zetMcRubriek(q, nakijk, key, correctTekst);
   });
 
   return { vragen: nextVragen, nakijkmodel: nextNakijk };
