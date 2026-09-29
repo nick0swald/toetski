@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { bijschavenToets, generateExtraQuestions } from "@/lib/toets/generate";
+import { finalizeVragen } from "@/lib/toets/mc-balance";
 import { withDefaults } from "@/lib/toets/defaults";
 import { maakVoorbeeldToets } from "@/lib/toets/sample";
 import { cesuurPunten, formuleTekst } from "@/lib/toets/cijfer";
@@ -214,10 +215,15 @@ function ToetsPage() {
         toast.error(result.error);
         return;
       }
+      const merged = finalizeVragen(
+        [...current.vragen, ...result.vragen],
+        [...current.nakijkmodel, ...result.nakijkmodel],
+        { skipOrder: true },
+      );
       upsert({
         ...current,
-        vragen: [...current.vragen, ...result.vragen],
-        nakijkmodel: [...current.nakijkmodel, ...result.nakijkmodel],
+        vragen: merged.vragen,
+        nakijkmodel: merged.nakijkmodel,
       });
       const n = result.vragen.length;
       toast.success(n === 1 ? "1 extra vraag toegevoegd" : `${n} extra vragen toegevoegd`);
