@@ -1,6 +1,7 @@
 import type { FiguurSpec } from "../types.ts";
 import { ghsPictogramSvg, maatcilinderSvg } from "../figuur-svg.ts";
 import { parseSpecData, type SpecData } from "./spec.ts";
+import { symboolSoort, type SymboolSoort } from "./schakelsymbolen.ts";
 
 /**
  * Deterministische tekenaars: spec-data → SVG. Getallen komen letterlijk uit de spec,
@@ -51,8 +52,8 @@ function tekst(
   } text-anchor="${opts.anchor ?? "middle"}" fill="${opts.kleur ?? INK}"${rot}>${esc(s)}</text>`;
 }
 
-function lijn(x1: number, y1: number, x2: number, y2: number, opts: { w?: number; kleur?: string; dash?: string } = {}): string {
-  return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${opts.kleur ?? INK}" stroke-width="${opts.w ?? 2}"${
+function lijn(x1: number, y1: number, x2: number, y2: number, opts: { w?: number; kleur?: string; dash?: string; attr?: string } = {}): string {
+  return `<line${opts.attr ? ` ${opts.attr}` : ""} x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${opts.kleur ?? INK}" stroke-width="${opts.w ?? 2}"${
     opts.dash ? ` stroke-dasharray="${opts.dash}"` : ""
   } stroke-linecap="round"/>`;
 }
@@ -228,56 +229,105 @@ function staafdiagram(spec: FiguurSpec): { svg: string; W: number; H: number } {
 
 type Comp = { soort: string; label?: string };
 
-/** Schakelsymbool horizontaal gecentreerd op (x,y); `vert` draait het 90°. Neemt 44 px draad in. */
-function symbool(c: Comp, x: number, y: number, vert = false): { vorm: string; tekst: string } {
-  const s = c.soort.toLowerCase();
-  const rot = vert ? ` transform="rotate(90 ${x} ${y})"` : "";
-  const g = (inner: string) => `<g${rot}>${inner}</g>`;
-  const draad = (gap: number) => lijn(x - 22, y, x - gap, y) + lijn(x + gap, y, x + 22, y);
-  const cirkelLetter = (L: string) => ({
-    vorm: g(`${draad(14)}<circle cx="${x}" cy="${y}" r="14" fill="#ffffff" stroke="${INK}" stroke-width="2"/>`),
-    tekst: tekst(x, y + 5, L, { size: 14, bold: true }),
-  });
-  if (/^a$|^amp[eè]re|stroommeter/.test(s)) return cirkelLetter("A");
-  if (/^v$|^volt|spanningsmeter/.test(s)) return cirkelLetter("V");
-  if (/motor/.test(s)) return cirkelLetter("M");
-  if (/weerstand/.test(s))
-    return { vorm: g(`${draad(20)}<rect x="${x - 20}" y="${y - 8}" width="40" height="16" fill="#ffffff" stroke="${INK}" stroke-width="2"/>`), tekst: "" };
-  if (/schakel/.test(s)) {
-    const open = !/dicht|gesloten/.test(s);
-    return {
-      vorm: g(
-        `${lijn(x - 22, y, x - 14, y)}${lijn(x + 14, y, x + 22, y)}<circle cx="${x - 14}" cy="${y}" r="3" fill="${INK}"/><circle cx="${x + 14}" cy="${y}" r="3" fill="${INK}"/>${
-          open ? lijn(x - 14, y, x + 12, y - 14) : lijn(x - 14, y, x + 14, y)
-        }`,
-      ),
-      tekst: "",
-    };
-  }
-  if (/led/.test(s))
-    return {
-      vorm: g(
-        `${draad(9)}<polygon points="${x - 9},${y - 10} ${x - 9},${y + 10} ${x + 9},${y}" fill="#ffffff" stroke="${INK}" stroke-width="2"/>${lijn(x + 9, y - 10, x + 9, y + 10)}${pijl(x + 2, y - 12, x + 12, y - 22, INK, 1.4)}${pijl(x + 8, y - 9, x + 18, y - 19, INK, 1.4)}`,
-      ),
-      tekst: "",
-    };
-  if (/zoemer|bel/.test(s))
-    return { vorm: g(`${draad(14)}<path d="M ${x - 14} ${y} A 14 14 0 0 1 ${x + 14} ${y} Z" fill="#ffffff" stroke="${INK}" stroke-width="2"/>`), tekst: "" };
-  // lampje (standaard)
-  return {
-    vorm: g(
-      `${draad(14)}<circle cx="${x}" cy="${y}" r="14" fill="#ffffff" stroke="${INK}" stroke-width="2"/>${lijn(x - 10, y - 10, x + 10, y + 10)}${lijn(x - 10, y + 10, x + 10, y - 10)}`,
-    ),
-    tekst: "",
-  };
+/** Klein pijltje (voor led/LDR/variabele weerstand). */
+function pijltje(x1: number, y1: number, x2: number, y2: number, w = 1.4): string {
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  const L = 6;
+  const p = (a: number) => `${(x2 + Math.cos(a) * L).toFixed(1)},${(y2 + Math.sin(a) * L).toFixed(1)}`;
+  return `${lijn(x1, y1, x2 - Math.cos(ang) * 3, y2 - Math.sin(ang) * 3, { w })}<polygon points="${x2.toFixed(1)},${y2.toFixed(1)} ${p(ang + Math.PI - 0.5)} ${p(ang + Math.PI + 0.5)}" fill="${INK}"/>`;
 }
 
-/** Batterij/spanningsbron verticaal op (x,y): lange plaat = +. */
+const WIT = `fill="#ffffff" stroke="${INK}" stroke-width="2"`;
+
+/**
+ * Standaard NL/VMBO-schakelsymbool, horizontaal gecentreerd op (x,y); `vert` draait het 90°.
+ * Neemt 44 px draad in. Elk symbool zit in <g data-symbool="…"> zodat code kan controleren
+ * dat élk onderdeel met zijn eigen symbool getekend is (zie schakelsymbolen.ts).
+ */
+function symbool(c: Comp, x: number, y: number, vert = false): { vorm: string; tekst: string } {
+  const soort: SymboolSoort = symboolSoort(c.soort);
+  const rot = vert ? ` transform="rotate(90 ${x} ${y})"` : "";
+  const g = (inner: string) => `<g data-symbool="${soort}"${rot}>${inner}</g>`;
+  const draad = (gap: number) => lijn(x - 22, y, x - gap, y) + lijn(x + gap, y, x + 22, y);
+  const rechthoek = (extra = "") => `${draad(18)}<rect x="${x - 18}" y="${y - 7}" width="36" height="14" ${WIT}/>${extra}`;
+  const cirkelLetter = (L: "A" | "V" | "M") => ({
+    vorm: g(`${draad(14)}<circle data-letter="${L}" cx="${x}" cy="${y}" r="14" ${WIT}/>`),
+    tekst: tekst(x, y + 5, L, { size: 14, bold: true }),
+  });
+  switch (soort) {
+    case "ampèremeter":
+      return cirkelLetter("A");
+    case "voltmeter":
+      return cirkelLetter("V");
+    case "motor":
+      return cirkelLetter("M");
+    case "weerstand":
+      return { vorm: g(rechthoek()), tekst: "" };
+    case "zekering":
+      return { vorm: g(rechthoek(lijn(x - 18, y, x + 18, y, { w: 1.6 }))), tekst: "" };
+    case "variabele-weerstand":
+      return { vorm: g(rechthoek(pijltje(x - 16, y + 13, x + 16, y - 13, 1.6))), tekst: "" };
+    case "ntc":
+      return {
+        vorm: g(rechthoek(`${lijn(x - 20, y + 12, x - 12, y + 12, { w: 1.6 })}${lijn(x - 12, y + 12, x + 16, y - 12, { w: 1.6 })}`)),
+        tekst: tekst(x + (vert ? 26 : 0), y + (vert ? 4 : 26), "−t°", { size: 11, anchor: vert ? "start" : "middle" }),
+      };
+    case "ldr":
+      return {
+        vorm: g(
+          `${draad(18)}<circle cx="${x}" cy="${y}" r="18" ${WIT}/><rect x="${x - 11}" y="${y - 5}" width="22" height="10" ${WIT}/>${pijltje(x - 22, y - 24, x - 10, y - 12)}${pijltje(x - 12, y - 28, x, y - 16)}`,
+        ),
+        tekst: "",
+      };
+    case "schakelaar-open":
+    case "schakelaar-dicht": {
+      // Twee (open) contactpunten; hendel vanaf het linker contact: schuin omhoog (open) of recht naar het rechter contact (dicht).
+      const cx1 = x - 15;
+      const cx2 = x + 15;
+      const hoek = (30 * Math.PI) / 180;
+      const hendel =
+        soort === "schakelaar-open"
+          ? lijn(cx1, y, cx1 + 32 * Math.cos(hoek), y - 32 * Math.sin(hoek), { w: 2.2, attr: 'data-hendel="1"' })
+          : lijn(cx1, y, cx2, y, { w: 3, attr: 'data-hendel="1"' });
+      return {
+        vorm: g(
+          `${lijn(x - 22, y, cx1 - 3.5, y)}${lijn(cx2 + 3.5, y, x + 22, y)}${hendel}<circle data-contact="1" cx="${cx1}" cy="${y}" r="3.5" ${WIT}/><circle data-contact="1" cx="${cx2}" cy="${y}" r="3.5" ${WIT}/>`,
+        ),
+        tekst: "",
+      };
+    }
+    case "led":
+    case "diode":
+      return {
+        vorm: g(
+          `${draad(9)}<polygon points="${x - 9},${y - 10} ${x - 9},${y + 10} ${x + 9},${y}" ${WIT}/>${lijn(x + 9, y - 11, x + 9, y + 11)}${
+            soort === "led" ? `${pijltje(x, y - 12, x + 9, y - 22)}${pijltje(x + 7, y - 10, x + 16, y - 20)}` : ""
+          }`,
+        ),
+        tekst: "",
+      };
+    case "zoemer":
+      return { vorm: g(`${draad(14)}<path d="M ${x - 14} ${y} A 14 14 0 0 1 ${x + 14} ${y} Z" ${WIT}/>`), tekst: "" };
+    case "lamp":
+      return {
+        vorm: g(`${draad(14)}<circle cx="${x}" cy="${y}" r="14" ${WIT}/>${lijn(x - 10, y - 10, x + 10, y + 10)}${lijn(x - 10, y + 10, x + 10, y - 10)}`),
+        tekst: "",
+      };
+    default:
+      // Geen standaardsymbool: zichtbaar "?"-blok; de code-keuring maakt hier een no_go van.
+      return {
+        vorm: g(`${draad(18)}<rect x="${x - 18}" y="${y - 10}" width="36" height="20" fill="#ffffff" stroke="${INK}" stroke-width="2" stroke-dasharray="4 3"/>`),
+        tekst: tekst(x, y + 5, "?", { size: 13, bold: true }),
+      };
+  }
+}
+
+/** Batterij/spanningsbron verticaal op (x,y): lange dunne plaat = +, korte dikke plaat = −. */
 function bron(x: number, y: number, soort: string): string {
   if (soort === "spanningsbron") {
-    return `${lijn(x, y - 26, x, y - 16)}${lijn(x, y + 16, x, y + 26)}<circle cx="${x}" cy="${y}" r="16" fill="#ffffff" stroke="${INK}" stroke-width="2"/>${tekst(x, y - 3, "+", { size: 12, bold: true })}${tekst(x, y + 12, "−", { size: 13, bold: true })}`;
+    return `<g data-symbool="spanningsbron">${lijn(x, y - 26, x, y - 16)}${lijn(x, y + 16, x, y + 26)}<circle cx="${x}" cy="${y}" r="16" ${WIT}/></g>${tekst(x, y - 3, "+", { size: 12, bold: true })}${tekst(x, y + 12, "−", { size: 13, bold: true })}`;
   }
-  return `${lijn(x, y - 26, x, y - 5)}${lijn(x, y + 5, x, y + 26)}${lijn(x - 16, y - 5, x + 16, y - 5, { w: 2 })}${lijn(x - 8, y + 5, x + 8, y + 5, { w: 4.5 })}${tekst(x + 22, y - 8, "+", { size: 13, bold: true, anchor: "start" })}${tekst(x + 22, y + 16, "−", { size: 14, bold: true, anchor: "start" })}`;
+  return `<g data-symbool="batterij">${lijn(x, y - 26, x, y - 5)}${lijn(x, y + 5, x, y + 26)}${lijn(x - 16, y - 5, x + 16, y - 5, { w: 2, attr: 'data-plaat="1"' })}${lijn(x - 8, y + 5, x + 8, y + 5, { w: 4.5, attr: 'data-plaat="1"' })}</g>${tekst(x + 22, y - 8, "+", { size: 13, bold: true, anchor: "start" })}${tekst(x + 22, y + 16, "−", { size: 14, bold: true, anchor: "start" })}`;
 }
 
 /** Horizontale draad van x1 naar x2 met gaten voor symbolen op posities xs. */
@@ -322,7 +372,17 @@ function stroomkring(spec: FiguurSpec): { svg: string; W: number; H: number } {
   const bronLabel = d.bron.label;
   out.push(lijn(L, top, L, bronY - 26), lijn(L, bronY + 26, L, bot));
   out.push(bron(L, bronY, d.bron.soort));
-  if (bronLabel) out.push(tekst(L - 26, bronY + 5, bronLabel, { anchor: "end", size: 13 }));
+  const vmBron = d.voltmeters.find((v) => v.over === "bron");
+  if (bronLabel) out.push(tekst(vmBron ? L + 40 : L - 26, bronY + 5, bronLabel, { anchor: vmBron ? "start" : "end", size: 13 }));
+  if (vmBron) {
+    // Spanningsmeter parallel over de bron (links van de bron).
+    const x = L - 48;
+    out.push(lijn(L, bronY - 40, x, bronY - 40), lijn(x, bronY - 40, x, bronY - 22), lijn(x, bronY + 22, x, bronY + 40), lijn(x, bronY + 40, L, bronY + 40));
+    out.push(`<circle cx="${L}" cy="${bronY - 40}" r="3" fill="${INK}"/><circle cx="${L}" cy="${bronY + 40}" r="3" fill="${INK}"/>`);
+    const s = symbool({ soort: "voltmeter" }, x, bronY, true);
+    out.push(s.vorm, s.tekst);
+    if (vmBron.label) out.push(tekst(x - 20, bronY + 5, vmBron.label, { anchor: "end", size: 13 }));
+  }
 
   if (d.schakeling === "parallel" && d.takken.length) {
     const hoofd = d.componenten.slice(0, 3);
@@ -363,15 +423,7 @@ function stroomkring(spec: FiguurSpec): { svg: string; W: number; H: number } {
     boven.forEach((c, i) => plaats(c, bx[i]!, top, d.voltmeters.length > 0));
     onder.forEach((c, i) => plaats(c, ox[i]!, bot, true));
     for (const vm of d.voltmeters) {
-      if (vm.over === "bron") {
-        const x = L - 48;
-        out.push(lijn(L, bronY - 40, x, bronY - 40), lijn(x, bronY - 40, x, bronY - 22), lijn(x, bronY + 22, x, bronY + 40), lijn(x, bronY + 40, L, bronY + 40));
-        out.push(`<circle cx="${L}" cy="${bronY - 40}" r="3" fill="${INK}"/><circle cx="${L}" cy="${bronY + 40}" r="3" fill="${INK}"/>`);
-        const s = symbool({ soort: "voltmeter" }, x, bronY, true);
-        out.push(s.vorm, s.tekst);
-        if (vm.label) out.push(tekst(x - 20, bronY + 5, vm.label, { anchor: "end", size: 13 }));
-        continue;
-      }
+      if (vm.over === "bron") continue;
       const idx = vm.over;
       const inBoven = idx < boven.length;
       const cx = inBoven ? bx[idx] : ox[idx - boven.length];
