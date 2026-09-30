@@ -22,12 +22,21 @@ describe("grafiekSvg", () => {
 });
 
 describe("ghs en maatcilinder", () => {
-  it("tekent elk GHS-symbool als ruit", () => {
+  it("tekent elk GHS-symbool als ruit en elk veiligheidsbord in de juiste vorm/kleur", () => {
     for (const soort of GHS_SYMBOLEN) {
       const svg = ghsPictogramSvg(soort);
       assert.match(svg, /<svg/);
-      assert.match(svg, /polygon/);
+      if (soort.startsWith("gebod-")) assert.match(svg, /<circle cx="120" cy="120" r="108" fill="#005ca9"/, soort);
+      else if (soort.startsWith("waarschuwing-")) assert.match(svg, /polygon points="120,20 226,210 14,210" fill="#f9c300"/, soort);
+      else if (soort.startsWith("verbod-")) assert.match(svg, /stroke="#d2232a"/, soort);
+      else assert.match(svg, /polygon points="110,14/, soort);
     }
+  });
+
+  it("gezondheidsgevaar: silhouet met ster op de borst (geen losse ster)", () => {
+    const svg = ghsPictogramSvg("gezondheidsgevaar");
+    assert.match(svg, /<circle cx="120" cy="74" r="19"/);
+    assert.match(svg, /<polygon points="[^"]+" fill="#fff"\/>/);
   });
 
   it("zet mL-standen op de maatcilinder", () => {

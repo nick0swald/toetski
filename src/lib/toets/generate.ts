@@ -7,9 +7,10 @@ import { bijschavenInputSchema, bijschavenPayloadSchema, extraQuestionsInputSche
 import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
 import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
-import { REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
+import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
+import { extractParagrafen } from "./leerdoelen";
 import { bouwKwaliteit } from "./kwaliteit-check";
-import { TEKST_MODEL } from "./figuren/modellen";
+import { CONTROLE_MODEL as CONTROLE_MODEL_NAAM, TEKST_MODEL } from "./figuren/modellen";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 
 function stripJsonFence(raw: string): string {
@@ -79,7 +80,7 @@ async function fetchBronUrl(url: string): Promise<string> {
     method: "GET",
     redirect: "follow",
     signal: AbortSignal.timeout(8000),
-    headers: { "User-Agent": "Ares058Toetsmaker/1.0" },
+    headers: { "User-Agent": "AeresToetsmaker/1.0" },
   });
   if (!res.ok) throw new Error(`De link gaf een fout (${res.status}).`);
   const type = res.headers.get("content-type") ?? "";
@@ -100,6 +101,32 @@ async function fetchBronUrl(url: string): Promise<string> {
 
 /** Tekstmodel (ongewijzigd); ook gebruikt door de beeldpijplijn via figuren/modellen.ts. */
 const GROK_TEKST_MODEL = TEKST_MODEL;
+const CONTROLE_MODEL = CONTROLE_MODEL_NAAM;
+
+/** Onafhankelijke controle: redenerend model (grok-4.5, lage redeneerinspanning), temperatuur 0. */
+async function callControle(system: string, user: string): Promise<string> {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
+  const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(45_000),
+    body: JSON.stringify({
+      model: CONTROLE_MODEL,
+      reasoning_effort: "low",
+      temperature: 0,
+      max_tokens: 6000,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`xAI API error ${res.status}`);
+  const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  return body.choices?.[0]?.message?.content ?? "";
+}
 
 async function callGrok(messages: { role: string; content: string }[], maxTokens = 4000): Promise<string> {
   const apiKey = process.env.XAI_API_KEY;
@@ -135,7 +162,7 @@ export function plaatjesModus(input: { plaatjes?: "auto" | "met" | "zonder"; met
 }
 
 const FIGUUR_BASIS =
-  "Pictogramvraag: veld pictogram en beschrijf het symbool niet. Onderdompelen: veld maatcilinder met af te lezen standen. Figuren passen bij Nova NaSk (VMBO): spanningsmeter parallel over een lampje/weerstand, nooit over de bron; stroommeter in serie.";
+  "Pictogramvraag: veld pictogram (GHS-symbool voor stoffen, of een veiligheidsbord zoals gebod-gehoorbescherming) en beschrijf het symbool niet. Onderdompelen: veld maatcilinder met af te lezen standen. Figuren passen bij Nova NaSk (VMBO): spanningsmeter parallel over een lampje/weerstand, nooit over de bron; stroommeter in serie.";
 
 /** Figuurregel in de prompt: automatisch (terughoudend), verplicht met plaatjes, of helemaal zonder. */
 export function figuurRegel(modus: boolean | "auto" | "met" | "zonder"): string {
@@ -207,16 +234,19 @@ ${input.vorigeSamenvatting?.trim() || "(niet meegeleverd)"}
   }
   return `Maak een complete VMBO-toets plus nakijkmodel.
 
-School: ${SCHOOL}
 Lesstof is leidend.
 Vak: ${input.vak?.trim() || "(leid af uit de lesstof)"}
 Niveau: ${input.leerweg}
 Leerjaar: ${input.leerjaar}
 Titel: ${input.titel?.trim() || "(leid af uit de lesstof)"}
 Toetsduur: ${input.duurMinuten} minuten
-Aantal vragen (richtlijn): ${input.aantalVragen}
+Aantal vragen: ${input.aantalVragen} (lever er echt zoveel; de toets moet de toetsduur vullen)
 Vraagverdeling: ${verdelingTekst}
-Streefmaximum: ${input.doelPunten} punten (richtlijn; passend bij toetsduur en moeilijkheid, tenzij de docent anders stuurt)
+Totaal punten: ${input.doelPunten} (± 2; passend bij ${input.duurMinuten} minuten, tenzij de docent anders stuurt)
+${paragrafenRegel(bron, input.antwoordenmateriaal)}
+Context-eisen (verplicht): realistische getallen en situaties (een echo in een lokaal of hal: tientallen meters, niet honderden; geluid van een klein apparaat hoor je niet op 500 m); alle gegevens die nodig zijn staan in de vraag; noem een ding eerst concreet voordat je 'de/dit' gebruikt; nooit een schoolnaam; verzonnen bedrijven mogen grappig zijn (bijv. 'Frituur De Vette Hap'); personen hebben Nederlandse voornamen (Sanne, Daan, Lotte, Bram).
+Juist/onjuist: opties altijd in de volgorde A. Juist, B. Onjuist.
+Rekenvragen: rubriek in stappen (formule – invullen/berekenen – antwoord met eenheid); een rekenfout kost 1 punt, niet alles.
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
 MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam, alleen als die iets toevoegt.
@@ -243,6 +273,13 @@ ${input.antwoordenmateriaal.trim()}
 `
     : ""
 }`;
+}
+
+/** Paragrafen uit de koppen van lesstof/antwoordenboek → dekkingseis in de prompt. */
+function paragrafenRegel(bron: string, antwoorden?: string): string {
+  const pars = extractParagrafen(bron, antwoorden);
+  if (pars.length < 2) return "";
+  return `Paragrafen (dekking verplicht): ${pars.map((p) => `${p.code} ${p.titel}`).join("; ")}. Minstens één vraag per paragraaf, verdeeld naar de hoeveelheid stof; domein = paragraafnummer + titel (bijv. "${pars[0]!.code} ${pars[0]!.titel}").`;
 }
 
 type GenerateData = z.infer<typeof generateInputSchema>;
@@ -310,6 +347,10 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
     vak: vakNaam,
     skipOrder: skipMcEerst,
     figuren: plaatjesModus(data) === "zonder" ? "geen" : "nodig",
+    antwoorden: data.antwoordenmateriaal ?? "",
+    rttiDoel,
+    budgetMs: 60_000,
+    controleer: (prompt) => callControle(CONTROLE_SYSTEM, prompt).catch(() => null),
     repair: (prompt) =>
       callGrok(
         [
@@ -366,6 +407,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
         rttiDoel,
         llm: payload.kwaliteit,
         issues: af.issues,
+        controle: af.controle,
       }),
       vragen,
       wilHogeMcShare({
@@ -378,6 +420,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       }),
     ),
   };
+  if (af.controle) toets.controle = af.controle;
   const modus = plaatjesModus(data);
   toets.plaatjes = modus;
   if (modus === "zonder") toets.metPlaatjes = false;
@@ -424,7 +467,7 @@ export const afwerkToets = createServerFn({ method: "POST" })
     }
   });
 
-const MATRIJS_SYSTEM = `Je bent toetsconstructeur voor Ares058 VMBO Leeuwarden.
+const MATRIJS_SYSTEM = `Je bent toetsconstructeur voor het vmbo. Noem in vragen nooit een schoolnaam.
 De docent levert een BESTAANDE toets. Jij maakt daar een toetsmatrijs van. Je herschrijft de toets niet.
 Haal elke vraag eruit. Ken RTTI toe. Verzin geen extra vragen en geen nakijkmodel.
 Antwoord ALLEEN met één JSON-object:
@@ -452,7 +495,6 @@ export const generateMatrijs = createServerFn({ method: "POST" })
         : "Geef GEEN feedback. Laat het veld kwaliteit weg.";
       const user = `Maak een toetsmatrijs bij deze BESTAANDE toets.
 
-School: ${SCHOOL}
 Vak: ${data.vak?.trim() || "(leid af)"}
 Niveau: ${data.leerweg}
 Leerjaar: ${data.leerjaar}
@@ -588,7 +630,6 @@ function extraUserPrompt(input: {
   return `Voeg ${input.count} NIEUWE originele vraag/vragen toe aan een BESTAANDE VMBO-toets.
 Je maakt GEEN volledige toets opnieuw. Alleen de extra vragen + nakijkmodel daarvoor.
 
-School: ${SCHOOL}
 Vak: ${input.vak?.trim() || "(leid af uit de lesstof)"}
 Niveau: ${input.leerweg}
 Leerjaar: ${input.leerjaar}
@@ -632,7 +673,7 @@ export const generateExtraQuestions = createServerFn({ method: "POST" })
           return { ok: false, error: "MC + open moet gelijk zijn aan het aantal extra vragen." };
         }
         const stuur = data.stuurdocument?.trim() || stuurdocumentTekst();
-        const system = `Je bent toetsconstructeur voor Ares058 VMBO Leeuwarden (groen vmbo: BB, KB en GT).
+        const system = `Je bent toetsconstructeur voor het vmbo (BB, KB en GT). Noem in vragen nooit een schoolnaam.
 Je volgt dit stuurdocument. Je voegt alleen extra vragen toe aan een bestaande toets.
 
 ${stuur}
@@ -743,7 +784,7 @@ export const bijschavenToets = createServerFn({ method: "POST" })
         const instructie = data.instructie.trim();
         if (!instructie) return { ok: false, error: "Typ een korte instructie voor het bijschaven." };
         const stuur = data.stuurdocument?.trim() || stuurdocumentTekst();
-        const system = `Je bent toetsconstructeur voor Ares058 VMBO Leeuwarden.
+        const system = `Je bent toetsconstructeur voor het vmbo. Noem in vragen nooit een schoolnaam.
 Je BIJSCHAAFT een bestaande toets op basis van een korte docentinstructie.
 Je maakt GEEN nieuwe toets van scratch. Wijzig alleen wat nodig is (volgorde/punten/één of enkele vragen/nakijk).
 Houd nakijkmodel synchroon met vraagnummers. RTTI/domein/leerdoel behouden tenzij de instructie die raakt.

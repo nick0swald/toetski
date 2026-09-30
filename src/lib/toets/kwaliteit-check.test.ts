@@ -117,8 +117,8 @@ describe("bouwKwaliteit", () => {
     assert.doesNotMatch(check.samenvatting, /dekt alle leerdoelen/i);
   });
 
-  it("bewaart alleen een kwalitatieve LLM-opmerking", () => {
-    assert.match(check.samenvatting, /Opmerking: De formulering is helder/);
+  it("neemt geen modelclaims over in de feedback (alleen berekende controles)", () => {
+    assert.doesNotMatch(check.samenvatting, /Opmerking/);
     assert.doesNotMatch(check.samenvatting, /voldoet/i);
     for (const p of check.punten) {
       if (p.oordeel === "voldoet") assert.doesNotMatch(p.toelichting, /36|tabel bij vraag/i);

@@ -171,7 +171,7 @@ export async function verwerkFiguren(
       }
     }
 
-    deps.voortgang?.(jobs.length ? `${jobs.length} figuur${jobs.length === 1 ? "" : "en"} maken en keuren (go/no-go)…` : "Geen figuren nodig");
+    deps.voortgang?.(jobs.length ? `${jobs.length} ${jobs.length === 1 ? "figuur" : "figuren"} maken en keuren (go/no-go)…` : "Geen figuren nodig");
     deps.gebeurtenis?.({ soort: "gepland", totaal: jobs.length });
     let klaar = 0;
     const uitkomsten = await Promise.all(

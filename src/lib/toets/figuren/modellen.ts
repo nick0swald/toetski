@@ -8,3 +8,6 @@ export const BEELD_MODEL = "grok-imagine-image-2.0";
 export const VISIE_MODEL = "grok-4.5";
 
 export const XAI_BASE = "https://api.x.ai/v1";
+
+/** Onafhankelijke inhoudscontrole (sleutel, oplosbaarheid, realisme): redenerend model, lage inspanning. */
+export const CONTROLE_MODEL = "grok-4.5";

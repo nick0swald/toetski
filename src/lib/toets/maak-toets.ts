@@ -6,6 +6,9 @@ import { koppelVroegeFiguren, zonderPlaatjes, type VroegeRonde } from "./figuren
 import { zonderLegacyFiguren } from "./figuren/bevriezing";
 import type { GegenereerdeToets, GenerateInput, PlaatjesModus } from "./types";
 import { MAX_TOTAAL_MS } from "./voortgang";
+import { eindControle } from "./eind-controle";
+
+export { eindControle };
 
 export { DOEL_TOTAAL_MS, MAX_TOTAAL_MS, MIN_FIGUURVENSTER_MS, figuurDeadline } from "./voortgang";
 
@@ -54,13 +57,14 @@ export async function maakToets(
   const ruw = await generateVragenRuw({ data });
   if (!ruw.ok) return { ok: false, error: ruw.error };
   const tVragen = nu();
-  const afwerkData = { input: { ...data, bronmateriaal: "", bronUrl: undefined, antwoordenmateriaal: "", stuurdocument: undefined }, bron: ruw.bron, payload: ruw.payload };
+  // Het antwoordenboek gaat mee naar het afwerken: bron van waarheid voor de inhoudscontrole.
+  const afwerkData = { input: { ...data, bronmateriaal: "", bronUrl: undefined, antwoordenmateriaal: (input.antwoordenmateriaal ?? "").slice(0, 30_000), stuurdocument: undefined }, bron: ruw.bron, payload: ruw.payload };
 
   if (!met) {
     meld({ fase: "afwerken" });
     const af = await afwerkToets({ data: afwerkData });
     if (!af.ok) return { ok: false, error: af.error };
-    const toets = zonderPlaatjes(af.toets);
+    const toets = eindControle(zonderPlaatjes(af.toets));
     const t1 = nu();
     toets.figuurRapport = { ...toets.figuurRapport!, tijden: { vragenMs: tVragen - t0, afwerkenMs: t1 - tVragen, totaalMs: t1 - t0 } };
     meld({ fase: "word", afwerkenKlaar: true });
@@ -134,10 +138,11 @@ export async function maakToets(
     if (n < MIN_MET_GEPLAATST && toets.figuurRapport) {
       toets.figuurRapport = {
         ...toets.figuurRapport,
-        meldingen: [...toets.figuurRapport.meldingen, `Met plaatjes: binnen 100 s ${n === 0 ? "geen" : `maar ${n}`} goedgekeurde figuur${n === 1 ? "" : "en"}. Afgekeurde figuren worden nooit geplaatst.`],
+        meldingen: [...toets.figuurRapport.meldingen, `Met plaatjes: binnen 100 s ${n === 0 ? "geen" : `maar ${n}`} goedgekeurde ${n === 1 ? "figuur" : "figuren"}. Afgekeurde figuren worden nooit geplaatst.`],
       };
     }
   }
+  toets = eindControle(toets);
   const t2 = nu();
   toets.figuurRapport = {
     ...(toets.figuurRapport ?? { versie: 1, items: [], meldingen: [] }),

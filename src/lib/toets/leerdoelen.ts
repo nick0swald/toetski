@@ -180,3 +180,55 @@ export function ongedekteLeerdoelen(bron: string, vragen: Vraag[]): Leerdoel[] {
   const doelen = extractLeerdoelen(bron).filter((d) => d.tekst.length >= 8);
   return doelen.filter((d) => !vragen.some((q) => score(norm(`${q.domein} ${q.leerdoel} ${q.stam} ${q.context ?? ""}`), d) >= 0.4));
 }
+
+export type Paragraaf = { code: string; titel: string };
+
+/**
+ * Paragrafen uit de koppen van lesstof/antwoordenboek ("6.1 Geluid maken", "§ 6.2 Hoog en laag").
+ * Alleen het hoofdstuk dat het vaakst voorkomt telt (zo vallen losse getallen als "1.5 kg" weg).
+ */
+export function extractParagrafen(...teksten: (string | undefined)[]): Paragraaf[] {
+  const gevonden = new Map<string, string>();
+  for (const t of teksten) {
+    for (const regel of (t ?? "").split(/\r?\n/)) {
+      const line = regel.replace(/\s+/g, " ").trim();
+      const m = line.match(/^(?:paragraaf\s+|§\s*)?(\d{1,2})\.(\d{1,2})\.?\s+([A-ZÀ-Ý][A-Za-zÀ-ÿ' ,&-]{2,60})$/);
+      if (!m) continue;
+      const titel = m[3]!.replace(/[.:;,]+$/, "").trim();
+      if (/\b(kg|m|s|cm|mL|N|Hz|dB|g|°C|km|J|W|V|A)\b\s*$/.test(titel) || titel.split(" ").length > 8) continue;
+      const code = `${Number(m[1])}.${Number(m[2])}`;
+      if (!gevonden.has(code)) gevonden.set(code, titel);
+    }
+  }
+  const telling = new Map<string, number>();
+  for (const code of gevonden.keys()) {
+    const h = code.split(".")[0]!;
+    telling.set(h, (telling.get(h) ?? 0) + 1);
+  }
+  const hoofd = [...telling.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!hoofd) return [];
+  const lijst = [...gevonden.entries()]
+    .filter(([c]) => c.split(".")[0] === hoofd)
+    .map(([code, titel]) => ({ code, titel }))
+    .sort((a, b) => Number(a.code.split(".")[1]) - Number(b.code.split(".")[1]));
+  return lijst.length >= 2 ? lijst : [];
+}
+
+/** Welke vragen horen bij welke paragraaf (op paragraafnummer in domein/leerdoel, anders op woorden). */
+export function paragraafDekking(vragen: Vraag[], paragrafen: Paragraaf[]): { paragraaf: Paragraaf; vragen: number[] }[] {
+  return paragrafen.map((p) => {
+    const codeRe = new RegExp(`(^|[^\\d.])${p.code.replace(".", "\\.")}(?![\\d])`);
+    const nrs = vragen
+      .filter((q) => {
+        const lab = `${q.domein ?? ""} ${q.leerdoel ?? ""}`;
+        if (codeRe.test(lab)) return true;
+        if (/\b\d{1,2}\.\d{1,2}\b/.test(lab)) return false;
+        const pt = tokens(p.titel);
+        if (!pt.length) return false;
+        const set = new Set(tokens(`${lab} ${q.stam} ${q.context ?? ""}`));
+        return pt.filter((t) => set.has(t)).length / pt.length >= 0.5;
+      })
+      .map((q) => q.nummer);
+    return { paragraaf: p, vragen: nrs };
+  });
+}

@@ -105,12 +105,15 @@ export function schemaFiguurSvg(fig: SchemaFiguur, W = 420, H = 220): string {
 </svg>`;
 }
 
-/** GHS-ruit, zwart-wit lijntekening (printbaar, geen boekillustratie). */
+/** GHS-ruit (zwart symbool op wit), of een veiligheidsbord (gebod/waarschuwing/verbod). Zelf getekend. */
 export function ghsPictogramSvg(soort: GhsSymbool, W = 220, H = 220): string {
+  if (/^(gebod|waarschuwing|verbod)-/.test(soort)) return veiligheidsbordSvg(soort, W, H);
   const cx = W / 2;
-  const cy = H / 2 + 4;
-  const ruit = `<polygon points="${cx},${18} ${W - 18},${cy} ${cx},${H - 18} ${18},${cy}" fill="#ffffff" stroke="${INK}" stroke-width="3"/>`;
-  const sym = ghsSymboolPad(soort, cx, cy);
+  const cy = H / 2;
+  const m = 14;
+  const ruit = `<polygon points="${cx},${m} ${W - m},${cy} ${cx},${H - m} ${m},${cy}" fill="#ffffff" stroke="${INK}" stroke-width="3"/>`;
+  const k = Math.min(W, H) / 240;
+  const sym = `<g transform="translate(${cx - 120 * k} ${cy - 120 * k}) scale(${k})">${ghsSymboolPad(soort)}</g>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <rect width="${W}" height="${H}" fill="#ffffff"/>
@@ -119,47 +122,105 @@ export function ghsPictogramSvg(soort: GhsSymbool, W = 220, H = 220): string {
 </svg>`;
 }
 
-function ghsSymboolPad(soort: GhsSymbool, cx: number, cy: number): string {
-  if (soort === "ontvlambaar") {
-    return `<path d="M${cx} ${cy - 48} C ${cx + 8} ${cy - 20}, ${cx + 28} ${cy - 18}, ${cx + 22} ${cy + 8} C ${cx + 40} ${cy - 8}, ${cx + 36} ${cy - 36}, ${cx + 14} ${cy - 28} C ${cx + 18} ${cy - 46}, ${cx + 4} ${cy - 40}, ${cx} ${cy - 48} Z M${cx - 6} ${cy + 6} C ${cx - 22} ${cy - 8}, ${cx - 8} ${cy - 30}, ${cx + 2} ${cy - 16} C ${cx + 8} ${cy - 28}, ${cx + 22} ${cy - 10}, ${cx + 10} ${cy + 18} C ${cx + 28} ${cy + 8}, ${cx + 18} ${cy + 36}, ${cx} ${cy + 42} C ${cx - 20} ${cy + 36}, ${cx - 28} ${cy + 12}, ${cx - 6} ${cy + 6} Z" fill="${INK}"/>`;
+/** Symbolen op een 240×240-raster rond (120,120), passend binnen de ruit. */
+function ghsSymboolPad(soort: GhsSymbool): string {
+  const K = INK;
+  switch (soort) {
+    case "ontvlambaar":
+      return `<path d="M120 58 C 136 84, 158 96, 150 136 C 146 156, 132 166, 120 166 C 104 166, 90 156, 88 138 C 86 118, 100 108, 104 92 C 110 104, 110 112, 118 118 C 124 100, 118 80, 120 58 Z" fill="${K}"/><rect x="78" y="172" width="84" height="9" fill="${K}"/>`;
+    case "oxiderend":
+      return `<path d="M120 52 C 134 72, 150 84, 144 110 C 140 124, 130 130, 120 130 C 108 130, 98 122, 96 110 C 94 94, 106 86, 108 74 C 114 84, 114 92, 118 96 C 122 82, 118 68, 120 52 Z" fill="${K}"/><circle cx="120" cy="150" r="18" fill="none" stroke="${K}" stroke-width="9"/><rect x="82" y="178" width="76" height="8" fill="${K}"/>`;
+    case "giftig":
+      return `<ellipse cx="120" cy="92" rx="30" ry="28" fill="${K}"/><rect x="104" y="108" width="32" height="20" rx="4" fill="${K}"/>
+        <circle cx="109" cy="90" r="8" fill="#fff"/><circle cx="131" cy="90" r="8" fill="#fff"/><path d="M117 104 L120 97 L123 104 Z" fill="#fff"/>
+        <path d="M112 120 v7 M120 120 v7 M128 120 v7" stroke="#fff" stroke-width="2.5"/>
+        <path d="M78 138 L162 176 M162 138 L78 176" stroke="${K}" stroke-width="11" stroke-linecap="round"/>
+        <circle cx="76" cy="134" r="7" fill="${K}"/><circle cx="72" cy="143" r="7" fill="${K}"/><circle cx="164" cy="134" r="7" fill="${K}"/><circle cx="168" cy="143" r="7" fill="${K}"/>
+        <circle cx="76" cy="180" r="7" fill="${K}"/><circle cx="72" cy="171" r="7" fill="${K}"/><circle cx="164" cy="180" r="7" fill="${K}"/><circle cx="168" cy="171" r="7" fill="${K}"/>`;
+    case "bijtend":
+      return `<g fill="none" stroke="${K}" stroke-width="5" stroke-linejoin="round">
+          <rect x="72" y="52" width="16" height="46" rx="7" transform="rotate(-50 80 75)"/>
+          <rect x="142" y="52" width="16" height="46" rx="7" transform="rotate(-50 150 75)"/>
+        </g>
+        <path d="M96 94 q 4 8 0 12 q -4 -4 0 -12 Z M98 112 q 4 8 0 12 q -4 -4 0 -12 Z" fill="${K}"/>
+        <path d="M166 94 q 4 8 0 12 q -4 -4 0 -12 Z M168 112 q 4 8 0 12 q -4 -4 0 -12 Z" fill="${K}"/>
+        <path d="M66 152 h 44 v 20 h -44 Z" fill="${K}"/><path d="M90 152 q 6 10 12 0 Z" fill="#fff"/>
+        <path d="M140 172 L140 150 Q140 142 146 142 L150 142 L150 134 Q150 128 156 128 Q162 128 162 134 L162 142 L170 142 Q176 142 176 150 L176 172 Z" fill="${K}"/><path d="M160 142 q 6 12 14 4 Z" fill="#fff"/>`;
+    case "milieu":
+      return `<rect x="62" y="170" width="116" height="6" fill="${K}"/>
+        <path d="M86 170 V 110 M86 132 L70 116 M86 124 L102 106 M86 146 L100 136 M70 116 L66 104 M102 106 L108 96" stroke="${K}" stroke-width="6" stroke-linecap="round" fill="none"/>
+        <path d="M118 150 Q 140 132 162 150 Q 140 166 118 150 Z" fill="${K}"/><path d="M162 150 L176 140 L176 160 Z" fill="${K}"/>
+        <path d="M126 144 l6 6 m0 -6 l-6 6" stroke="#fff" stroke-width="2.5"/>`;
+    case "explosief":
+      return `<circle cx="120" cy="140" r="20" fill="${K}"/>
+        ${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<polygon points="-6,-34 6,-34 0,-58" fill="${K}" transform="translate(120 140) rotate(${a})"/>`).join("")}
+        ${[22, 112, 202, 292].map((a) => `<rect x="-4" y="-50" width="8" height="10" fill="${K}" transform="translate(120 140) rotate(${a})"/>`).join("")}`;
+    case "gas-onder-druk":
+      return `<g transform="rotate(-30 120 130)"><rect x="70" y="112" width="96" height="40" rx="18" fill="${K}"/><rect x="164" y="124" width="14" height="16" fill="${K}"/><rect x="176" y="120" width="6" height="24" fill="${K}"/></g>`;
+    case "gezondheidsgevaar": {
+      const ster = Array.from({ length: 16 }, (_, i) => {
+        const r = i % 2 === 0 ? 24 : 10;
+        const a = (Math.PI / 8) * i - Math.PI / 2;
+        return `${(120 + r * Math.cos(a)).toFixed(1)},${(142 + r * Math.sin(a)).toFixed(1)}`;
+      }).join(" ");
+      return `<circle cx="120" cy="74" r="19" fill="${K}"/>
+        <path d="M78 178 L80 124 Q 82 102 104 98 L136 98 Q 158 102 160 124 L162 178 Z" fill="${K}"/>
+        <polygon points="${ster}" fill="#fff"/>`;
+    }
+    case "schadelijk":
+    default:
+      return `<path d="M111 62 L129 62 L125 146 L115 146 Z" fill="${K}"/><circle cx="120" cy="168" r="10" fill="${K}"/>`;
   }
-  if (soort === "giftig") {
-    return `
-      <circle cx="${cx}" cy="${cy - 10}" r="28" fill="none" stroke="${INK}" stroke-width="3"/>
-      <circle cx="${cx - 10}" cy="${cy - 16}" r="4" fill="${INK}"/>
-      <circle cx="${cx + 10}" cy="${cy - 16}" r="4" fill="${INK}"/>
-      <path d="M${cx - 10} ${cy - 2} Q ${cx} ${cy + 8} ${cx + 10} ${cy - 2}" fill="none" stroke="${INK}" stroke-width="2.5"/>
-      <path d="M${cx - 36} ${cy + 18} L${cx + 36} ${cy + 46} M${cx + 36} ${cy + 18} L${cx - 36} ${cy + 46}" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>
-    `;
+}
+
+const BLAUW = "#005ca9";
+const GEEL = "#f9c300";
+const ROOD = "#d2232a";
+
+/** Veiligheidsborden volgens NEN-EN-ISO 7010 (vereenvoudigd): gebod blauw, waarschuwing geel, verbod rood. */
+export function veiligheidsbordSvg(soort: GhsSymbool, W = 220, H = 220): string {
+  const k = Math.min(W, H) / 240;
+  let body = "";
+  if (soort.startsWith("gebod-")) {
+    const W_ = "#ffffff";
+    const hoofd = `<circle cx="120" cy="98" r="28" fill="${W_}"/><path d="M68 196 Q 70 150 104 140 L136 140 Q 170 150 172 196 Z" fill="${W_}"/>`;
+    let sym = "";
+    if (soort === "gebod-gehoorbescherming")
+      sym = `${hoofd}<path d="M84 98 C 84 44, 156 44, 156 98" fill="none" stroke="${BLAUW}" stroke-width="16"/><path d="M84 98 C 84 44, 156 44, 156 98" fill="none" stroke="${W_}" stroke-width="8"/>
+        <rect x="72" y="80" width="22" height="40" rx="10" fill="${W_}" stroke="${BLAUW}" stroke-width="4"/><rect x="146" y="80" width="22" height="40" rx="10" fill="${W_}" stroke="${BLAUW}" stroke-width="4"/>`;
+    else if (soort === "gebod-oogbescherming")
+      sym = `${hoofd}<rect x="90" y="84" width="60" height="22" rx="10" fill="${BLAUW}"/><rect x="95" y="88" width="22" height="14" rx="6" fill="${W_}"/><rect x="123" y="88" width="22" height="14" rx="6" fill="${W_}"/>`;
+    else if (soort === "gebod-stofmasker")
+      sym = `${hoofd}<path d="M100 104 Q 120 96 140 104 L138 122 Q 120 134 102 122 Z" fill="${W_}" stroke="${BLAUW}" stroke-width="4"/><path d="M100 108 L92 100 M140 108 L148 100" stroke="${BLAUW}" stroke-width="3"/>`;
+    else if (soort === "gebod-helm")
+      sym = `${hoofd}<path d="M88 92 C 88 56, 152 56, 152 92 Z" fill="${W_}" stroke="${BLAUW}" stroke-width="4"/><rect x="78" y="90" width="84" height="10" rx="4" fill="${W_}" stroke="${BLAUW}" stroke-width="4"/>`;
+    else if (soort === "gebod-handschoenen")
+      sym = `<g fill="#ffffff"><rect x="90" y="58" width="13" height="62" rx="6"/><rect x="106" y="50" width="13" height="70" rx="6"/><rect x="122" y="52" width="13" height="68" rx="6"/><rect x="138" y="62" width="13" height="58" rx="6"/>
+        <rect x="88" y="104" width="64" height="62" rx="12"/><rect x="60" y="112" width="44" height="14" rx="7" transform="rotate(35 82 119)"/><rect x="92" y="164" width="56" height="26" rx="3"/></g>
+        <path d="M92 168 h 56" stroke="${BLAUW}" stroke-width="4"/>`;
+    else
+      sym = `<path d="M84 64 L122 64 L124 136 L166 148 Q 180 154 178 172 L178 182 L80 182 Z" fill="#ffffff"/><path d="M150 150 Q 176 156 176 176" fill="none" stroke="${BLAUW}" stroke-width="4"/><path d="M80 170 H 178" stroke="${BLAUW}" stroke-width="4"/>`;
+    body = `<circle cx="120" cy="120" r="108" fill="${BLAUW}"/><circle cx="120" cy="120" r="108" fill="none" stroke="#ffffff" stroke-width="4"/><clipPath id="c"><circle cx="120" cy="120" r="104"/></clipPath><g clip-path="url(#c)">${sym}</g>`;
+  } else if (soort.startsWith("waarschuwing-")) {
+    let sym = "";
+    if (soort === "waarschuwing-elektriciteit") sym = `<polygon points="132,78 98,146 122,146 106,196 150,124 126,124 142,78" fill="${INK}"/>`;
+    else if (soort === "waarschuwing-heet")
+      sym = `<rect x="74" y="178" width="92" height="9" fill="${INK}"/>${[92, 120, 148].map((x) => `<path d="M${x} 168 q -10 -12 0 -24 q 10 -12 0 -24 q -10 -12 0 -22" fill="none" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`).join("")}`;
+    else sym = `<path d="M111 90 L129 90 L125 160 L115 160 Z" fill="${INK}"/><circle cx="120" cy="180" r="10" fill="${INK}"/>`;
+    body = `<polygon points="120,20 226,210 14,210" fill="${GEEL}" stroke="${INK}" stroke-width="10" stroke-linejoin="round"/>${sym}`;
+  } else {
+    let sym = "";
+    if (soort === "verbod-roken")
+      sym = `<rect x="62" y="130" width="96" height="18" fill="#ffffff" stroke="${INK}" stroke-width="4"/><rect x="158" y="130" width="22" height="18" fill="${INK}"/><path d="M76 122 q -8 -14 4 -26 q 10 -12 2 -28" fill="none" stroke="${INK}" stroke-width="5" stroke-linecap="round"/>`;
+    else
+      sym = `<path d="M92 184 L136 104" stroke="${INK}" stroke-width="9" stroke-linecap="round"/><path d="M138 60 C 152 80, 160 92, 150 108 C 144 116, 132 116, 128 108 C 122 96, 134 84, 138 60 Z" fill="${INK}"/>`;
+    body = `<circle cx="120" cy="120" r="104" fill="#ffffff"/>${sym}<circle cx="120" cy="120" r="96" fill="none" stroke="${ROOD}" stroke-width="18"/><path d="M52 52 L188 188" stroke="${ROOD}" stroke-width="18"/>`;
   }
-  if (soort === "bijtend") {
-    return `
-      <path d="M${cx - 28} ${cy - 20} L${cx - 8} ${cy - 36} L${cx + 6} ${cy - 10} L${cx + 22} ${cy - 28} L${cx + 30} ${cy - 8} L${cx + 8} ${cy + 36} L${cx - 18} ${cy + 20} Z" fill="none" stroke="${INK}" stroke-width="2.5"/>
-      <path d="M${cx - 22} ${cy + 28} q 10 16 28 8" fill="none" stroke="${INK}" stroke-width="2.5"/>
-      <path d="M${cx + 4} ${cy + 8} l 6 18 l 10 -8" fill="none" stroke="${INK}" stroke-width="2.5"/>
-    `;
-  }
-  if (soort === "milieu") {
-    return `
-      <path d="M${cx - 34} ${cy + 10} q 20 28 68 0" fill="none" stroke="${INK}" stroke-width="2.5"/>
-      <path d="M${cx - 20} ${cy + 8} q 6 -16 18 -8 q 4 10 16 0" fill="none" stroke="${INK}" stroke-width="2.5"/>
-      <path d="M${cx + 8} ${cy - 36} v 28 M${cx + 8} ${cy - 28} q 16 -8 16 8" fill="none" stroke="${INK}" stroke-width="2.5"/>
-      <circle cx="${cx - 8}" cy="${cy - 8}" r="7" fill="none" stroke="${INK}" stroke-width="2.5"/>
-    `;
-  }
-  if (soort === "explosief") {
-    return `<polygon points="${cx},${cy - 46} ${cx + 12},${cy - 12} ${cx + 44},${cy - 8} ${cx + 16},${cy + 10} ${cx + 28},${cy + 44} ${cx},${cy + 20} ${cx - 28},${cy + 44} ${cx - 16},${cy + 10} ${cx - 44},${cy - 8} ${cx - 12},${cy - 12}" fill="none" stroke="${INK}" stroke-width="2.5"/>`;
-  }
-  if (soort === "oxiderend") {
-    return `<circle cx="${cx}" cy="${cy}" r="34" fill="none" stroke="${INK}" stroke-width="3"/><circle cx="${cx}" cy="${cy}" r="10" fill="${INK}"/>`;
-  }
-  if (soort === "gas-onder-druk") {
-    return `<rect x="${cx - 16}" y="${cy - 40}" width="32" height="70" rx="10" fill="none" stroke="${INK}" stroke-width="3"/><rect x="${cx - 8}" y="${cy - 52}" width="16" height="14" fill="none" stroke="${INK}" stroke-width="3"/>`;
-  }
-  if (soort === "gezondheidsgevaar") {
-    return `<path d="M${cx} ${cy - 40} l 8 16 h 16 l -12 12 6 18 -18 -10 -18 10 6 -18 -12 -12 h 16 z" fill="none" stroke="${INK}" stroke-width="2.5"/>`;
-  }
-  return `<text x="${cx}" y="${cy + 16}" text-anchor="middle" font-family="Arial" font-size="64" font-weight="700" fill="${INK}">!</text>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect width="${W}" height="${H}" fill="#ffffff"/>
+  <g transform="translate(${W / 2 - 120 * k} ${H / 2 - 120 * k}) scale(${k})">${body}</g>
+</svg>`;
 }
 
 /** Maatcilinder met af te lezen vloeistofstanden. */

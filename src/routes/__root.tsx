@@ -9,7 +9,7 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Ares058 Toetsmaker";
+const APP_NAME = "Aeres Toetsmaker";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -20,7 +20,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Toetsmaker voor Ares058 VMBO Leeuwarden: Cito-opmaak, nakijkmodel en RTTI-toetsmatrijs.",
+          "Toetsmaker voor Aeres VMBO Leeuwarden: Cito-opmaak, nakijkmodel en RTTI-toetsmatrijs.",
       },
       { name: "theme-color", content: "#004422" },
     ],

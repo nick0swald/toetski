@@ -1,5 +1,5 @@
 import { symboolLijstVoorKeuring } from "./schakelsymbolen.ts";
-import type { FiguurSpec, NakijkItem, Vraag } from "../types.ts";
+import { GHS_SYMBOLEN, PICTOGRAM_NAAM, type FiguurSpec, type GhsSymbool, type NakijkItem, type Vraag } from "../types.ts";
 import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, specSamenvatting } from "./spec.ts";
 
 /** Vaste stijl voor elke sfeerplaat (Nova natuurkunde-lesboek). */
@@ -45,12 +45,13 @@ const SPEC_UITLEG = `Een figuurspec is JSON:
     krachtenschema: {"voorwerp":string,"krachten":[{"naam":"Fz","richting":"omhoog"|"omlaag"|"links"|"rechts","grootte":n,"eenheid":"N"}],"toonGrootte":bool,"schaal"?:n}
     blokschema: {"blokken":[string,...]}
     maatcilinder: {"maxMl":n,"standen":[{"label","ml":n}]}
-    sfeerplaat: {"scene": string (Engelse beschrijving van een eenvoudige situatie/voorwerp, zonder tekst in beeld)}
+    pictogram: {"symbool": ${GHS_SYMBOLEN.map((x) => `"${x}"`).join("|")}} (GHS-gevarensymbolen voor stoffen; gebod-/waarschuwing-/verbod- voor veiligheidsborden, bijv. gehoorbescherming bij lawaai = "gebod-gehoorbescherming")
+    sfeerplaat: {"scene": string (Engelse beschrijving van een eenvoudige situatie/voorwerp, zonder tekst in beeld; de scene moet kloppen met ELK feit uit de vraag: afstanden, wie waar staat, wie wat vasthoudt)}
 Grafieken en schema's tekent de app zelf exact uit "data". Een sfeerplaat is alleen sfeer/situatie en mag nooit gegevens bevatten die nodig zijn voor het antwoord.`;
 
 export const PLANNER_SYSTEM = `Je bent beeldredacteur voor VMBO-toetsen (NaSk, methode Nova). Je bepaalt welke vragen een figuur NODIG hebben en schrijft per figuur eerst een precieze figuurspec. Je tekent niets.
 Regels:
-- Wees terughoudend. Alleen een figuur als die echt waarde toevoegt: de leerling moet iets aflezen of herkennen (grafiek, schakeling, krachten, maatcilinder), of de vraag is zonder figuur onduidelijk. Nooit "ter versiering". 0 figuren is een prima uitkomst: geef dan { "figuren": [] }. Meestal zijn 0–3 figuren genoeg; maximaal ${MAX_FIGUREN_PER_TOETS}, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten (alleen als de situatie echt helpt).
+- Wees terughoudend. Alleen een figuur als die echt waarde toevoegt: de leerling moet iets aflezen of herkennen (grafiek, schakeling, krachten, maatcilinder), of de vraag is zonder figuur onduidelijk. Nooit "ter versiering". 0 figuren is een prima uitkomst: geef dan { "figuren": [] }. Meestal zijn 0–3 figuren genoeg; maximaal ${MAX_FIGUREN_PER_TOETS}, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten. Sfeerplaat alleen als de situatie zonder beeld echt onduidelijk is (zelden); nooit bij een vraag met afstanden, posities of tijden die het beeld zou kunnen tegenspreken. Bij twijfel: geen sfeerplaat.
 - Sluit aan bij wat leerlingen in Nova NaSk (VMBO) zien: Nova-achtige opstellingen en symbolen, eenvoudige schema's, SI-eenheden met decimale komma.
 - Stroomkring (Nova): bron links; stroommeter (A) in serie; spanningsmeter (V) ALTIJD parallel over een lampje, weerstand of ander onderdeel — NOOIT over de spanningsbron of batterij (de bronspanning staat als label bij de bron). Bij parallelschakelingen mag een spanningsmeter over een onderdeel in een tak: "over": {"tak": t, "index": i}.
 - Getallen in de figuur moeten exact kloppen met de vraag en het nakijkmodel. Bereken het antwoord zelf na.
@@ -81,6 +82,7 @@ Keur ALLEEN "go" als alles klopt. Controleer:
 5. leesbaar: scherp, niet overvol, tekst groot genoeg om geprint te lezen, geen overlap.
 6. juiste_stijl: schone educatieve lesboekstijl (Nova): vlak, dunne donkere contouren, witte achtergrond; geen fotorealisme. Bij een sfeerplaat: géén tekst in beeld.
 7. veilig_en_vakinhoudelijk_juist: geen onveilige situatie (bij proeven: veiligheidsbril), geen natuurkundige/scheikundige fouten, niets ongepasts voor 12–16-jarigen.
+8. geen_tegenspraak_met_vraag: loop ELK feit uit de context en stam langs (afstanden, posities, wie wat vasthoudt of doet, aantallen, binnen/buiten, open/dicht, volgorde van gebeurtenissen) en vergelijk met het beeld. Eén tegenspraak = no_go. Voorbeeld: de vraag zegt dat je een knal op honderden meters afstand hoort, maar het beeld toont iemand die het apparaat zelf vasthoudt → no_go. Een sfeerplaat die niets toevoegt of twijfel zaait → no_go.
 Extra bij een stroomkring (schakelschema) — tel en controleer ELK symbool tegen de lijst "Verwachte symbolen":
 - Elk onderdeel moet met het Nederlandse standaardsymbool (VMBO/Nova) getekend zijn: lampje = cirkel met kruis; batterij = lange dunne plaat (+) en korte dikke plaat (−); weerstand = rechthoek; stroommeter = cirkel met A (in serie); spanningsmeter = cirkel met V (parallel over het onderdeel); motor = cirkel met M; led = driehoek met streep en twee pijltjes naar buiten; zoemer = halve cirkel.
 - Open schakelaar = twee OPEN (holle) contactcirkeltjes met een hendeltje dat schuin omhoog staat vanaf het ene contactpunt richting het andere. Gesloten schakelaar = twee OPEN (holle) contactcirkeltjes met een rechte, iets dikkere hendel ertussen. Twee dichte stippen op een doorlopende draad lijken op knooppunten en zijn GEEN herkenbaar schakelaarsymbool → no_go. Alleen twee stippen of een onderbroken draad zonder hendel is ook GEEN schakelaar → no_go (zet klopt_met_spec en veilig_en_vakinhoudelijk_juist op false).
@@ -90,7 +92,13 @@ Extra bij een stroomkring (schakelschema) — tel en controleer ELK symbool tege
 - Ontbreekt een onderdeel, staat er een extra onderdeel, of is een symbool fout/onduidelijk → no_go.
 - Draden vormen een gesloten kring (behalve bij een open schakelaar); geen losse draadeinden of kortsluiting die niet in de spec staat.
 Antwoord ALLEEN met JSON:
-{ "besluit": "go"|"no_go", "checks": { "klopt_met_spec": bool, "labels_en_getallen_correct": bool, "past_bij_vraag_en_antwoord": bool, "verklapt_antwoord_niet": bool, "leesbaar": bool, "juiste_stijl": bool, "veilig_en_vakinhoudelijk_juist": bool }, "redenen": [string], "feedback": string (concrete aanwijzing wat anders moet bij no_go) }`;
+{ "besluit": "go"|"no_go", "checks": { "klopt_met_spec": bool, "labels_en_getallen_correct": bool, "past_bij_vraag_en_antwoord": bool, "verklapt_antwoord_niet": bool, "leesbaar": bool, "juiste_stijl": bool, "veilig_en_vakinhoudelijk_juist": bool, "geen_tegenspraak_met_vraag": bool }, "redenen": [string], "feedback": string (concrete aanwijzing wat anders moet bij no_go) }`;
+
+function pictogramVerwacht(spec: FiguurSpec): string {
+  const d = spec.data as { symbool?: string } | undefined;
+  const sym = d?.symbool as GhsSymbool | undefined;
+  return sym && PICTOGRAM_NAAM[sym] ? PICTOGRAM_NAAM[sym] : String(sym ?? "?");
+}
 
 export function keuringUser(input: { vraag: Vraag; nakijk?: NakijkItem; spec: FiguurSpec; bron: "code" | "ai" }): string {
   return `${vraagTekst(input.vraag)}
@@ -102,6 +110,8 @@ ${specSamenvatting(input.spec)}
 
 Herkomst: ${input.bron === "code" ? "door code getekend uit de spec-data (getallen exact)" : "AI-illustratie (sfeerplaat)"}.
 De figuur komt op het leerlingblad direct onder de vraagstam.${
+    input.spec.soort === "pictogram" ? `\n\nVerwacht pictogram: ${pictogramVerwacht(input.spec)}. Beoordeel of het getekende symbool herkenbaar dit pictogram is (vereenvoudigde, zelf getekende versie is prima).` : ""
+  }${
     input.spec.soort === "stroomkring" ? `\n\nVerwachte symbolen (precies deze, niet meer en niet minder):\n${symboolLijstVoorKeuring(input.spec)}` : ""
   }`;
 }

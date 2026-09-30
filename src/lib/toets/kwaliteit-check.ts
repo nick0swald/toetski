@@ -7,7 +7,8 @@ import { bouwMatrijs } from "./rtti.ts";
 import { RTTI_ORDER } from "./constants.ts";
 import type { ItemIssue } from "./item-kwaliteit";
 import { figuurIsGeldig } from "./figuren/bevriezing.ts";
-import type { FiguurRapport, Kwaliteitscheck, Kwaliteitspunt, NakijkItem, RttiVerdeling, Vraag } from "./types";
+import type { ControleLog, FiguurRapport, Kwaliteitscheck, Kwaliteitspunt, NakijkItem, RttiVerdeling, Vraag } from "./types";
+import { CONTROLE_CODES } from "./inhoud-controle.ts";
 
 function kwalitatief(llm?: Kwaliteitscheck | null): string {
   if (!llm) return "";
@@ -45,6 +46,7 @@ export function bouwKwaliteit(input: {
   rttiDoel: RttiVerdeling;
   llm?: Kwaliteitscheck | null;
   issues?: ItemIssue[];
+  controle?: ControleLog;
 }): Kwaliteitscheck {
   const { vragen, nakijkmodel, bron, vak, rttiDoel } = input;
   const punten: Kwaliteitspunt[] = [];
@@ -79,7 +81,7 @@ export function bouwKwaliteit(input: {
       punten.push({
         criterium: "Figuren",
         oordeel: "voldoet",
-        toelichting: `${echte.length} echte figuur${echte.length === 1 ? "" : "en"} (${soorten.join(", ") || "figuur"}). Een tabel telt niet mee${tabellen ? ` (${tabellen} tabel${tabellen === 1 ? "" : "len"} apart)` : ""}.`,
+        toelichting: `${echte.length} echte ${echte.length === 1 ? "figuur" : "figuren"} (${soorten.join(", ") || "figuur"}). Een tabel telt niet mee${tabellen ? ` (${tabellen} tabel${tabellen === 1 ? "" : "len"} apart)` : ""}.`,
       });
     } else {
       punten.push({
@@ -93,7 +95,15 @@ export function bouwKwaliteit(input: {
   }
 
   const doelen = extractLeerdoelen(bron).filter((d) => d.tekst.length >= 8);
-  if (doelen.length < 2) {
+  const pars = input.controle?.paragrafen ?? [];
+  if (pars.length >= 2) {
+    const leeg = pars.filter((p) => !p.vragen.length);
+    punten.push({
+      criterium: "Dekking per paragraaf",
+      oordeel: leeg.length ? "let op" : "voldoet",
+      toelichting: pars.map((p) => `${p.code} ${p.titel}: ${p.vragen.length ? `vraag ${p.vragen.join(", ")}` : "geen vraag"}`).join(" · ") + ".",
+    });
+  } else if (doelen.length < 2) {
     punten.push({
       criterium: "Leerdoeldekking",
       oordeel: "let op",
@@ -128,7 +138,36 @@ export function bouwKwaliteit(input: {
       : "Bij meerkeuze volgt de rubriek de sleutelletter.",
   });
 
-  const issues = input.issues ?? [];
+  const c = input.controle;
+  if (c) {
+    const soorten = (codes: string[]) => [...new Set(codes.map((x) => CONTROLE_CODES[x] ?? x))].join(", ");
+    const perVraag = (lijst: { nummer: number; code: string }[]) => {
+      const m = new Map<number, string[]>();
+      for (const x of lijst) m.set(x.nummer, [...(m.get(x.nummer) ?? []), x.code]);
+      return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([nr, codes]) => `vraag ${nr} (${soorten(codes)})`).join("; ");
+    };
+    const realisme = c.gevonden.filter((g) => g.code === "realisme");
+    const realismeOpen = c.blijft.filter((g) => g.code === "realisme");
+    punten.push({
+      criterium: "Inhoudscontrole",
+      oordeel: !c.gecontroleerd || c.blijft.length ? "let op" : "voldoet",
+      toelichting: !c.gecontroleerd
+        ? `Onafhankelijke controle niet gelukt${c.fout ? ` (${c.fout})` : ""}; controleer sleutels en berekeningen zelf.`
+        : `${c.gecontroleerd} vragen onafhankelijk nagerekend (sleutel, oplosbaarheid, realisme, helderheid, rubriek).${
+            c.gevonden.length ? ` Gevonden en aangepast: ${perVraag(c.gevonden.filter((g) => !["rtti", "dekking"].includes(g.code)))}.` : " Geen problemen gevonden."
+          }${c.vervangen.length ? ` Vervangen: vraag ${c.vervangen.join(", ")}.` : ""}${c.blijft.length ? ` Nog nakijken: ${perVraag(c.blijft)}.` : ""}`.replace(" Gevonden en aangepast: .", ""),
+    });
+    punten.push({
+      criterium: "Realisme",
+      oordeel: !c.gecontroleerd || realismeOpen.length ? "let op" : "voldoet",
+      toelichting: !c.gecontroleerd
+        ? "Niet gecontroleerd."
+        : realisme.length
+          ? `Onrealistische context gevonden bij vraag ${[...new Set(realisme.map((r) => r.nummer))].join(", ")}${realismeOpen.length ? `; nog open bij vraag ${realismeOpen.map((r) => r.nummer).join(", ")}` : "; gerepareerd of vervangen"}.`
+          : "Getallen, situaties en antwoorden gecontroleerd op realisme: in orde.",
+    });
+  }
+  const issues = (input.issues ?? []).filter((x) => !c || !c.blijft.some((b) => b.nummer === x.nummer && b.code === x.code));
   if (issues.length) {
     const uniek = [...new Map(issues.map((x) => [`${x.nummer}:${x.code}`, x])).values()];
     punten.push({
@@ -141,7 +180,9 @@ export function bouwKwaliteit(input: {
     });
   }
 
-  const opmerking = kwalitatief(input.llm);
+  // Geen modelclaims in de feedback: alleen berekende controles.
+  void kwalitatief;
+  const opmerking = "";
   const samenvatting = [
     `Totaal ${max} punten.`,
     rttiTekst,
@@ -183,7 +224,7 @@ export function figuurKeuringPunten(
     ? {
         criterium: "Figuren",
         oordeel: "voldoet",
-        toelichting: `${echte.length} echte figuur${echte.length === 1 ? "" : "en"} (${soorten.join(", ") || "figuur"}). Een tabel telt niet mee${tabellen ? ` (${tabellen} tabel${tabellen === 1 ? "" : "len"} apart)` : ""}.`,
+        toelichting: `${echte.length} echte ${echte.length === 1 ? "figuur" : "figuren"} (${soorten.join(", ") || "figuur"}). Een tabel telt niet mee${tabellen ? ` (${tabellen} tabel${tabellen === 1 ? "" : "len"} apart)` : ""}.`,
       }
     : {
         criterium: "Figuren",
@@ -236,6 +277,7 @@ export function metFiguurKwaliteit(
   const punten = rest.slice();
   punten.splice(idx >= 0 ? Math.min(idx, punten.length) : Math.min(2, punten.length), 0, figuren, keuring);
   const basis = (kwaliteit?.samenvatting ?? "")
+    .replace(/\s*Opmerking:.*$/s, "")
     .replace(/\s*Echte figuren: \d+\./, "")
     .replace(/\s*Figuren: \d+ geplaatst \(go\), \d+ gedropt, \d+ keuringspogingen\./, "")
     .trim();
