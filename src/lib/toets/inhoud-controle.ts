@@ -1,4 +1,5 @@
 import { findCorrectOptionIndex } from "./mc-balance.ts";
+import { groepIntro } from "./context-groepen.ts";
 import type { ItemIssue } from "./item-kwaliteit";
 import type { NakijkItem, Rtti, Vraag } from "./types";
 
@@ -34,20 +35,23 @@ Beoordeel per vraag:
 4. realistisch: kloppen de getallen met de situatie (afstanden, tijden, snelheden, massa's, temperaturen, prijzen, afmetingen), is de situatie natuurkundig mogelijk en herkenbaar voor een vmbo-leerling, en spreken context, figuurgegevens en antwoord elkaar niet tegen? Voorbeelden van NIET realistisch: een echo van een kaswand op 200 m, de knal van een schrikdraadapparaat horen op 500 m, een fietser met 90 km/h, een kopje thee van 5 kg, 'na 4 seconden hoort ze de knal' zonder dat de leerling weet wanneer de knal begon (een tijdsverschil meet je alleen met een startsignaal: lichtflits, zichtbare slag of eigen roep), een echo in een lokaal, hal of sporthal met een wand verder dan ~60 m (echotijd hooguit ~0,35 s), een meting die in de praktijk niet zo gaat. Zo nee: realisme = wat er mis is en een realistische waarde.
 5. helder: is de vraag eenduidig; wordt elk ding/apparaat eerst genoemd voordat ernaar verwezen wordt ('de installatie', 'dit apparaat' zonder uitleg = niet helder); geen schoolnaam; geen verwijzing naar een figuur als er geen figuurgegevens zijn; 'Het flesje…' of 'De bak…' zonder te zeggen welk flesje/welke situatie = niet helder; juist/onjuist moet een stelling zijn (geen vraagzin); de leerling moet weten hoeveel dingen hij moet noemen; 'volgens de regel' zonder te zeggen welke regel = niet helder. Zo nee: helderheid = wat.
 6. rubriekOk: past de puntenverdeling bij het antwoord, zijn deelpunten mogelijk bij rekenvragen (een fout kost 1 punt, niet alles), en noemt de rubriek het juiste begrip? Elk rubriekcriterium is één los te scoren onderdeel (bijv. 1 punt per genoemd mengsel met kenmerk); criteria als 'gebruikt geen verkeerde kenmerken' of 'alles goed' zijn niet ok. Het aantal punten moet passen bij wat gevraagd wordt: 'noem twee … en leg uit' voor 1 punt = rubriek niet ok. Zo nee: rubriek = wat.
-7. rtti: R (reproductie), T1 (getrainde toepassing), T2 (toepassing in nieuwe situatie), I (inzicht).
+7. rtti: R (feit/begrip reproduceren), T1 (toepassen in een bekende situatie, bijv. één formule invullen), T2 (toepassen in een nieuwe situatie: meer stappen of zelf de aanpak kiezen), I (inzicht: verklaren, voorspellen, redeneren).
 Antwoord ALLEEN met JSON: { "oordelen": [ { "nummer": number, "eigenAntwoord": string, "juisteOpties": string[], "modelantwoordKlopt": boolean, "oplosbaar": boolean, "ontbreekt": string, "realistisch": boolean, "realisme": string, "helder": boolean, "helderheid": string, "rubriekOk": boolean, "rubriek": string, "rtti": "R"|"T1"|"T2"|"I" } ] }`;
 
 export function controlePrompt(
   vragen: Vraag[],
   nakijk: NakijkItem[],
   bron: { lesstof: string; antwoorden?: string },
+  alle: Vraag[] = vragen,
 ): string {
   const items = vragen.map((q) => {
     const n = nakijk.find((x) => x.nummer === q.nummer);
     const figuur = figuurGegevens(q);
+    const groep = groepIntro(alle, q);
     return {
       nummer: q.nummer,
       type: q.type,
+      ...(groep ? { gedeeldeContext: `${groep.titel}: ${groep.intro}` } : {}),
       context: q.context || undefined,
       stam: q.stam,
       opties: q.opties?.map((o) => `${o.letter}. ${o.tekst}`),

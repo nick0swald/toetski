@@ -16,16 +16,27 @@ function fractioneel(n: number): boolean {
   return Math.abs(n - Math.round(n)) > 0.001;
 }
 
-/** Eén bewerking (delen, aftrekken, l×b×h) is geen 4-puntsvraag. */
-function rekenRubriek(): PuntenCriterium[] {
-  return [
-    { punt: 1, criterium: "gegevens en gevraagd" },
-    { punt: 1, criterium: "formule" },
-    { punt: 1, criterium: "uitwerking met antwoord en eenheid" },
-  ];
+/**
+ * Standaardrubriek in de stijl van de docent (1 punt per stap, zoals het CSE-correctievoorschrift):
+ * 2p formule + rest; 3p omrekenen/aflezen + formule + rest; 4p met een extra tussenstap.
+ * Geen punt voor "gegevens en gevraagde".
+ */
+export function rekenRubriek(punten = 3): PuntenCriterium[] {
+  const formule = { punt: 1, criterium: "gebruik van de juiste formule (grootheden benoemd)" };
+  const rest = { punt: 1, criterium: "rest van de berekening juist (uitkomst met eenheid)" };
+  if (punten <= 2) return [formule, rest];
+  const omrekenen = { punt: 1, criterium: "juist omrekenen of aflezen van de benodigde waarde" };
+  if (punten === 3) return [omrekenen, formule, rest];
+  return [omrekenen, formule, { punt: 1, criterium: "juiste tussenstap (tweede formule of tussenuitkomst)" }, rest];
 }
 
-export const DOORREKENEN = "Rekenfout of vergeten stap: alleen het punt voor die stap aftrekken; verder rekenen met de eigen (foute) waarde wordt goed gerekend.";
+/** Criterium dat alleen overschrijven beloont (examenstijl kent dat punt niet). */
+export function isGegevensCriterium(c: string): boolean {
+  return /\bgegevens\b|\bgevraagde?\b|\bnoteren\s+van\s+de\s+gegevens\b/i.test(c) && !/formule|omreken|aflez|bereken/i.test(c);
+}
+
+export const DOORREKENEN =
+  "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg).";
 
 /**
  * Rekenvragen krijgen deelpunten: een fout (bijv. niet delen door 2) kost 1 punt, niet de hele vraag.
@@ -35,7 +46,7 @@ export function rekenAftrek(regels: string[] | undefined): string[] {
   const uit = (regels ?? [])
     .map((r) => r.trim())
     .filter(Boolean)
-    .filter((r) => !/^rekenfout of vergeten stap/i.test(r))
+    .filter((r) => !/^rekenfout of vergeten stap|^examenregel:/i.test(r))
     .map((r) => (/aftrek|punt minder|-\s*1\s*p/i.test(r) ? r : `${r.replace(/[.;]+$/, "")}: 1 punt aftrek (niet de hele vraag fout)`));
   return [...uit, DOORREKENEN];
 }
@@ -114,7 +125,10 @@ export function repareerPunten(
       // Specifieke stappen van het model blijven staan als ze netjes zijn (2–4 hele punten in 2–4 stappen);
       // anders de standaard driedeling.
       const netjes = eigen.length >= 2 && eigen.length <= 4 && eigen.every((c) => c.punt >= 1 && !fractioneel(c.punt)) && som >= 2 && som <= 4;
-      const verdeling = netjes ? eigen.map((c) => ({ ...c })) : rekenRubriek();
+      // Een punt voor "gegevens en gevraagde" bestaat niet: dan de standaardrubriek met hetzelfde totaal.
+      const verdeling = netjes && !eigen.some((c) => isGegevensCriterium(c.criterium))
+        ? eigen.map((c) => ({ ...c }))
+        : rekenRubriek(netjes ? som : heel(q.punten || 3) <= 2 ? 2 : 3);
       q.punten = verdeling.reduce((s, c) => s + c.punt, 0);
       n.puntenverdeling = verdeling;
       n.nietToekennen = rekenAftrek(n.nietToekennen);

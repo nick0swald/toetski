@@ -25,6 +25,11 @@ export function NakijkSheet({
               <p className="font-semibold text-brand">
                 Vraag {n.nummer} ({q?.punten ?? "?"}p) {q ? RTTI_META[q.rtti].kort : ""}
               </p>
+              {q?.rttiUitleg || q?.bronvermelding ? (
+                <p className="mt-1 text-xs italic text-muted">
+                  {[q.rttiUitleg ? `RTTI ${q.rttiUitleg}` : "", q.vraagtype && q.vraagtype !== "OVERIG" ? `type ${q.vraagtype}` : "", q.bronvermelding ?? ""].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
               {q && figuurIsGeldig(q.figuur) ? (
                 <p className="mt-1 text-xs italic text-muted">
                   Zie figuur {figuurNr.get(q.figuur.id)} ({q.figuur.alt.toLowerCase()}, goedgekeurd na {q.figuur.pogingen}{" "}

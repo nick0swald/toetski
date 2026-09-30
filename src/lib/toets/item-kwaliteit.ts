@@ -288,7 +288,7 @@ const VAAG_OBJECT = /^(het|de|dit|deze)\s+([a-zà-ÿ]+(?:je|tje|pje|kje)|fles|po
 
 /** Stam zonder context die begint met "Het flesje …" zonder dat het flesje is geïntroduceerd. */
 export function vaagObjectBegin(q: Vraag): string | null {
-  if ((q.context ?? "").trim()) return null;
+  if ((q.context ?? "").trim() || q.contextTitel?.trim()) return null;
   if (q.figuur || q.figuurId || q.grafiek || q.schemaFiguur || q.pictogram || q.maatcilinder || q.tabel) return null;
   const m = q.stam.trim().match(VAAG_OBJECT);
   return m ? m[0] : null;
@@ -321,7 +321,8 @@ function repareerContext(q: Vraag, n: NakijkItem | undefined, issues: ItemIssue[
     issues.push({ nummer: q.nummer, code: "stam-verklapt", uitleg: "De context noemt het juiste antwoord." });
     q.context = q.context.replace(new RegExp(sleutel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), "").replace(/\s{2,}/g, " ").trim();
   }
-  if (q.context && !contextNodig(q)) {
+  // Inleiding van een doorlopende context blijft altijd staan (de volgende vragen bouwen erop voort).
+  if (q.context && !q.contextTitel?.trim() && !contextNodig(q)) {
     issues.push({ nummer: q.nummer, code: "context-loos", uitleg: "De context voegt niets toe aan de vraag." });
     q.context = undefined;
   }

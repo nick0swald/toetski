@@ -98,6 +98,8 @@ export function CreateForm() {
   const [vak, setVak] = useState("");
   const [leerweg, setLeerweg] = useState<Leerweg>("KB");
   const [leerjaar, setLeerjaar] = useState<1 | 2 | 3 | 4>(2);
+  // Klas 4: blok 'Examenvragen' met echte CSE-contexten (bronvermelding 'naar: examen …'); standaard aan.
+  const [examenvragen, setExamenvragen] = useState(true);
   const [moeilijkheid, setMoeilijkheid] = useState<Moeilijkheid>("normaal");
   const [duur, setDuur] = useState(45);
   const [puntenTekst, setPuntenTekst] = useState("");
@@ -287,7 +289,7 @@ export function CreateForm() {
         ? Math.max(4, Math.min(80, mcN + openN))
         : mcN != null || openN != null
           ? Math.max(4, Math.min(80, (mcN ?? 0) + (openN ?? 0) + 4))
-          : toetsLengte(duur, leerweg, moeilijkheid).vragen;
+          : toetsLengte(duur, leerweg, moeilijkheid, { leerjaar, vak }).vragen;
         const input: GenerateInput = {
       titel: titel.trim(),
       vak: vak.trim(),
@@ -302,6 +304,8 @@ export function CreateForm() {
         return Math.max(10, Math.min(100, Math.floor(n)));
       })(),
       aantalVragen,
+      lengteAuto: mcN == null && openN == null && !puntenTekst.trim(),
+      examenvragen: leerjaar === 4 ? examenvragen : false,
       mcVragen: mcN,
       openVragen: openN,
       rttiDoel: rtti,
@@ -361,7 +365,7 @@ export function CreateForm() {
     cijferNorm.exponent === DEFAULT_CIJFER.exponent;
 
   function schatPunten(minuten: number, m: Moeilijkheid): number {
-    return toetsLengte(minuten, leerweg, m).punten;
+    return toetsLengte(minuten, leerweg, m, { leerjaar, vak }).punten;
   }
 
   const selectCls =
@@ -558,6 +562,12 @@ export function CreateForm() {
               </select>
             </div>
           </div>
+          {leerjaar === 4 ? (
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input type="checkbox" checked={examenvragen} onChange={(e) => setExamenvragen(e.target.checked)} />
+              Blok Examenvragen (echte examencontexten, met bronvermelding)
+            </label>
+          ) : null}
 
           <div className="grid gap-2">
             <Label htmlFor="duur">Minuten</Label>

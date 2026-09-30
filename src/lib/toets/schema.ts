@@ -30,6 +30,10 @@ export const generateInputSchema = z.object({
   duurMinuten: z.coerce.number().int().min(10).max(180),
   doelPunten: z.coerce.number().int().min(10).max(100),
   aantalVragen: z.coerce.number().int().min(4).max(80),
+  /** Docent zette geen aantallen/punten vast: de server mag de gekalibreerde lengte gebruiken (NaSk). */
+  lengteAuto: z.boolean().optional(),
+  /** Blok 'Examenvragen' met echte CSE-contexten (alleen klas 4 / examenniveau; standaard aan in klas 4). */
+  examenvragen: z.boolean().optional(),
   mcVragen: z.coerce.number().int().min(0).max(60).optional(),
   openVragen: z.coerce.number().int().min(0).max(40).optional(),
   rttiDoel: z.object({
@@ -84,6 +88,18 @@ export const vraagSchema = z.object({
   punten: z.coerce.number().min(0).default(1),
   /** Situatieschets/inleiding vóór de stam (Cito-volgorde). */
   context: z.string().optional().default(""),
+  /** Titel van een doorlopende context (zelfde titel bij alle vragen van die context). */
+  contextTitel: z
+    .string()
+    .optional()
+    .transform((s) => (s?.trim() ? s.trim().slice(0, 60) : undefined)),
+  /** Vraagtype uit de NaSk-taxonomie (id), anders OVERIG. */
+  vraagtype: z
+    .string()
+    .optional()
+    .transform((s) => (s?.trim() ? s.trim().toUpperCase().slice(0, 20) : undefined)),
+  rttiUitleg: z.string().optional(),
+  bronvermelding: z.string().optional(),
   /** Vraagtekst; bij lege context: eerst inleiding, daarna vraagzin. */
   stam: z.string().default(""),
   opties: z
@@ -169,6 +185,8 @@ export const generatedPayloadSchema = z.object({
   }),
   vragen: z.array(vraagSchema).min(3),
   nakijkmodel: z.array(nakijkSchema).min(3),
+  /** Ids van de echte examencontexten die voor het blok 'Examenvragen' zijn meegegeven (klas 4). */
+  examenContexten: z.array(z.string()).optional(),
   cesuur: z.object({
     nTerm: z.coerce.number().default(1),
     cesuurPunten: z.coerce.number(),
