@@ -123,8 +123,8 @@ export function eersteRondeEinde(t0: number, tVragen: number): number {
 }
 
 
-/** Afwerkbudget: maximaal 60 s, en zo dat de hele toets binnen ~100 s klaar is (≥ 25 s voor de controle). */
+/** Afwerkbudget: maximaal 60 s, en zo dat de hele toets binnen ~100 s klaar is (≥ 30 s voor de controle). */
 export function afwerkBudget(verstrekenMs?: number): number {
   if (verstrekenMs === undefined) return 60_000;
-  return Math.max(25_000, Math.min(60_000, 100_000 - 12_000 - verstrekenMs));
+  return Math.max(30_000, Math.min(60_000, 100_000 - 10_000 - verstrekenMs));
 }

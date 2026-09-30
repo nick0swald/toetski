@@ -150,12 +150,12 @@ export function bouwKwaliteit(input: {
     const realismeOpen = c.blijft.filter((g) => g.code === "realisme");
     punten.push({
       criterium: "Inhoudscontrole",
-      oordeel: !c.gecontroleerd || c.blijft.length || c.nietHercontroleerd?.length ? "let op" : "voldoet",
+      oordeel: !c.gecontroleerd || c.blijft.length || c.nietHercontroleerd?.length || c.verwijderd?.length ? "let op" : "voldoet",
       toelichting: !c.gecontroleerd
         ? `Onafhankelijke controle niet gelukt${c.fout ? ` (${c.fout})` : ""}; controleer sleutels en berekeningen zelf.`
         : `${c.gecontroleerd} vragen onafhankelijk nagerekend (sleutel, oplosbaarheid, realisme, helderheid, rubriek).${
             c.gevonden.length ? ` Gevonden en aangepast: ${perVraag(c.gevonden.filter((g) => !["rtti", "dekking", "lengte"].includes(g.code)))}.` : " Geen problemen gevonden."
-          }${c.vervangen.length ? ` Vervangen: vraag ${c.vervangen.join(", ")}.` : ""}${c.nietHercontroleerd?.length ? ` Niet opnieuw nagerekend (tijd): vraag ${c.nietHercontroleerd.join(", ")}.` : ""}${c.blijft.length ? ` Nog nakijken: ${perVraag(c.blijft)}.` : ""}`.replace(" Gevonden en aangepast: .", ""),
+          }${c.vervangen.length ? ` Vervangen: vraag ${c.vervangen.join(", ")}.` : ""}${c.verwijderd?.length ? ` ${c.verwijderd.length === 1 ? "Eén vraag is" : `${c.verwijderd.length} vragen zijn`} weggehaald: bleef na reparatie en vervanging zonder eenduidig juist antwoord of niet oplosbaar.` : ""}${c.nietHercontroleerd?.length ? ` Niet opnieuw nagerekend (tijd): vraag ${c.nietHercontroleerd.join(", ")}.` : ""}${c.blijft.length ? ` Nog nakijken: ${perVraag(c.blijft)}.` : ""}`.replace(" Gevonden en aangepast: .", ""),
     });
     punten.push({
       criterium: "Realisme",

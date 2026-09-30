@@ -375,6 +375,8 @@ export interface ControleLog {
   vervangen: number[];
   /** Vervangen maar (door tijdgebrek) niet opnieuw gecontroleerd. */
   nietHercontroleerd?: number[];
+  /** Aantal/oorspronkelijke nummers van vragen die onbruikbaar bleven en zijn weggehaald. */
+  verwijderd?: number[];
   /** Nog open na reparatie (docent moet kijken). */
   blijft: ControleBevinding[];
   paragrafen?: { code: string; titel: string; vragen: number[] }[];
