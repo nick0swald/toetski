@@ -1,9 +1,8 @@
-import { SCHOOL } from "./constants";
 import { bouwMatrijs } from "./rtti";
 import type { GegenereerdeToets } from "./types";
 
 export const VOORBEELD_LESSTOF = `Lesstof klas 2 KB Biologie — Fotosynthese en ademhaling
-Aeres VMBO Leeuwarden, praktijkkas.
+Een praktijkkas.
 
 Fotosynthese is het proces waarbij groene planten glucose en zuurstof maken. Daarvoor hebben ze water, koolstofdioxide (CO₂) en licht nodig. De woordvergelijking is:
 
@@ -23,7 +22,6 @@ Leerdoelen
 `;
 
 export const VOORBEELD_TOETS_TEKST = `Toets Biologie klas 2 KB — Fotosynthese
-Aeres VMBO Leeuwarden · 50 minuten · 20 punten
 
 1. Wat is fotosynthese? Geef een omschrijving in één of twee zinnen. (2p)
 
@@ -217,7 +215,7 @@ export function maakVoorbeeldToets(): GegenereerdeToets {
       leerweg: "KB",
       leerjaar: 2,
       duurMinuten: 50,
-      school: SCHOOL,
+      school: "",
       hulpmiddelen: ["Geen biologieboek"],
       instructies: [
         "Deze toets bestaat uit 8 vragen. Het maximumscore is 19 punten.",

@@ -1,4 +1,4 @@
-import { RTTI_META, SCHOOL } from "./constants";
+import { RTTI_META } from "./constants";
 import { totaalPunten } from "./rtti";
 import type { GegenereerdeToets } from "./types";
 
@@ -28,7 +28,7 @@ export function kwaliteitAlsTekst(toets: GegenereerdeToets): string {
     "let op": "LET OP",
   };
   const regels = [
-    `Kwaliteitscheck van Aeres Toetsmaker bij «${toets.meta.titel}»`,
+    `Kwaliteitscheck van Toetski bij «${toets.meta.titel}»`,
     k.samenvatting ? `Samenvatting: ${k.samenvatting}` : "",
     "",
     "Pas de toets aan op punten met LET OP, AANDACHT of ONTBREEKT. Wat VOLDOET, laat staan.",
@@ -56,7 +56,6 @@ export function toetsAlsTekst(toets: GegenereerdeToets): string {
   const max = totaalPunten(toets.vragen);
   const m = toets.meta;
   const lines: string[] = [
-    SCHOOL,
     `${m.vak} · ${m.leerweg} · klas ${m.leerjaar}`,
     m.titel,
     `Tijd: ${m.duurMinuten} minuten · Maximumscore: ${max} punten`,
@@ -75,7 +74,7 @@ export function toetsAlsTekst(toets: GegenereerdeToets): string {
 }
 
 export function nakijkAlsTekst(toets: GegenereerdeToets): string {
-  const lines: string[] = [SCHOOL, `Correctievoorschrift · ${toets.meta.vak} · ${toets.meta.titel}`, ""];
+  const lines: string[] = [`Correctievoorschrift · ${toets.meta.vak} · ${toets.meta.titel}`, ""];
   for (const n of toets.nakijkmodel) {
     const q = toets.vragen.find((v) => v.nummer === n.nummer);
     lines.push(`Vraag ${n.nummer}  (${q?.punten ?? "?"}p)  ${q ? RTTI_META[q.rtti].kort : ""}`);

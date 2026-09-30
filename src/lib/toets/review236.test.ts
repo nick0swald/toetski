@@ -3,7 +3,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { SCHOOL, APP_NAME } from "./constants.ts";
+import { APP_NAME } from "./constants.ts";
 import { bevatSchoolnaam, borgFiguurVerwijzingen, onopgeloste, verwijderSchoolnamen } from "./context-regels.ts";
 import { repareerItemsDeterministisch, detecteerItemIssues } from "./item-kwaliteit.ts";
 import { finalizeVragen } from "./mc-balance.ts";
@@ -36,9 +36,9 @@ const open = (nummer: number, stam: string, extra: Partial<Vraag> = {}): Vraag =
 const nk = (nummer: number, modelantwoord: string, punten = 1): NakijkItem => ({ nummer, modelantwoord, puntenverdeling: [{ punt: punten, criterium: "juist" }] });
 
 describe("7. schoolnaam nooit in vragen", () => {
-  it("branding heet Aeres (niet Ares058); de systeemprompt noemt geen school", () => {
-    assert.equal(SCHOOL, "Aeres VMBO Leeuwarden");
-    assert.doesNotMatch(APP_NAME, /Ares058/);
+  it("branding heet Toetski; de systeemprompt noemt geen school", () => {
+    assert.equal(APP_NAME, "Toetski");
+    assert.doesNotMatch(APP_NAME, /Aeres|Ares058/);
     assert.doesNotMatch(bouwSystemPrompt(), /voor (Aeres|Ares058)|leerbedrijf Ares058|kas van Aeres/);
     assert.doesNotMatch(stuurdocumentTekst(), /leerbedrijf Ares058/);
     assert.match(stuurdocumentTekst(), /NOOIT de naam van de school/);

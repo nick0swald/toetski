@@ -17,7 +17,7 @@ import {
   Footer,
   VerticalAlign,
 } from "docx";
-import { RTTI_META, RTTI_ORDER, SCHOOL } from "./constants";
+import { RTTI_META, RTTI_ORDER } from "./constants";
 import { cesuurPunten, formuleTekst, modelLabel, omzetTabel, voldoendeHint } from "./cijfer";
 import { totaalPunten } from "./rtti";
 import { slug } from "./text";
@@ -267,7 +267,7 @@ function metaPair(label: string, value: string) {
 }
 
 
-function schoolLeerlingChrome() {
+function pageNumberChrome() {
   return {
     headers: {
       default: new Header({ children: [new Paragraph({ children: [] })] }),
@@ -286,37 +286,6 @@ function schoolLeerlingChrome() {
     },
   };
 }
-
-function headerFooter(label: string) {
-  return {
-    headers: {
-      default: new Header({
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({ text: SCHOOL, font: "Arial", size: 16, color: GREEN, bold: true }),
-              new TextRun({ text: `  ·  ${label}`, font: "Arial", size: 16, color: MUTED }),
-            ],
-          }),
-        ],
-      }),
-    },
-    footers: {
-      default: new Footer({
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            children: [
-              new TextRun({ text: "blad ", font: "Arial", size: 16, color: MUTED }),
-              new TextRun({ children: [PageNumber.CURRENT], font: "Arial", size: 16, color: MUTED }),
-            ],
-          }),
-        ],
-      }),
-    },
-  };
-}
-
 
 /** Voorblad-cel: label + waarde (of invullijn). */
 function voorbladCel(
@@ -395,19 +364,12 @@ function voorbladBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
     }),
     new TableRow({
       children: [
-        voorbladCel("Totaal te behalen punten", String(max), { width: w }),
-        voorbladCel("School", m.school || SCHOOL, { width: w }),
-      ],
-    }),
-    new TableRow({
-      children: [
         voorbladCel("Cesuur", `5,5 bij ${cesuur} punten`, { width: w }),
         voorbladCel("", "", { width: w }),
       ],
     }),
   ];
   return [
-    p(SCHOOL, { bold: true, size: 28, after: 200 }),
     new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: [w, w], rows }),
     new Paragraph({
       children: [new PageBreak()],
@@ -712,7 +674,7 @@ function kwaliteitParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [
     heading(`Feedback · ${t.meta.titel}`),
     sub(`${t.meta.vak} · ${t.meta.leerweg} klas ${t.meta.leerjaar}`),
-    p("Kwaliteitscheck van Aeres Toetsmaker.", { italics: true }),
+    p("Kwaliteitscheck van Toetski.", { italics: true }),
     p(t.kwaliteit.samenvatting || "Geen samenvatting."),
   ];
   for (const k of t.kwaliteit.punten) {
@@ -745,13 +707,13 @@ function cijferParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   return cijferParagrafenVan(max, t.cijferNorm, `Cijferomzetting · ${t.meta.titel}`, modelLabel(t.cijferNorm.model));
 }
 
-function docOf(children: (Paragraph | Table)[], label: string) {
+function docOf(children: (Paragraph | Table)[]) {
   return new Document({
     styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
     sections: [
       {
         properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } },
-        ...headerFooter(label),
+        ...pageNumberChrome(),
         children,
       },
     ],
@@ -776,25 +738,25 @@ async function saveDoc(doc: Document, filename: string) {
 
 export async function downloadMatrijsDocx(toets: GegenereerdeToets) {
   const t = withDefaults(toets);
-  await saveDoc(docOf(matrijsBlocks(t), `Toetsmatrijs versie ${t.meta.versie}`), `${slug(t.meta.titel)}-matrijs.docx`);
+  await saveDoc(docOf(matrijsBlocks(t)), `${slug(t.meta.titel)}-matrijs.docx`);
 }
 
 export async function downloadCijferDocx(toets: GegenereerdeToets) {
   const t = withDefaults(toets);
-  await saveDoc(docOf(cijferParagrafen(t), "Cijferomzetting"), `${slug(t.meta.titel)}-cijfer.docx`);
+  await saveDoc(docOf(cijferParagrafen(t)), `${slug(t.meta.titel)}-cijfer.docx`);
 }
 
 export async function downloadCijferTabelDocx(opts: { titel?: string; max: number; norm: CijferNorm }) {
   const titel = opts.titel?.trim() || "Cijferomzetting";
   await saveDoc(
-    docOf(cijferParagrafenVan(opts.max, opts.norm, titel, modelLabel(opts.norm.model)), "Cijferomzetting"),
+    docOf(cijferParagrafenVan(opts.max, opts.norm, titel, modelLabel(opts.norm.model))),
     `${slug(titel)}-${opts.norm.model}-${opts.max}p.docx`,
   );
 }
 
 export async function downloadKwaliteitDocx(toets: GegenereerdeToets) {
   const t = withDefaults(toets);
-  await saveDoc(docOf(kwaliteitParagrafen(t), `Feedback · ${t.meta.titel}`), `${slug(t.meta.titel)}-feedback.docx`);
+  await saveDoc(docOf(kwaliteitParagrafen(t)), `${slug(t.meta.titel)}-feedback.docx`);
 }
 
 export async function downloadPakketDocx(toets: GegenereerdeToets) {
@@ -809,10 +771,10 @@ export async function pakketDocument(toets: GegenereerdeToets): Promise<Document
   return new Document({
     styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
     sections: [
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: leerling },
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: nakijkParagrafen(t) },
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Toetsmatrijs"), children: matrijsBlocks(t) },
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Cijferomzetting"), children: cijferParagrafen(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: leerling },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: nakijkParagrafen(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: matrijsBlocks(t) },
+      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: cijferParagrafen(t) },
     ],
   });
 }
@@ -821,5 +783,5 @@ export async function pakketDocument(toets: GegenereerdeToets): Promise<Document
 export async function downloadLeerlingDocx(toets: GegenereerdeToets) {
   const t = withDefaults(toets);
   const leerling = await toetsParagrafen(t);
-  await saveDoc(docOf(leerling, `Toets versie ${t.meta.versie}`), `${slug(t.meta.titel)}-versie-${t.meta.versie}.docx`);
+  await saveDoc(docOf(leerling), `${slug(t.meta.titel)}-versie-${t.meta.versie}.docx`);
 }

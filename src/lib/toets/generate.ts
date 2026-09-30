@@ -1,7 +1,6 @@
 import { afwerkBudget } from "./voortgang";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { SCHOOL } from "./constants";
 import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
 import { bijschavenInputSchema, bijschavenPayloadSchema, extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
@@ -120,7 +119,7 @@ async function fetchBronUrl(url: string): Promise<string> {
     method: "GET",
     redirect: "follow",
     signal: AbortSignal.timeout(8000),
-    headers: { "User-Agent": "AeresToetsmaker/1.0" },
+    headers: { "User-Agent": "Toetski/1.0" },
   });
   if (!res.ok) throw new Error(`De link gaf een fout (${res.status}).`);
   const type = res.headers.get("content-type") ?? "";
@@ -499,7 +498,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       leerweg: payload.meta.leerweg ?? data.leerweg,
       leerjaar: (Math.min(4, Math.max(1, Math.round(payload.meta.leerjaar ?? data.leerjaar))) || 2) as 1 | 2 | 3 | 4,
       duurMinuten: payload.meta.duurMinuten || data.duurMinuten,
-      school: SCHOOL,
+      school: "",
       hulpmiddelen: payload.meta.hulpmiddelen,
       instructies: payload.meta.instructies,
       onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
@@ -676,7 +675,7 @@ ${bron}`;
           leerweg: payload.meta.leerweg ?? data.leerweg,
           leerjaar: (Math.min(4, Math.max(1, Math.round(payload.meta.leerjaar ?? data.leerjaar))) || 2) as 1 | 2 | 3 | 4,
           duurMinuten: 50,
-          school: SCHOOL,
+          school: "",
           hulpmiddelen: [],
           instructies: [],
           onderwerp: payload.meta.onderwerp || payload.meta.titel,

@@ -4,7 +4,7 @@ import { LeafMark } from "@/components/brand/mark";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { to: "/", label: "Toetsmaker", exact: true },
+  { to: "/", label: "Toetski", exact: true },
   { to: "/matrijsmaker", label: "Matrijsmaker" },
   { to: "/cijfer", label: "Cijfer" },
 ] as const;
@@ -50,7 +50,7 @@ export function AppShell({
           <Link to="/werkwijze" className="font-semibold text-brand hover:opacity-80">
             Werkwijze
           </Link>
-          {" · "}Aeres VMBO Leeuwarden · docent controleert altijd inhoud en cesuur.
+          {" · "}Powered by Grok · a Nicko Swald product
         </p>
       </footer>
     </div>
@@ -85,7 +85,7 @@ function Brand() {
     <Link to="/" onClick={onClick} className="flex items-center gap-2.5 text-brand">
       <LeafMark className="size-8 shrink-0" />
       <span className="text-lg tracking-tight sm:text-xl">
-        <span className="font-bold">Aeres</span> <span className="font-medium">Toetsmaker</span>
+        <span className="font-bold">Toetski</span>
       </span>
     </Link>
   );

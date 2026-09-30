@@ -6,10 +6,11 @@ import {
 } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { APP_NAME } from "@/lib/toets/constants";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Aeres Toetsmaker";
+const APP_DESCRIPTION = "Toetski: maak duidelijke toetsen, nakijkmodellen en toetsmatrijzen.";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -19,10 +20,15 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       {
         name: "description",
-        content:
-          "Toetsmaker voor Aeres VMBO Leeuwarden: Cito-opmaak, nakijkmodel en RTTI-toetsmatrijs.",
+        content: APP_DESCRIPTION,
       },
       { name: "theme-color", content: "#004422" },
+      { property: "og:title", content: APP_NAME },
+      { property: "og:description", content: APP_DESCRIPTION },
+      { property: "og:site_name", content: APP_NAME },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: APP_NAME },
+      { name: "twitter:description", content: APP_DESCRIPTION },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

@@ -1,7 +1,6 @@
 import type { Leerweg, Moeilijkheid, Rtti, RttiVerdeling, ToetsVersie } from "./types";
 
-export const SCHOOL = "Aeres VMBO Leeuwarden";
-export const APP_NAME = "Aeres Toetsmaker";
+export const APP_NAME = "Toetski";
 
 export const LEERWEGEN: { id: Leerweg; label: string; hint: string }[] = [
   { id: "BB", label: "BB", hint: "Basis" },
