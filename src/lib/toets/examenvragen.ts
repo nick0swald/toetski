@@ -65,7 +65,7 @@ export function examenvragenPrompt(contexten: CseContext[]): string {
     return `Context "${c.titel}" (${bronLabel(c)})\n  Intro: ${c.intro}\n${vragen}`;
   });
   return `EXAMENVRAGEN (klas 4, zoals de docent zelf doet): neem de volgende echte examencontext(en) op als blok 'Examenvragen' aan het EIND van de toets. Regels:
-- contextTitel = precies de titel hieronder; intro in context van de eerste vraag van die context.
+- Zet de titel in het APARTE veld contextTitel (precies de titel hieronder, bij ELKE vraag van die context) en de intro in context van de eerste vraag; bijv. {"contextTitel": "<titel>", "context": "<intro>", "stam": "…"} en daarna {"contextTitel": "<titel>", "context": "", "stam": "…"}. Zet 'Examenvragen' of de titel NIET in context of stam.
 - Bewerk licht: verwijzingen naar een figuur, afbeelding of uitwerkbijlage weg (gegevens in de tekst zetten, of die vraag weglaten); getallen en situatie mogen blijven; vervang vragen die niet bij de lesstof passen door een vraag over de lesstof binnen dezelfde context.
 - Neem 2–4 vragen per context; nakijkmodel volgens het correctievoorschrift (bij bewerking aanpassen), 1 punt per stap.
 - Deze vragen tellen mee in het totaal aantal vragen en punten; de rest van de toets gaat over de overige stof.
@@ -76,16 +76,37 @@ function kaal(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[^a-z0-9]/g, "");
 }
 
-/** Bronvermelding op de vragen van de gekozen examencontexten (deterministisch, op contextTitel). */
+/** CSE-intro zonder verwijzingen naar figuren/uitwerkbijlage (die komen niet mee). */
+export function schoonIntro(intro: string): string {
+  return intro
+    .split(/(?<=[.!?])\s+/)
+    .filter((z) => !/afbeelding|figuur|uitwerkbijlage|\bje ziet\b|hieronder|foto|tekening|schema/i.test(z))
+    .join(" ")
+    .trim();
+}
+
+/**
+ * Bronvermelding op de vragen van de gekozen examencontexten (deterministisch). Herkent de context aan
+ * contextTitel, of (als het model de titel in context/stam zette) aan de titel in de tekst; zet dan
+ * contextTitel goed, haalt 'Examenvragen <titel>' uit de context en zorgt dat de eerste vraag de intro heeft.
+ */
 export function markeerExamenvragen(vragen: Vraag[], contexten: CseContext[]): Vraag[] {
   if (!contexten.length) return vragen;
+  const gezien = new Set<string>();
   return vragen.map((q) => {
     const t = kaal(q.contextTitel ?? "");
-    if (!t) return q;
+    const tekst = kaal(`${q.context ?? ""} ${q.stam}`);
     const c = contexten.find((x) => {
       const k = kaal(x.titel);
-      return k === t || (k.length >= 5 && (t.includes(k) || k.includes(t)));
+      if (t) return k === t || (k.length >= 5 && (t.includes(k) || k.includes(t)));
+      return k.length >= 6 && tekst.includes(k) && /examenvragen/i.test(`${q.context ?? ""}`) ;
     });
-    return c ? { ...q, contextTitel: c.titel, bronvermelding: bronLabel(c) } : q;
+    if (!c) return q;
+    let context = (q.context ?? "").replace(new RegExp(`^\\s*(?:examenvragen\\s*[:\\-–]?\\s*)?${c.titel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[:.\\-–]?\\s*`, "i"), "").trim();
+    context = context.replace(/^examenvragen\s*[:\-–]?\s*/i, "").trim();
+    const eerste = !gezien.has(c.id);
+    gezien.add(c.id);
+    if (eerste && context.split(/\s+/).length < 8) context = [schoonIntro(c.intro), context].filter(Boolean).join(" ");
+    return { ...q, contextTitel: c.titel, bronvermelding: bronLabel(c), context: context || undefined };
   });
 }

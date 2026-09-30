@@ -1,4 +1,4 @@
-import { isVeiligheidsbord, pictogramPastBijVraag } from "./types.ts";
+import { isVeiligheidsbord, maatcilinderPastBijVraag, pictogramPastBijVraag } from "./types.ts";
 import type { GhsSymbool, MaatcilinderFiguur, NakijkItem, SchemaFiguur, Vraag, VraagGrafiek, VraagTabel, VakProfiel } from "./types";
 import { heeftEchtFiguur } from "./blad-volgorde.ts";
 
@@ -223,6 +223,11 @@ function isOnderdompel(q: Vraag): boolean {
 export function plaatsMaatcilinders(vragen: Vraag[]): Vraag[] {
   return vragen.map((q) => {
     if (q.figuur || q.figuurId) return q; // bevroren figuur: niets toevoegen
+    if (q.maatcilinder && !maatcilinderPastBijVraag(q)) {
+      // Maatcilinder bij een vraag die niet over volume gaat (bijv. een veer): weg, anders ontstaat onzintekst.
+      const { maatcilinder: _m, ...rest } = q;
+      return rest as Vraag;
+    }
     if (q.maatcilinder || !isOnderdompel(q)) return q;
     const nrs = parseMl(`${q.context ?? ""} ${q.stam}`);
     const begin = nrs[0] ?? 30;

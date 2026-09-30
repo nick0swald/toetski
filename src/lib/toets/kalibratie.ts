@@ -203,7 +203,7 @@ export function kalibratiePrompt(k: Kalibratie): string {
   } else if (k.opbouw === "situaties") {
     const c = k.contexten!;
     regels.push(
-      `- Opbouw: losse vragen plus ${c.aantal[0]}–${c.aantal[1]} kleine situaties met elk ${c.vragenPer[0]}–${c.vragenPer[1]} vragen. Geef de vragen van één situatie hetzelfde veld contextTitel (2–4 woorden) en zet de inleiding (${c.introWoorden[0]}–${c.introWoorden[1]} woorden) alleen in context van de EERSTE vraag van die situatie; de volgende vragen geven alleen hun nieuwe gegevens.`,
+      `- Opbouw: losse vragen plus ${c.aantal[0]}–${c.aantal[1]} kleine situaties met elk ${c.vragenPer[0]}–${c.vragenPer[1]} vragen. Geef de vragen van één situatie hetzelfde veld contextTitel (2–4 woorden, apart veld, niet in context of stam) en zet de inleiding (${c.introWoorden[0]}–${c.introWoorden[1]} woorden) alleen in context van de EERSTE vraag van die situatie; de volgende vragen geven alleen hun nieuwe gegevens.`,
     );
   } else if (k.opbouw === "blokken") {
     regels.push(
@@ -218,7 +218,7 @@ export function kalibratiePrompt(k: Kalibratie): string {
   } else {
     const c = k.contexten!;
     regels.push(
-      `- Opbouw als een mini-examen: ${c.aantal[0]}–${c.aantal[1]} contexten, elk met een contextTitel van 2–4 woorden (zelfde contextTitel bij alle vragen van die context) en een intro van ${c.introWoorden[0]}–${c.introWoorden[1]} woorden in context van de EERSTE vraag; ${c.vragenPer[0]}–${c.vragenPer[1]} vragen per context, volgorde herkennen → rekenen → redeneren/tekenen; per vraag 1–2 zinnen nieuwe gegevens. Precies één voornaam per context. Mix categorieën (huis & keuken, verkeer, werk & beroep, techniek, sport & vrije tijd, natuur); schoolsituaties spaarzaam, nooit een schoolnaam.`,
+      `- Opbouw als een mini-examen (VERPLICHT, alle vragen horen bij een context): ${c.aantal[0]}–${c.aantal[1]} contexten, elk met een contextTitel van 2–4 woorden in het aparte veld contextTitel (zelfde contextTitel bij alle vragen van die context, bijv. {"contextTitel": "Nieuwe koelkast", "context": "<intro>", …} en daarna {"contextTitel": "Nieuwe koelkast", "context": "", …}) en een intro van ${c.introWoorden[0]}–${c.introWoorden[1]} woorden in context van de EERSTE vraag; ${c.vragenPer[0]}–${c.vragenPer[1]} vragen per context, volgorde herkennen → rekenen → redeneren/tekenen; per vraag 1–2 zinnen nieuwe gegevens. Precies één voornaam per context. Mix categorieën (huis & keuken, verkeer, werk & beroep, techniek, sport & vrije tijd, natuur); schoolsituaties spaarzaam, nooit een schoolnaam.`,
     );
   }
   regels.push(

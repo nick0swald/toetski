@@ -453,6 +453,11 @@ export function pictogramPastBijVraag(q: Pick<Vraag, "stam" | "context" | "leerd
   return /symbool|pictogram|\bbord|etiket|gevaar|gevaarlijk|veilig|bescherming|\bbril|handschoen|brandbaar|ontvlambaar|giftig|bijtend|explosie|oxider|milieu|irriter|schadelijk|lawaai|verplicht|verboden/i.test(t);
 }
 
+/** Een maatcilinder hoort alleen bij een vraag over volume/vloeistof aflezen (niet bij bijv. een veer). */
+export function maatcilinderPastBijVraag(q: Pick<Vraag, "stam" | "context" | "leerdoel">): boolean {
+  return /maatcilinder|volume|onderdompel|\bml\b|milliliter|vloeistof|dichtheid|afles/i.test(`${q.context ?? ""} ${q.stam} ${q.leerdoel ?? ""}`);
+}
+
 /** Wat je op het symbool/bord ZIET (zonder de betekenis te noemen): voor een vraag waarvan de figuur wegviel. */
 export const PICTOGRAM_BESCHRIJVING: Record<GhsSymbool, string> = {
   ontvlambaar: "een zwarte vlam in een rode ruit",
