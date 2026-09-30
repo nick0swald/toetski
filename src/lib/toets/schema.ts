@@ -56,6 +56,7 @@ export const generateInputSchema = z.object({
   stuurdocument: z.string().max(20000).optional(),
   /** "Met plaatjes" (standaard) of "Zonder plaatjes". */
   metPlaatjes: z.boolean().optional().default(true),
+  plaatjes: z.enum(["auto", "met", "zonder"]).optional(),
 });
 
 export const vraagSchema = z.object({

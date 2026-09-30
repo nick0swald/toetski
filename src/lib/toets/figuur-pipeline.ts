@@ -22,6 +22,10 @@ const planInput = z.object({
   alSfeer: z.coerce.number().int().min(0).max(20).default(0),
   /** Tijdslimiet voor de planner (ms); de client geeft een krap budget mee voor de 60 s-doelstelling. */
   timeoutMs: z.coerce.number().int().min(5_000).max(70_000).default(70_000),
+  /** "Met plaatjes" (harde keuze): minimaal zoveel figuren plannen. */
+  minFiguren: z.coerce.number().int().min(0).max(6).default(0),
+  /** Vraagnummers waarvan een figuur eerder is afgekeurd (liever andere vragen of een eenvoudiger spec). */
+  afgekeurd: z.array(z.coerce.number()).max(80).default([]),
 });
 
 export interface GeplandeFiguur {
@@ -39,7 +43,7 @@ export const planFiguren = createServerFn({ method: "POST" })
       const { PLANNER_SYSTEM, plannerUser } = await import("./figuren/prompts");
       const raw = (await vraagJson(
         PLANNER_SYSTEM,
-        plannerUser({ vak: data.vak, vragen: data.vragen as Vraag[], nakijk: data.nakijkmodel as NakijkItem[], overslaan: data.overslaan }),
+        plannerUser({ vak: data.vak, vragen: data.vragen as Vraag[], nakijk: data.nakijkmodel as NakijkItem[], overslaan: data.overslaan, minFiguren: data.minFiguren, afgekeurd: data.afgekeurd }),
         { maxTokens: 5000, timeoutMs: data.timeoutMs },
       )) as { figuren?: unknown[] };
       const meldingen: string[] = [];

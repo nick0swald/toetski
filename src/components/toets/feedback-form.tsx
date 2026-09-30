@@ -73,7 +73,8 @@ export function FeedbackForm({ startId }: { startId?: string }) {
     setBusy(true);
     setError(null);
     try {
-      const metPlaatjes = toets.metPlaatjes !== false;
+      const plaatjes = toets.plaatjes ?? (toets.metPlaatjes === false ? "zonder" : "auto");
+      const metPlaatjes = plaatjes !== "zonder";
       const result = await maakToets(
         {
           titel: toets.meta.titel,
@@ -95,8 +96,9 @@ export function FeedbackForm({ startId }: { startId?: string }) {
           vorigeSamenvatting: vorigeSamenvatting(toets),
           stuurdocument: stuurdocument.trim() || undefined,
           metPlaatjes,
+          plaatjes,
         },
-        { metPlaatjes, onVoortgang: setVoortgang },
+        { plaatjes, onVoortgang: setVoortgang },
       );
       if (!result.ok) {
         setError(result.error);

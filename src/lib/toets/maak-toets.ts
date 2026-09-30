@@ -1,17 +1,19 @@
 import { afwerkToets, generateVragenRuw, ruweVragen } from "./generate";
 import { figuurDeps } from "./figuren/client";
 import { verwerkFiguren, type FiguurGebeurtenis } from "./figuren/verwerk";
+import { figuurDeadline } from "./voortgang";
 import { koppelVroegeFiguren, zonderPlaatjes, type VroegeRonde } from "./figuren/vroeg";
 import { zonderLegacyFiguren } from "./figuren/bevriezing";
-import type { GegenereerdeToets, GenerateInput } from "./types";
+import type { GegenereerdeToets, GenerateInput, PlaatjesModus } from "./types";
+import { MAX_TOTAAL_MS } from "./voortgang";
 
-/** Doel: totale wachttijd ± 60 s, inclusief figuren. */
-export const DOEL_TOTAAL_MS = 60_000;
-/**
- * Figuren krijgen altijd minstens zoveel tijd na het verschijnen van de vragen.
- * (25 s bleek te krap: planner + één vision-keuring liep uit → alle figuren gedropt.)
- */
-export const MIN_FIGUURVENSTER_MS = 40_000;
+export { DOEL_TOTAAL_MS, MAX_TOTAAL_MS, MIN_FIGUURVENSTER_MS, figuurDeadline } from "./voortgang";
+
+/** "Met plaatjes": zoveel figuren laten plannen, en doorgaan tot er minstens MIN_MET_GEPLAATST zijn. */
+export const MIN_MET_GEPLAATST = 2;
+export const MET_DOEL_FIGUREN = 3;
+/** Eerste figuurronde bij "Met plaatjes" stopt hier, zodat er tijd is voor een extra ronde binnen 100 s. */
+export const MET_EERSTE_RONDE_MS = 72_000;
 
 export type Fase = "vragen" | "afwerken" | "plaatjes" | "word" | "klaar";
 
@@ -23,6 +25,8 @@ export interface Voortgang {
   figuren?: { klaar: number; totaal: number; gepland: boolean };
   /** Absolute deadline voor de figuren (Date.now-klok). */
   figuurDeadline?: number;
+  /** Moment waarop de figuren startten (vragen klaar). */
+  figuurStart?: number;
   metPlaatjes: boolean;
 }
 
@@ -33,18 +37,20 @@ export interface Voortgang {
  */
 export async function maakToets(
   input: GenerateInput,
-  opts: { metPlaatjes: boolean; onVoortgang?: (v: Voortgang) => void; nu?: () => number },
+  opts: { plaatjes: PlaatjesModus; onVoortgang?: (v: Voortgang) => void; nu?: () => number },
 ): Promise<{ ok: true; toets: GegenereerdeToets } | { ok: false; error: string }> {
   const nu = opts.nu ?? (() => Date.now());
   const t0 = nu();
-  const met = opts.metPlaatjes;
+  const modus = opts.plaatjes;
+  const met = modus !== "zonder";
+  const verplicht = modus === "met";
   let staat: Voortgang = { fase: "vragen", metPlaatjes: met };
   const meld = (patch: Partial<Voortgang>) => {
     staat = { ...staat, ...patch };
     opts.onVoortgang?.(staat);
   };
   meld({});
-  const data = { ...input, metPlaatjes: met };
+  const data = { ...input, metPlaatjes: met, plaatjes: modus };
   const ruw = await generateVragenRuw({ data });
   if (!ruw.ok) return { ok: false, error: ruw.error };
   const tVragen = nu();
@@ -61,8 +67,8 @@ export async function maakToets(
     return { ok: true, toets };
   }
 
-  const deadline = Math.max(t0 + DOEL_TOTAAL_MS, tVragen + MIN_FIGUURVENSTER_MS);
-  meld({ fase: "afwerken", figuurDeadline: deadline, figuren: { klaar: 0, totaal: 0, gepland: false } });
+  const deadline = verplicht ? Math.min(figuurDeadline(t0, tVragen), t0 + MET_EERSTE_RONDE_MS) : figuurDeadline(t0, tVragen);
+  meld({ fase: "afwerken", figuurDeadline: deadline, figuurStart: tVragen, figuren: { klaar: 0, totaal: 0, gepland: false } });
   const gebeurtenis = (e: FiguurGebeurtenis) => {
     if (e.soort === "gepland") meld({ figuren: { klaar: 0, totaal: e.totaal, gepland: true } });
     if (e.soort === "figuur-klaar") meld({ figuren: { klaar: e.klaar, totaal: e.totaal, gepland: true } });
@@ -87,7 +93,7 @@ export async function maakToets(
     kwaliteit: { samenvatting: "", punten: [] },
   };
   const vroegPromise: Promise<GegenereerdeToets | null> = uniek
-    ? verwerkFiguren(voorlopig, deps, { deadline }).catch(() => null)
+    ? verwerkFiguren(voorlopig, deps, { deadline, ...(verplicht ? { minFiguren: MET_DOEL_FIGUREN } : {}) }).catch(() => null)
     : Promise.resolve(null);
 
   const af = await afwerkToets({ data: afwerkData });
@@ -108,6 +114,30 @@ export async function maakToets(
       figuurRapport: { versie: 1, items: [], meldingen: [`Beeldpijplijn mislukt (${err instanceof Error ? err.message.slice(0, 100) : "fout"}); toets zonder figuren.`] },
     };
   }
+  // "Met plaatjes" is een harde keuze: te weinig goedgekeurde figuren → nieuwe ronde (andere vragen of
+  // eenvoudiger spec) zolang het harde maximum van 100 s het toelaat.
+  if (verplicht) {
+    const hardeDeadline = t0 + MAX_TOTAAL_MS;
+    for (let ronde = 0; ronde < 2; ronde++) {
+      const geplaatst = toets.vragen.filter((q) => q.figuur).length;
+      if (geplaatst >= MIN_MET_GEPLAATST || hardeDeadline - nu() < 22_000) break;
+      const afgekeurd = [...new Set((toets.figuurRapport?.items ?? []).filter((i) => i.status === "gedropt").map((i) => i.nummer))];
+      meld({ fase: "plaatjes", wachtOpPlaatjes: true, figuurDeadline: hardeDeadline, figuurStart: nu(), figuren: { klaar: 0, totaal: 0, gepland: false } });
+      try {
+        toets = await verwerkFiguren(toets, deps, { deadline: hardeDeadline, minFiguren: MET_DOEL_FIGUREN - geplaatst, afgekeurd });
+      } catch {
+        break;
+      }
+      if (toets.vragen.filter((q) => q.figuur).length === geplaatst && hardeDeadline - nu() < 30_000) break;
+    }
+    const n = toets.vragen.filter((q) => q.figuur).length;
+    if (n < MIN_MET_GEPLAATST && toets.figuurRapport) {
+      toets.figuurRapport = {
+        ...toets.figuurRapport,
+        meldingen: [...toets.figuurRapport.meldingen, `Met plaatjes: binnen 100 s ${n === 0 ? "geen" : `maar ${n}`} goedgekeurde figuur${n === 1 ? "" : "en"}. Afgekeurde figuren worden nooit geplaatst.`],
+      };
+    }
+  }
   const t2 = nu();
   toets.figuurRapport = {
     ...(toets.figuurRapport ?? { versie: 1, items: [], meldingen: [] }),
@@ -117,19 +147,21 @@ export async function maakToets(
   return { ok: true, toets };
 }
 
-const OPSLAG_SLEUTEL = "toetski:metPlaatjes";
+const OPSLAG_SLEUTEL = "toetski:plaatjes";
 
-export function leesMetPlaatjes(): boolean {
+/** Plaatjeskeuze onthouden (standaard Automatisch; de oude aan/uit-sleutel wordt bewust genegeerd). */
+export function leesPlaatjesModus(): PlaatjesModus {
   try {
-    return globalThis.localStorage?.getItem(OPSLAG_SLEUTEL) !== "0";
+    const v = globalThis.localStorage?.getItem(OPSLAG_SLEUTEL);
+    return v === "met" || v === "zonder" ? v : "auto";
   } catch {
-    return true;
+    return "auto";
   }
 }
 
-export function bewaarMetPlaatjes(met: boolean): void {
+export function bewaarPlaatjesModus(m: PlaatjesModus): void {
   try {
-    globalThis.localStorage?.setItem(OPSLAG_SLEUTEL, met ? "1" : "0");
+    globalThis.localStorage?.setItem(OPSLAG_SLEUTEL, m);
   } catch {
     /* privémodus: niet bewaren */
   }

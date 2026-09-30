@@ -129,11 +129,22 @@ async function callGrok(messages: { role: string; content: string }[], maxTokens
   return content;
 }
 
-/** Figuurregel in de prompt: terughoudend met plaatjes, of helemaal zonder. */
-export function figuurRegel(metPlaatjes: boolean): string {
-  return metPlaatjes
-    ? "Figuren: alleen als een figuur echt iets toevoegt (aflezen, herkennen, schakeling, krachten). 0 figuren is prima. Pictogramvraag: veld pictogram en beschrijf het symbool niet. Onderdompelen: veld maatcilinder met af te lezen standen. Figuren passen bij Nova NaSk (VMBO): spanningsmeter parallel over een lampje/weerstand, nooit over de bron; stroommeter in serie."
-    : "ZONDER PLAATJES: maak GEEN figuren — geen velden grafiek, schemaFiguur, pictogram of maatcilinder. Verwijs in geen enkele vraag naar een figuur, grafiek, afbeelding, plaatje, tekening of schema. Alle gegevens die nodig zijn staan in de tekst of in een tabel (veld tabel).";
+/** Plaatjeskeuze uit de invoer (oude invoer: metPlaatjes=false → zonder). */
+export function plaatjesModus(input: { plaatjes?: "auto" | "met" | "zonder"; metPlaatjes?: boolean }): "auto" | "met" | "zonder" {
+  return input.plaatjes ?? (input.metPlaatjes === false ? "zonder" : "auto");
+}
+
+const FIGUUR_BASIS =
+  "Pictogramvraag: veld pictogram en beschrijf het symbool niet. Onderdompelen: veld maatcilinder met af te lezen standen. Figuren passen bij Nova NaSk (VMBO): spanningsmeter parallel over een lampje/weerstand, nooit over de bron; stroommeter in serie.";
+
+/** Figuurregel in de prompt: automatisch (terughoudend), verplicht met plaatjes, of helemaal zonder. */
+export function figuurRegel(modus: boolean | "auto" | "met" | "zonder"): string {
+  const m = modus === true ? "auto" : modus === false ? "zonder" : modus;
+  if (m === "zonder")
+    return "ZONDER PLAATJES: maak GEEN figuren — geen velden grafiek, schemaFiguur, pictogram of maatcilinder. Verwijs in geen enkele vraag naar een figuur, grafiek, afbeelding, plaatje, tekening of schema. Alle gegevens die nodig zijn staan in de tekst of in een tabel (veld tabel).";
+  if (m === "met")
+    return `MET PLAATJES (keuze van de docent, verplicht): maak minstens 3 vragen waarbij de leerling een figuur echt nodig heeft — bijv. een grafiek aflezen (veld grafiek met exacte punten), een schakeling (veld schemaFiguur), krachten/hefboom, een maatcilinder aflezen of een gevarensymbool (pictogram) — passend bij de lesstof. ${FIGUUR_BASIS}`;
+  return `Figuren: volg wat de docent in de instructies/extra eisen vraagt; anders alleen als een figuur echt iets toevoegt (aflezen, herkennen, schakeling, krachten). 0 figuren is prima. ${FIGUUR_BASIS}`;
 }
 
 function userPrompt(
@@ -157,6 +168,7 @@ function userPrompt(
     vorigeSamenvatting?: string;
     ronde?: number;
     metPlaatjes?: boolean;
+    plaatjes?: "auto" | "met" | "zonder";
   },
   bron: string,
 ): string {
@@ -209,7 +221,7 @@ Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); ee
 MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam, alleen als die iets toevoegt.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
-${figuurRegel(input.metPlaatjes !== false)}
+${figuurRegel(plaatjesModus(input))}
 Kwaliteit in JSON: alleen een korte kwalitatieve opmerking. Verzin geen puntentotaal, RTTI-percentages, figuuraantal of "dekt alle leerdoelen" — de app rekent die zelf uit.
 Domein = paragraaf uit de leerdoelen (bijv. "2.1 Stoffen herkennen"), niet een losse deelvaardigheid. Zet PLUS in het leerdoel als het leerdoel PLUS is. Spelling: stofeigenschap.
 Versie: ${input.versie ?? "A"}
@@ -297,7 +309,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
     bron,
     vak: vakNaam,
     skipOrder: skipMcEerst,
-    figuren: data.metPlaatjes === false ? "geen" : "nodig",
+    figuren: plaatjesModus(data) === "zonder" ? "geen" : "nodig",
     repair: (prompt) =>
       callGrok(
         [
@@ -366,7 +378,9 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       }),
     ),
   };
-  if (data.metPlaatjes === false) toets.metPlaatjes = false;
+  const modus = plaatjesModus(data);
+  toets.plaatjes = modus;
+  if (modus === "zonder") toets.metPlaatjes = false;
   return toets;
 }
 
