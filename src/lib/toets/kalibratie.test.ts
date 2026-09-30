@@ -153,6 +153,16 @@ describe("RTTI-regels", () => {
     assert.equal(rttiVolgensRegels({ type: "berekening", stam: "Bereken de energie in kWh die de lamp in een week gebruikt.", punten: 3, vraagtype: "E-EPT" }).rtti, "T2");
     assert.equal(rttiVolgensRegels({ type: "open", stam: "Leg uit of Sanne met een langere steel meer of minder kracht nodig heeft.", punten: 2, vraagtype: "K-HEF" }).rtti, "I");
     assert.equal(rttiVolgensRegels({ type: "open", stam: "Leg uit waarom het ijs smelt.", punten: 1, vraagtype: "W-FASE" }).rtti, "T2");
+    // Gesloten 1p zonder getallen: nooit I/T2 (r7: sirene-MC kreeg I, juist-onjuist over dB kreeg T2).
+    assert.equal(rttiVolgensRegels({ type: "meerkeuze", stam: "Wat gebeurt er met de toonhoogte als de frequentie toeneemt?", opties: ["Hoger", "Lager", "Gelijk", "Weg"], punten: 1, vraagtype: "G-FREQ" }).rtti, "T1");
+    assert.equal(rttiVolgensRegels({ type: "juist-onjuist", stam: "Een grotere amplitude geeft een zachter geluid.", opties: ["Juist", "Onjuist"], punten: 1, vraagtype: "G-DB" }).rtti, "R");
+    // r7: noteer-vraag bij type met basis T2 is gewoon R; "leg uit wat/hoe" bij basis T1 is geen I.
+    assert.equal(rttiVolgensRegels({ type: "open", stam: "Noteer met welk apparaat en in welke eenheid je geluidssterkte meet.", punten: 1, vraagtype: "G-DB" }).rtti, "R");
+    assert.equal(rttiVolgensRegels({ type: "open", stam: "Leg uit wat er met de amplitude gebeurt als Lotte harder zingt.", punten: 1, vraagtype: "G-DB" }).rtti, "T2");
+    assert.equal(rttiVolgensRegels({ type: "open", stam: "Leg uit hoe het geluid van de luidspreker bij haar oren komt.", punten: 2, vraagtype: "G-BRON", contextTitel: "Muziek" }).rtti, "T2");
+    assert.equal(rttiVolgensRegels({ type: "open", stam: "Leg uit wat het verschil is tussen geluid absorberen en weerkaatsen.", punten: 2, vraagtype: "G-BRON" }).rtti, "T1");
+    // Met getallen blijft een gesloten vraag een toepassing.
+    assert.notEqual(rttiVolgensRegels({ type: "meerkeuze", stam: "Vier telefoons maken elk even hard geluid. Hoe groot is de geluidssterkte samen van alle telefoons?", opties: [{ letter: "A", tekst: "75 dB" }, { letter: "B", tekst: "81 dB" }], punten: 1, vraagtype: "G-DB" }).rtti, "R");
   });
   it("labelRtti zet label + reden en laat vakken zonder vraagtype met rust", () => {
     const [a, b] = labelRtti([v(1, { vraagtype: "K-SOORT", rtti: "T2", stam: "Noem de kracht." }), v(2, { rtti: "I" })]);

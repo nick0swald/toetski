@@ -31,9 +31,9 @@ export const RTTI_META: Record<Rtti, { kort: string; naam: string; uitleg: strin
 
 export const RTTI_PRESETS: Record<string, { label: string; verdeling: RttiVerdeling }> = {
   onderbouw: { label: "Onderbouw (klas 1–2)", verdeling: { R: 35, T1: 40, T2: 20, I: 5 } },
-  bovenbouw: { label: "Klas 3", verdeling: { R: 25, T1: 40, T2: 25, I: 10 } },
+  bovenbouw: { label: "Klas 3", verdeling: { R: 25, T1: 40, T2: 27, I: 8 } },
   klas4: { label: "Klas 4 (richting examen)", verdeling: { R: 15, T1: 45, T2: 34, I: 6 } },
-  examen: { label: "CSE NaSk1 2013–2026 (referentie)", verdeling: { R: 7, T1: 55, T2: 36, I: 2 } },
+  examen: { label: "CSE NaSk1 2013–2026 (referentie)", verdeling: { R: 7, T1: 57, T2: 34, I: 2 } },
 };
 
 /**
@@ -41,10 +41,10 @@ export const RTTI_PRESETS: Record<string, { label: string; verdeling: RttiVerdel
  * (rtti-regels.ts, tools/examen-rtti.ts). Referentie voor klas 4.
  */
 export const RTTI_EXAMEN: Record<"BB" | "KB" | "GT" | "alle", RttiVerdeling> = {
-  BB: { R: 8, T1: 69, T2: 23, I: 0 },
-  KB: { R: 8, T1: 60, T2: 30, I: 2 },
-  GT: { R: 7, T1: 51, T2: 40, I: 2 },
-  alle: { R: 7, T1: 55, T2: 36, I: 2 },
+  BB: { R: 8, T1: 72, T2: 20, I: 0 },
+  KB: { R: 9, T1: 62, T2: 28, I: 1 },
+  GT: { R: 7, T1: 52, T2: 39, I: 2 },
+  alle: { R: 7, T1: 57, T2: 34, I: 2 },
 };
 
 export function presetVoorLeerjaar(jaar: 1 | 2 | 3 | 4): keyof typeof RTTI_PRESETS {

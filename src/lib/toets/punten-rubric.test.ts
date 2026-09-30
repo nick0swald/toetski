@@ -90,7 +90,8 @@ describe("repareerPunten", () => {
     assert.equal(out.vragen[0]!.punten, 3);
     assert.deepEqual(
       out.nakijkmodel[0]!.puntenverdeling.map((p) => p.criterium),
-      ["juist omrekenen of aflezen van de benodigde waarde", "gebruik van de juiste formule (grootheden benoemd)", "rest van de berekening juist (uitkomst met eenheid)"],
+      // Niets om te rekenen/af te lezen in de stam → het derde punt is het invulpunt (Nick: 1 punt per echte stap).
+      ["juiste waarden ingevuld (formule zo nodig omgeschreven)", "gebruik van de juiste formule (grootheden benoemd)", "rest van de berekening juist (uitkomst met eenheid)"],
     );
     assert.equal(
       out.nakijkmodel[0]!.puntenverdeling.reduce((s, p) => s + p.punt, 0),

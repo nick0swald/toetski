@@ -99,8 +99,20 @@ export function figuurVerwijzingenZonderFiguur(q: Vraag, n?: NakijkItem): string
       if (!heeftBeeld) out.push(m[0]);
     }
   }
+  // Aanduiden op een voorwerp ("geef het draaipunt aan", "teken de armen") kan alleen als dat voorwerp getekend is.
+  if (!heeftBeeld) {
+    const zin = (q.stam.match(/[^.!?]+[.!?]*/g) ?? []).find((z) => AANDUIDEN.some((re) => re.test(z)) && !/hoe\s+groot|bereken|hoeveel/i.test(z));
+    if (zin) out.push(zin.trim());
+  }
   return [...new Set(out)];
 }
+
+/** Een plek op een (niet getekend) voorwerp aanwijzen of er iets in tekenen. */
+const PLEK = String.raw`\b(?:aangrijpingspunt(?:en)?|draaipunt|zwaartepunt|armen|arm|werklijn(?:en)?)\b`;
+const AANDUIDEN = [
+  new RegExp(String.raw`\b(?:teken|markeer|omcirkel)\b[^.?!]{0,60}?` + PLEK, "i"),
+  new RegExp(String.raw`\bgeef\b[^.?!]{0,60}?` + PLEK + String.raw`[^.?!]{0,40}\baan\b`, "i"),
+];
 
 function zinnen(t: string): string[] {
   return t.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((z) => z.trim()).filter(Boolean) ?? [];
@@ -143,10 +155,20 @@ export function borgFiguurVerwijzingen(
       });
       return blijf.map((z) => z.replace(LOS_FIGUURDEEL, "").replace(/\s{2,}/g, " ").replace(/\s+([,.?!])/g, "$1")).join(" ").trim();
     };
+    const voorTekst = `${q.context ?? ""} ${q.stam}`;
     q.context = schoon(q.context, false) || undefined;
     q.stam = schoon(q.stam, true) ?? q.stam;
+    // Stond de introductie van het voorwerp ("... op een pot") alleen in een weggehaalde zin, dan is de rest
+    // ("voordat Emma de pot opent") zonder antecedent: dan liever de vraag eruit dan een kapotte zin.
+    const naTekst = `${q.context ?? ""} ${q.stam}`;
+    const weg = zinnen(voorTekst).filter((z) => !naTekst.includes(z.replace(LOS_FIGUURDEEL, "").trim())).join(" ").toLowerCase();
+    const wees = [...naTekst.matchAll(/\b(?:de|het|deze|dit|die)\s+([a-zà-ÿ]{3,})\b/gi)].some((m) => {
+      const w = m[1]!.toLowerCase();
+      if (/^(figuur|grafiek|tabel|stof|vraag|antwoord|zin|volgende|juiste|eenheid|formule)$/.test(w)) return false;
+      return new RegExp(`\\b${w}\\b`).test(weg) && !new RegExp(`\\b(?:een|twee|drie)\\s+(?:[a-zà-ÿ-]+\\s+)?${w}\\b`, "i").test(naTekst);
+    });
     const n = n0 ? { ...n0, puntenverdeling: (n0.puntenverdeling ?? []).map((p) => ({ ...p, criterium: p.criterium.replace(LOS_FIGUURDEEL, "").trim() })) } : undefined;
-    if (!figuurVerwijzingenZonderFiguur(q, n).length && q.stam.trim().length > 10) {
+    if (!wees && !figuurVerwijzingenZonderFiguur(q, n).length && q.stam.trim().length > 10) {
       uitV.push(q);
       if (n) uitN = uitN.map((x) => (x.nummer === n.nummer ? n : x));
       meldingen.push(`Vraag ${q.nummer}: verwijzing naar een figuur weggehaald (er staat geen figuur bij).`);
