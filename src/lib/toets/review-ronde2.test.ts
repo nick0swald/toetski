@@ -5,6 +5,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { detecteerItemIssues, isStubContext, isVraagzinStelling, repareerItemsDeterministisch, tekortPunten, vaagObjectBegin } from "./item-kwaliteit.ts";
 import { lengteIssues, werkVragenAf } from "./afwerken.ts";
+import { controleIssues, parseControle } from "./inhoud-controle.ts";
+import { vraagZonderFiguur, wijstOpTegenspraak } from "./figuren/fallback.ts";
 import { isSymboolnaam, voorcheckNietTonen } from "./figuren/keuring.ts";
 import { plaatsPictogrammen } from "./bron-figuren.ts";
 import { eersteRondeEinde } from "./voortgang.ts";
@@ -80,8 +82,8 @@ describe("ronde 1: lengte en afwerken", () => {
   it("afwerkbudget past binnen 100 s", () => {
     assert.equal(afwerkBudget(undefined), 60_000);
     assert.equal(afwerkBudget(20_000), 60_000);
-    assert.equal(afwerkBudget(45_000), 43_000);
-    assert.equal(afwerkBudget(80_000), 25_000);
+    assert.equal(afwerkBudget(45_000), 45_000);
+    assert.equal(afwerkBudget(80_000), 30_000);
   });
 });
 
@@ -103,5 +105,77 @@ describe("ronde 1: figuren", () => {
     const q = v(5, "Welk veiligheidsbord hangt bij de machine waar je gehoorbescherming moet dragen?", { pictogram: "gezondheidsgevaar" as Vraag["pictogram"] });
     const [uit] = plaatsPictogrammen([q], [{ nummer: 5, modelantwoord: "Gehoorbescherming verplicht", puntenverdeling: [] }]);
     assert.equal(uit!.pictogram, "gebod-gehoorbescherming");
+  });
+});
+
+describe("ronde 2: strengere afwerking", () => {
+  const oordeel = (nummer: number, extra: Record<string, unknown> = {}) => ({ nummer, eigenAntwoord: "", juisteOpties: [], oplosbaar: true, ontbreekt: "", realistisch: true, realisme: "", helder: true, helderheid: "", rubriekOk: true, rubriek: "", rtti: "T1", ...extra });
+  it("open vraag met fout modelantwoord → sleutel-fout", () => {
+    const o = parseControle(JSON.stringify({ oordelen: [oordeel(1, { eigenAntwoord: "2,4 m", modelantwoordKlopt: false })] }));
+    const iss = controleIssues([v(1, "Bereken r.", { type: "berekening", punten: 4 })], [{ nummer: 1, modelantwoord: "1,35 m", puntenverdeling: [] }], o);
+    assert.ok(iss.some((i) => i.code === "sleutel-fout" && /2,4 m/.test(i.uitleg)));
+  });
+  it("vraag die na reparatie en vervanging onbruikbaar blijft, gaat eraf en er wordt doorgenummerd", async () => {
+    const vragen = Array.from({ length: 10 }, (_, i) => v(i + 1, `Leg uit waarom stof ${i + 1} oplost in water.`));
+    const nakijk: NakijkItem[] = vragen.map((q) => ({ nummer: q.nummer, modelantwoord: "x", puntenverdeling: [{ criterium: "uitleg", punt: 1 }] }));
+    const res = await werkVragenAf({
+      vragen,
+      nakijkmodel: nakijk,
+      bron: "",
+      vak: "NaSk",
+      skipOrder: true,
+      budgetMs: 60_000,
+      controleer: async (p) => {
+        const nrs = [...p.matchAll(/"nummer":(\d+)/g)].map((m) => Number(m[1]));
+        return JSON.stringify({ oordelen: [...new Set(nrs)].map((nr) => oordeel(nr, nr === 4 ? { oplosbaar: false, ontbreekt: "massa" } : {})) });
+      },
+      repair: async () => null,
+    });
+    assert.equal(res.vragen.length, 9);
+    assert.deepEqual(res.vragen.map((q) => q.nummer), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert.ok(!res.vragen.some((q) => /stof 4 /.test(q.stam)));
+    assert.deepEqual(res.controle?.verwijderd, [4]);
+    assert.deepEqual(res.controle?.blijft, []);
+  });
+  it("zonder plaatjes: pictogram weg vóór de controle", async () => {
+    let gezien = "";
+    await werkVragenAf({
+      vragen: [v(1, "Noem twee veiligheidsmaatregelen.", { punten: 2, pictogram: "gebod-gehoorbescherming" as Vraag["pictogram"] })],
+      nakijkmodel: [{ nummer: 1, modelantwoord: "bril, haar vast", puntenverdeling: [{ criterium: "a", punt: 1 }, { criterium: "b", punt: 1 }] }],
+      bron: "",
+      vak: "NaSk",
+      figuren: "geen",
+      controleer: async (p) => {
+        gezien = p;
+        return JSON.stringify({ oordelen: [oordeel(1)] });
+      },
+      repair: async () => null,
+    });
+    assert.doesNotMatch(gezien, /gehoorbescherming/);
+  });
+  it("context niet herhalen in de stam; 'maakt geen fouten' is geen criterium", () => {
+    const q = v(6, "Bij Frituur De Vette Hap staat een afzuiger van 89 dB. Hoe lang mag Daan er werken?", { context: "Bij Frituur De Vette Hap staat een afzuiger van 89 dB." });
+    const r = repareerItemsDeterministisch([q], [{ nummer: 6, modelantwoord: "1 uur", puntenverdeling: [{ criterium: "gebruikt geen kenmerken van een ander mengsel", punt: 1 }] }], "");
+    assert.equal(r.vragen[0]!.stam, "Hoe lang mag Daan er werken?");
+    assert.ok(r.issues.some((i) => i.code === "rubriek"));
+  });
+  it("'noem drie' mag 2 punten (staffel), 'noem drie en leg uit' niet", () => {
+    assert.equal(tekortPunten(v(1, "Noem drie soorten krachten.", { punten: 2 })), null);
+    assert.ok(tekortPunten(v(1, "Noem drie stofeigenschappen. Leg uit waarom je niet mag proeven.", { punten: 2 })));
+  });
+  it("te kort: eerst open vragen uitbreiden, MC-aandeel blijft ≥ 50%", () => {
+    const mcV = (n: number) => v(n, `MC ${n}`, { type: "meerkeuze", opties: [{ letter: "A", tekst: "a" }, { letter: "B", tekst: "b" }] });
+    const vragen = [mcV(1), mcV(2), mcV(3), mcV(4), mcV(5), mcV(6), v(7, "Leg uit."), v(8, "Leg uit.", { punten: 2 }), v(9, "Bereken.", { punten: 3 }), v(10, "Leg uit.")];
+    const iss = lengteIssues(vragen, 20, new Set());
+    const nrs = iss.map((i) => i.nummer);
+    assert.ok(nrs.includes(7) && nrs.includes(8) && nrs.includes(10));
+    assert.ok(!nrs.includes(9));
+    assert.ok(nrs.filter((nr) => nr <= 6).length <= 1);
+  });
+  it("figuur die de vraag tegenspreekt, wordt geen tabel", () => {
+    assert.equal(wijstOpTegenspraak(["Grafiek toont T = 0,004 s wat f = 250 Hz impliceert; directe tegenspraak"]), true);
+    const spec = { soort: "lijngrafiek", data: { xLabel: "t", yLabel: "u", reeksen: [{ naam: "a", punten: [{ x: 0, y: 0 }, { x: 1, y: 2 }] }] }, nietTonen: [] } as unknown as FiguurSpec;
+    const q = v(11, "Bereken de trillingstijd bij 220 Hz.");
+    assert.notEqual(vraagZonderFiguur(q, spec, { legacy: true, verwijst: true, tegenspraak: true }).fallback, "tabel");
   });
 });

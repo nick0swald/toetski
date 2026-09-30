@@ -5,6 +5,11 @@ import { zonderLegacyFiguren } from "./bevriezing.ts";
 
 const FIGUURWOORD = /\b(de |het |deze |onderstaande |bovenstaande )?(figuur|grafiek|diagram|afbeelding|plaatje|tekening)( hieronder| hierboven| hiernaast)?\b/gi;
 
+/** Keuringsredenen die op tegenspraak met de vraag wijzen. */
+export function wijstOpTegenspraak(redenen: string[] = []): boolean {
+  return redenen.some((r) => /tegenspraak|spreekt? .{0,40}tegen|klopt? niet met|kloppen niet met|impliceert/i.test(r));
+}
+
 function vervangWoorden(s: string | undefined, door: string): string | undefined {
   if (!s) return s;
   return s.replace(FIGUURWOORD, door).replace(/\s{2,}/g, " ").trim();
@@ -45,12 +50,13 @@ function tabelUitSpec(spec: FiguurSpec): VraagTabel | null {
 export function vraagZonderFiguur(
   q: Vraag,
   spec: FiguurSpec,
-  opts: { legacy: boolean; verwijst: boolean },
+  opts: { legacy: boolean; verwijst: boolean; tegenspraak?: boolean },
 ): { vraag: Vraag; fallback: NonNullable<FiguurRapportItem["fallback"]> } {
   const kaal = zonderLegacyFiguren(q);
   // Nieuwe (geplande) figuur die de vraag niet nodig had: vraag blijft zoals hij was.
   if (!opts.legacy && !opts.verwijst) return { vraag: kaal, fallback: "geen-figuur" };
-  const tabel = !kaal.tabel ? tabelUitSpec(spec) : null;
+  // Figuurdata die de vraag tegenspreekt, wordt ook geen tabel.
+  const tabel = !kaal.tabel && !opts.tegenspraak ? tabelUitSpec(spec) : null;
   if (tabel) {
     return {
       vraag: {

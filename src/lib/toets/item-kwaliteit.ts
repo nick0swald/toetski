@@ -258,10 +258,11 @@ export function isVraagzinStelling(q: Vraag): boolean {
 export function tekortPunten(q: Vraag): string | null {
   if (q.opties?.length) return null;
   const t = q.stam.toLowerCase();
-  const m = t.match(/\b(?:noem|geef|beschrijf|schrijf op)\s+(twee|drie|vier|vijf)\b/);
+  const m = t.match(/\b(?:noem|geef|beschrijf|schrijf op)\s+(?:de\s+)?(twee|drie|vier|vijf)\b/);
   const n = m ? TELWOORD[m[1]!]! : 0;
   const uitleg = /\b(leg (?:ook )?uit|verklaar|waarom)\b/.test(t) ? 1 : 0;
-  const nodig = Math.max(n, 1) + (uitleg && (n || /\b(noem|geef)\b/.test(t)) ? 1 : 0);
+  // 'Noem drie' mag 2 punten met een staffel; 'noem twee' = 2 punten; een uitleg is een extra punt.
+  const nodig = (n >= 3 ? n - 1 : Math.max(n, 1)) + (uitleg && (n || /\b(noem|geef)\b/.test(t)) ? 1 : 0);
   if (nodig > (q.punten ?? 1) && nodig >= 2) return `Vraagt ${nodig} onderdelen maar geeft ${q.punten} punt(en); maak de punten gelijk aan het aantal gevraagde onderdelen of vraag minder.`;
   return null;
 }
@@ -285,6 +286,11 @@ function repareerContext(q: Vraag, n: NakijkItem | undefined, issues: ItemIssue[
   if (/kurkplug|waterbuis/i.test(c)) {
     issues.push({ nummer: q.nummer, code: "context-onrealistisch", uitleg: "Een kurkplug in een waterbuis is geen realistische context." });
     c = "Een kurk valt in een emmer water.";
+  }
+  // Stam die met (bijna) dezelfde zin als de context begint: herhaling eruit.
+  if (c && q.stam.trim().toLowerCase().startsWith(c.toLowerCase().replace(/[.!?]\s*$/, ""))) {
+    const rest = q.stam.trim().slice(c.replace(/[.!?]\s*$/, "").length).replace(/^[.!?]?\s*/, "");
+    if (rest.length > 10) q.stam = rest;
   }
   // Losse stub als context ("pictogram", "Werkplaats") zegt niets: weg ermee.
   if (c && isStubContext(c)) {
@@ -478,6 +484,9 @@ function verzamel(vragen: Vraag[], nakijk: NakijkItem[], bron: string): ItemIssu
     }
     if (isVraagzinStelling(q)) {
       issues.push({ nummer: q.nummer, code: "onhelder", uitleg: "Juist/onjuist met een vraagzin; maak er een stelling van die juist of onjuist is." });
+    }
+    if ((n?.puntenverdeling ?? []).some((p) => /^(gebruikt|noemt|maakt|geeft|bevat) geen\b|\balles (goed|juist)\b/i.test(p.criterium.trim()))) {
+      issues.push({ nummer: q.nummer, code: "rubriek", uitleg: "Een rubriekcriterium is geen los te scoren onderdeel ('maakt geen fouten'); geef 1 punt per gevraagd onderdeel." });
     }
     const tekort = tekortPunten(q);
     if (tekort) issues.push({ nummer: q.nummer, code: "rubriek", uitleg: tekort });

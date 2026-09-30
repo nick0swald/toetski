@@ -11,7 +11,7 @@ import type {
   Vraag,
 } from "../types.ts";
 import { bewaakFiguren, diepBevriezen, figuurIsGeldig, zonderLegacyFiguren } from "./bevriezing.ts";
-import { vraagZonderFiguur } from "./fallback.ts";
+import { vraagZonderFiguur, wijstOpTegenspraak } from "./fallback.ts";
 import type { FiguurOpdracht, FiguurUitkomst } from "./pijplijn.ts";
 import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, heeftLegacyFiguur, isCodeFiguur, legacySpecs, veiligeNieuweStam } from "./spec.ts";
 
@@ -223,7 +223,7 @@ export async function verwerkFiguren(
         items.push({ nummer: job.nummer, soort: job.spec.soort, bron, status: "gedropt", pogingen, redenen, fallback: h.actie });
         return;
       }
-      const fb = vraagZonderFiguur(q, job.spec, { legacy: job.legacy, verwijst: job.verwijst });
+      const fb = vraagZonderFiguur(q, job.spec, { legacy: job.legacy, verwijst: job.verwijst, tegenspraak: wijstOpTegenspraak(redenen) });
       vragen = vragen.map((v) => (v.nummer === job.nummer ? fb.vraag : v));
       items.push({ nummer: job.nummer, soort: job.spec.soort, bron, status: "gedropt", pogingen, redenen, fallback: fb.fallback });
     });

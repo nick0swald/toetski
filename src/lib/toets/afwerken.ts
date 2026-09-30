@@ -21,6 +21,7 @@ Helder: noem elk ding/apparaat eerst concreet voordat je 'de/dit/deze' gebruikt.
 Contexten: alledaagse situaties of verzonnen bedrijven (mag grappig, passend bij 12–16-jarigen, bijv. 'Frituur De Vette Hap'). NOOIT een schoolnaam of 'leerbedrijf van school'. Personen: Nederlandse voornamen (Sanne, Daan, Lotte, Bram).
 Juist/onjuist: opties precies "Juist" en "Onjuist". Meerkeuze: modelantwoord = letter + tekst.
 Rekenvragen: rubriek in stappen (formule, invullen/berekenen, antwoord met eenheid), één fout kost 1 punt, doorrekenen met een eigen foute waarde telt.
+Rubriek: elk criterium is één los te scoren onderdeel (1 punt per gevraagd ding); geen criteria als 'maakt geen fouten'. Punten = aantal gevraagde onderdelen. Herhaal de context niet in de stam.
 Vraag om een andere RTTI of een andere paragraaf: schrijf een nieuwe vraag die daar echt bij past en zet rtti/domein goed.
 Pictogramvragen: veld pictogram (GHS-symbool of veiligheidsbord, bijv. gebod-gehoorbescherming) en beschrijf het symbool niet in de stam; de rubriek noemt hetzelfde soort pictogram. Een bestaande goedgekeurde figuur (figuurverwijzing) blijft; pas alleen de tekst aan zodat die klopt met de figuur.`;
 
@@ -75,6 +76,22 @@ function inStukken<T>(lijst: T[], grootte: number): T[][] {
   for (let i = 0; i < lijst.length; i += grootte) out.push(lijst.slice(i, i + grootte));
   return out;
 }
+
+function zonderFiguurVelden(q: Vraag): Vraag {
+  const spec = legacySpecs(q)[0];
+  return spec ? vraagZonderFiguur(q, spec, { legacy: true, verwijst: true }).vraag : zonderLegacyFiguren(q);
+}
+
+/** Onafhankelijk RTTI-oordeel telt (eerlijk herlabelen). */
+function herlabel(vragen: Vraag[], oordelen: ControleOordeel[]): Vraag[] {
+  return vragen.map((q) => {
+    const o = oordelen.find((x) => x.nummer === q.nummer);
+    return o?.rtti && o.rtti !== q.rtti ? { ...q, rtti: o.rtti } : q;
+  });
+}
+
+/** Codes waarbij een vraag niet op het blad mag blijven (geen/verkeerde sleutel, niet oplosbaar). */
+export const ONBRUIKBAAR = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt"]);
 
 /** Onafhankelijke controle, parallel in stukjes van 4 vragen (sneller, minder lange uitvoer). */
 async function controleerVragen(
@@ -140,21 +157,25 @@ async function repareerRonde(
 export function lengteIssues(vragen: Vraag[], doelPunten: number | undefined, vermijd: Set<number>): ItemIssue[] {
   if (!doelPunten) return [];
   const totaal = vragen.reduce((s, q) => s + (q.punten ?? 1), 0);
-  if (totaal >= Math.round(doelPunten * 0.9)) return [];
+  if (totaal >= doelPunten - 2) return [];
   let tekort = doelPunten - totaal;
-  const kandidaten = vragen
-    .filter((q) => !vermijd.has(q.nummer) && (q.punten ?? 1) <= 1 && !q.figuur && !q.figuurId && !q.pictogram)
-    .sort((a, b) => Number(!!b.opties?.length) - Number(!!a.opties?.length) || (a.rtti === "R" ? 1 : 0) - (b.rtti === "R" ? 1 : 0));
+  const vrij = (q: Vraag) => !vermijd.has(q.nummer) && !q.figuur && !q.figuurId && !q.pictogram;
   const out: ItemIssue[] = [];
-  for (const q of kandidaten) {
+  const kop = `De toets is te kort (${totaal} van ${doelPunten} punten voor deze tijd).`;
+  // 1) Open vragen van 1–2 punten krijgen een extra onderdeel (uitleg/berekening): MC-aandeel blijft gelijk.
+  for (const q of vragen.filter((x) => vrij(x) && !x.opties?.length && (x.punten ?? 1) <= 2).sort((a, b) => (a.punten ?? 1) - (b.punten ?? 1))) {
     if (tekort <= 0 || out.length >= 5) break;
-    const nieuw = tekort >= 2 && q.rtti !== "R" && out.length === 0 ? 3 : 2;
-    tekort -= nieuw - (q.punten ?? 1);
-    out.push({
-      nummer: q.nummer,
-      code: "lengte",
-      uitleg: `De toets is te kort (${totaal} van ${doelPunten} punten voor deze tijd). Herschrijf deze vraag tot een OPEN vraag van ${nieuw} punten over hetzelfde leerdoel (rtti ${q.rtti}), bijv. noem + leg uit, of een korte berekening met gegevens in de tekst. Geef een rubriek met ${nieuw} criteria van elk 1 punt.`,
-    });
+    const nieuw = (q.punten ?? 1) + 1;
+    tekort -= 1;
+    out.push({ nummer: q.nummer, code: "lengte", uitleg: `${kop} Breid deze open vraag uit met één extra onderdeel (bijv. 'leg uit waarom' of een rekenstap met gegevens in de tekst) en maak er ${nieuw} punten van, zelfde leerdoel en rtti ${q.rtti}. Rubriek: ${nieuw} criteria van elk 1 punt.` });
+  }
+  // 2) Pas daarna gesloten vragen omzetten, zolang minstens de helft gesloten blijft.
+  let gesloten = vragen.filter((q) => q.opties?.length).length;
+  for (const q of vragen.filter((x) => vrij(x) && x.opties?.length && x.rtti !== "R")) {
+    if (tekort <= 0 || out.length >= 5 || (gesloten - 1) * 2 < vragen.length) break;
+    gesloten -= 1;
+    tekort -= 1;
+    out.push({ nummer: q.nummer, code: "lengte", uitleg: `${kop} Herschrijf deze vraag tot een OPEN vraag van 2 punten over hetzelfde leerdoel (rtti ${q.rtti}), bijv. noem + leg uit. Rubriek: 2 criteria van elk 1 punt.` });
   }
   return out;
 }
@@ -220,6 +241,8 @@ export async function werkVragenAf(input: {
   let stap = repareerItemsDeterministisch(input.vragen, input.nakijkmodel, bron);
   let vragen = stap.vragen;
   let nakijk = stap.nakijkmodel;
+  // Zonder plaatjes: figuurvelden er meteen uit, zodat controle en reparatie geen spookfiguren beoordelen.
+  if (input.figuren === "geen") vragen = vragen.map(zonderFiguurVelden);
   const paragrafen = extractParagrafen(bron, input.antwoorden);
   const bronW = { lesstof: bron, antwoorden: input.antwoorden };
   let controle: ControleLog | undefined;
@@ -228,15 +251,11 @@ export async function werkVragenAf(input: {
     const gevonden: ControleBevinding[] = [];
     const vervangen: number[] = [];
     const nietHercontroleerd: number[] = [];
+    const verwijderd: number[] = [];
     try {
       const eerste = await controleerVragen(vragen, nakijk, bronW, input.controleer);
       // Onafhankelijk RTTI-oordeel telt (eerlijk herlabelen), daarna pas balanceren.
-      if (eerste.gelukt) {
-        vragen = vragen.map((q) => {
-          const o = eerste.oordelen.find((x) => x.nummer === q.nummer);
-          return o?.rtti && o.rtti !== q.rtti ? { ...q, rtti: o.rtti } : q;
-        });
-      }
+      if (eerste.gelukt) vragen = herlabel(vragen, eerste.oordelen);
       const inhoud = controleIssues(vragen, nakijk, eerste.oordelen);
       const heur = stap.issues;
       const bezet = new Set([...inhoud, ...heur].map((i) => i.nummer));
@@ -258,14 +277,17 @@ export async function werkVragenAf(input: {
         const gewijzigd = [...new Set(r1.gewijzigd)];
         const nietGerepareerd = alle.filter((i) => !gewijzigd.includes(i.nummer));
         let hercontrole: ItemIssue[] = [];
-        if (gewijzigd.length && rest() > 10_000) {
+        if (gewijzigd.length && rest() > 6_000) {
           const tweede = await controleerVragen(vragen.filter((q) => gewijzigd.includes(q.nummer)), nakijk, bronW, input.controleer);
+          vragen = herlabel(vragen, tweede.oordelen);
           hercontrole = controleIssues(vragen, nakijk, tweede.oordelen);
+        } else if (gewijzigd.length) {
+          nietHercontroleerd.push(...gewijzigd);
         }
         const heurNa = det.issues.filter((i) => INHOUD.has(i.code));
         open = [...nietGerepareerd.filter((i) => INHOUD.has(i.code)), ...hercontrole, ...heurNa];
         const ernstig = open.filter((i) => ERNSTIG.has(i.code));
-        if (ernstig.length && rest() > 8_000) {
+        if (ernstig.length && rest() > 3_000) {
           const r2 = await repareerRonde(vragen, nakijk, ernstig, bron, input.repair, true);
           const det2 = repareerItemsDeterministisch(r2.vragen, r2.nakijkmodel, bron);
           vragen = det2.vragen;
@@ -275,8 +297,9 @@ export async function werkVragenAf(input: {
           // Oude bevindingen van vervangen vragen gelden niet meer; de nieuwe vraag opnieuw controleren als er tijd is.
           open = open.filter((i) => !r2.gewijzigd.includes(i.nummer));
           const nieuw = [...new Set(r2.gewijzigd)];
-          if (nieuw.length && rest() > 7_000) {
+          if (nieuw.length && rest() > -4_000) {
             const derde = await controleerVragen(vragen.filter((q) => nieuw.includes(q.nummer)), nakijk, bronW, input.controleer);
+            vragen = herlabel(vragen, derde.oordelen);
             open.push(...controleIssues(vragen, nakijk, derde.oordelen));
           } else {
             nietHercontroleerd.push(...nieuw);
@@ -284,18 +307,45 @@ export async function werkVragenAf(input: {
           open.push(...det2.issues.filter((i) => INHOUD.has(i.code) && nieuw.includes(i.nummer)));
         }
       }
-      const blijft = [...new Map(open.filter((i) => INHOUD.has(i.code)).map((i) => [`${i.nummer}:${i.code}`, i])).values()];
+      let blijft = [...new Map(open.filter((i) => INHOUD.has(i.code)).map((i) => [`${i.nummer}:${i.code}`, i])).values()];
+      // Na reparatie én vervanging nog steeds onbruikbaar (geen juiste sleutel of niet oplosbaar): van het blad af,
+      // zolang er genoeg vragen overblijven. Liever een vraag minder dan een foute vraag.
+      const weg = [...new Set(blijft.filter((i) => ONBRUIKBAAR.has(i.code)).map((i) => i.nummer))].slice(0, Math.max(0, vragen.length - 8));
+      if (weg.length) {
+        vragen = vragen.filter((q) => !weg.includes(q.nummer));
+        nakijk = nakijk.filter((n) => !weg.includes(n.nummer));
+        blijft = blijft.filter((i) => !weg.includes(i.nummer));
+        verwijderd.push(...weg);
+      }
       const probleemNrs = new Set(gevonden.map((g) => g.nummer));
       controle = {
         gecontroleerd: eerste.gelukt,
         gevonden,
-        opgelost: [...probleemNrs].filter((nr) => !blijft.some((b) => b.nummer === nr)),
+        opgelost: [...probleemNrs].filter((nr) => !blijft.some((b) => b.nummer === nr) && !verwijderd.includes(nr)),
         vervangen: [...new Set(vervangen)],
-        ...(nietHercontroleerd.length ? { nietHercontroleerd: [...new Set(nietHercontroleerd)] } : {}),
+        ...(nietHercontroleerd.length ? { nietHercontroleerd: [...new Set(nietHercontroleerd)].filter((nr) => !verwijderd.includes(nr)) } : {}),
+        ...(verwijderd.length ? { verwijderd } : {}),
         blijft: blijft.map((i) => ({ nummer: i.nummer, code: i.code, uitleg: i.uitleg })),
         duurMs: nu() - t0,
         ...(eerste.gelukt ? {} : { fout: "controlemodel gaf geen oordeel" }),
       };
+      if (verwijderd.length) {
+        // Doornummeren zonder gaten; het log volgt de nieuwe nummers.
+        const nieuwNr = new Map(vragen.map((q, i) => [q.nummer, i + 1]));
+        vragen = vragen.map((q, i) => ({ ...q, nummer: i + 1 }));
+        nakijk = nakijk.map((n) => ({ ...n, nummer: nieuwNr.get(n.nummer) ?? n.nummer }));
+        const nr = (x: number) => nieuwNr.get(x);
+        const bev = (l: ControleBevinding[]) => l.filter((g) => nr(g.nummer) !== undefined).map((g) => ({ ...g, nummer: nr(g.nummer)! }));
+        const lijst = (l: number[]) => l.map(nr).filter((x): x is number => x !== undefined);
+        controle = {
+          ...controle,
+          gevonden: bev(controle.gevonden),
+          blijft: bev(controle.blijft),
+          opgelost: lijst(controle.opgelost),
+          vervangen: lijst(controle.vervangen),
+          ...(controle.nietHercontroleerd ? { nietHercontroleerd: lijst(controle.nietHercontroleerd) } : {}),
+        };
+      }
     } catch (err) {
       controle = { gecontroleerd: 0, gevonden, opgelost: [], vervangen, blijft: [], duurMs: nu() - t0, fout: err instanceof Error ? err.message.slice(0, 120) : "fout" };
     }
@@ -322,10 +372,7 @@ export async function werkVragenAf(input: {
   const figMode = input.figuren ?? "nodig";
   vragen =
     figMode === "geen"
-      ? punten.vragen.map((q) => {
-          const spec = legacySpecs(q)[0];
-          return spec ? vraagZonderFiguur(q, spec, { legacy: true, verwijst: true }).vraag : zonderLegacyFiguren(q);
-        })
+      ? punten.vragen.map(zonderFiguurVelden)
       : figMode === "minimaal"
         ? verzekerBronFiguren(punten.vragen, bron, detectVakProfiel(input.vak, bron), punten.nakijkmodel)
         : plaatsMaatcilinders(plaatsPictogrammen(punten.vragen, punten.nakijkmodel));

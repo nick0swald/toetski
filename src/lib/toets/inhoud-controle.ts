@@ -12,6 +12,8 @@ export interface ControleOordeel {
   nummer: number;
   eigenAntwoord: string;
   juisteOpties?: string[];
+  /** Open/berekening: klopt het modelantwoord met je eigen uitwerking? */
+  modelantwoordKlopt?: boolean;
   oplosbaar: boolean;
   ontbreekt?: string;
   realistisch: boolean;
@@ -27,13 +29,13 @@ export const CONTROLE_SYSTEM = `Je bent een strenge NaSk-docent en toetscontrole
 Bron van waarheid: het antwoordenboek en de lesstof hieronder; daarna standaard Binas-waarden (geluidssnelheid in lucht 343 m/s bij 20 °C, in water ongeveer 1500 m/s, in staal ongeveer 5000–6000 m/s; g = 9,8 N/kg; dichtheid water 1,0 g/cm³).
 Beoordeel per vraag:
 1. eigenAntwoord: jouw eigen korte uitwerking/antwoord.
-2. juisteOpties (alleen meerkeuze/juist-onjuist): ALLE letters die volgens de bron juist zijn. Precies één is goed; nul of twee is een fout.
+2. juisteOpties (alleen meerkeuze/juist-onjuist): ALLE letters die volgens de bron juist zijn. Precies één is goed; nul of twee is een fout. modelantwoordKlopt (alle vragen): komt het modelantwoord overeen met jouw eigen uitwerking (getal, eenheid, begrip)? Reken zelf na.
 3. oplosbaar: staan ALLE gegevens die nodig zijn in de context, stam, tabel of figuurgegevens (of standaard in Binas)? Zo nee: ontbreekt = welk gegeven. Het modelantwoord mag geen getal gebruiken dat de leerling nergens kan vinden.
-4. realistisch: kloppen de getallen met de situatie (afstanden, tijden, snelheden, massa's, temperaturen, prijzen, afmetingen), is de situatie natuurkundig mogelijk en herkenbaar voor een vmbo-leerling, en spreken context, figuurgegevens en antwoord elkaar niet tegen? Voorbeelden van NIET realistisch: een echo van een kaswand op 200 m, de knal van een schrikdraadapparaat horen op 500 m, een fietser met 90 km/h, een kopje thee van 5 kg, 'na 4 seconden hoort ze de knal' zonder dat de leerling weet wanneer de knal begon (een tijdsverschil meet je alleen met een startsignaal: lichtflits, zichtbare slag of eigen roep), een meting die in de praktijk niet zo gaat. Zo nee: realisme = wat er mis is en een realistische waarde.
+4. realistisch: kloppen de getallen met de situatie (afstanden, tijden, snelheden, massa's, temperaturen, prijzen, afmetingen), is de situatie natuurkundig mogelijk en herkenbaar voor een vmbo-leerling, en spreken context, figuurgegevens en antwoord elkaar niet tegen? Voorbeelden van NIET realistisch: een echo van een kaswand op 200 m, de knal van een schrikdraadapparaat horen op 500 m, een fietser met 90 km/h, een kopje thee van 5 kg, 'na 4 seconden hoort ze de knal' zonder dat de leerling weet wanneer de knal begon (een tijdsverschil meet je alleen met een startsignaal: lichtflits, zichtbare slag of eigen roep), een echo in een lokaal, hal of sporthal met een wand verder dan ~60 m (echotijd hooguit ~0,35 s), een meting die in de praktijk niet zo gaat. Zo nee: realisme = wat er mis is en een realistische waarde.
 5. helder: is de vraag eenduidig; wordt elk ding/apparaat eerst genoemd voordat ernaar verwezen wordt ('de installatie', 'dit apparaat' zonder uitleg = niet helder); geen schoolnaam; geen verwijzing naar een figuur als er geen figuurgegevens zijn; 'Het flesje…' of 'De bak…' zonder te zeggen welk flesje/welke situatie = niet helder; juist/onjuist moet een stelling zijn (geen vraagzin); de leerling moet weten hoeveel dingen hij moet noemen. Zo nee: helderheid = wat.
-6. rubriekOk: past de puntenverdeling bij het antwoord, zijn deelpunten mogelijk bij rekenvragen (een fout kost 1 punt, niet alles), en noemt de rubriek het juiste begrip? Het aantal punten moet passen bij wat gevraagd wordt: 'noem twee … en leg uit' voor 1 punt = rubriek niet ok. Zo nee: rubriek = wat.
+6. rubriekOk: past de puntenverdeling bij het antwoord, zijn deelpunten mogelijk bij rekenvragen (een fout kost 1 punt, niet alles), en noemt de rubriek het juiste begrip? Elk rubriekcriterium is één los te scoren onderdeel (bijv. 1 punt per genoemd mengsel met kenmerk); criteria als 'gebruikt geen verkeerde kenmerken' of 'alles goed' zijn niet ok. Het aantal punten moet passen bij wat gevraagd wordt: 'noem twee … en leg uit' voor 1 punt = rubriek niet ok. Zo nee: rubriek = wat.
 7. rtti: R (reproductie), T1 (getrainde toepassing), T2 (toepassing in nieuwe situatie), I (inzicht).
-Antwoord ALLEEN met JSON: { "oordelen": [ { "nummer": number, "eigenAntwoord": string, "juisteOpties": string[], "oplosbaar": boolean, "ontbreekt": string, "realistisch": boolean, "realisme": string, "helder": boolean, "helderheid": string, "rubriekOk": boolean, "rubriek": string, "rtti": "R"|"T1"|"T2"|"I" } ] }`;
+Antwoord ALLEEN met JSON: { "oordelen": [ { "nummer": number, "eigenAntwoord": string, "juisteOpties": string[], "modelantwoordKlopt": boolean, "oplosbaar": boolean, "ontbreekt": string, "realistisch": boolean, "realisme": string, "helder": boolean, "helderheid": string, "rubriekOk": boolean, "rubriek": string, "rtti": "R"|"T1"|"T2"|"I" } ] }`;
 
 export function controlePrompt(
   vragen: Vraag[],
@@ -101,6 +103,7 @@ export function parseControle(raw: string | null | undefined): ControleOordeel[]
       juisteOpties: Array.isArray(r.juisteOpties)
         ? [...new Set(r.juisteOpties.map((x) => String(x).trim().toUpperCase().replace(/[^A-F]/g, "").slice(0, 1)).filter(Boolean))]
         : undefined,
+      ...(r.modelantwoordKlopt === false || r.modelantwoordKlopt === "false" ? { modelantwoordKlopt: false } : {}),
       oplosbaar: ja(r.oplosbaar),
       ontbreekt: tekstOf(r.ontbreekt),
       realistisch: ja(r.realistisch),
@@ -138,6 +141,9 @@ export function controleIssues(vragen: Vraag[], nakijk: NakijkItem[], oordelen: 
       } else if (sleutel && o.juisteOpties[0] !== sleutel) {
         issues.push({ nummer: q.nummer, code: "sleutel-fout", uitleg: `Onafhankelijke controle: juiste optie is ${o.juisteOpties[0]}, de sleutel zegt ${sleutel} (eigen antwoord: ${o.eigenAntwoord || "?"}). Controleer met de lesstof en herstel de sleutel of de opties.` });
       }
+    }
+    if (!q.opties?.length && o.modelantwoordKlopt === false && o.oplosbaar) {
+      issues.push({ nummer: q.nummer, code: "sleutel-fout", uitleg: `Onafhankelijke controle: het modelantwoord klopt niet (eigen uitwerking: ${o.eigenAntwoord || "?"}). Herstel modelantwoord en rubriek, of pas de gegevens aan.` });
     }
     if (!o.oplosbaar) issues.push({ nummer: q.nummer, code: "gegeven-ontbreekt", uitleg: `Niet oplosbaar: ${o.ontbreekt || "een benodigd gegeven ontbreekt"}. Zet het gegeven in de context/stam (of haal het uit het modelantwoord).` });
     if (!o.realistisch) issues.push({ nummer: q.nummer, code: "realisme", uitleg: `Niet realistisch: ${o.realisme || "getallen of situatie kloppen niet"}. Maak de situatie en getallen realistisch en pas het antwoord aan.` });
