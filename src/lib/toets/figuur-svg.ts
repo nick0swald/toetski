@@ -163,7 +163,7 @@ function ghsSymboolPad(soort: GhsSymbool, cx: number, cy: number): string {
 }
 
 /** Maatcilinder met af te lezen vloeistofstanden. */
-export function maatcilinderSvg(fig: MaatcilinderFiguur, W = 280, H = 320): string {
+export function maatcilinderSvg(fig: MaatcilinderFiguur, W = 280, H = 320, opts: { eenheid?: string } = {}): string {
   const max = Math.max(10, fig.maxMl || 100);
   const top = 36;
   const bottom = H - 28;
@@ -184,6 +184,11 @@ export function maatcilinderSvg(fig: MaatcilinderFiguur, W = 280, H = 320): stri
     return `<line x1="${left + 2}" y1="${y.toFixed(1)}" x2="${right - 2}" y2="${y.toFixed(1)}" stroke="${INK}" stroke-width="2" stroke-dasharray="5 3"/>
       <text x="${right + 8}" y="${(y + 4).toFixed(1)}" font-family="Arial" font-size="11" fill="${INK}">${escapeXml(s.label)}</text>`;
   });
+  // Vloeistof zichtbaar tot de laagste stand (beginstand), anders lijkt de cilinder leeg.
+  const laagste = (fig.standen ?? []).reduce((m, st) => Math.min(m, st.ml), Infinity);
+  const vulling = Number.isFinite(laagste) && laagste > 0
+    ? `<path d="M${left + 1} ${yOf(laagste).toFixed(1)} V${bottom} Q${(left + right) / 2} ${bottom + 15} ${right - 1} ${bottom} V${yOf(laagste).toFixed(1)} Z" fill="#d6e8fa" stroke="none"/>`
+    : "";
   const titel = fig.titel
     ? `<text x="${W / 2}" y="18" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="${INK}">${escapeXml(fig.titel)}</text>`
     : "";
@@ -193,9 +198,10 @@ export function maatcilinderSvg(fig: MaatcilinderFiguur, W = 280, H = 320): stri
   ${titel}
   <path d="M${left} ${top} V${bottom} Q${(left + right) / 2} ${bottom + 16} ${right} ${bottom} V${top}" fill="none" stroke="${INK}" stroke-width="2"/>
   <line x1="${left}" y1="${top}" x2="${right}" y2="${top}" stroke="${INK}" stroke-width="2"/>
+  ${vulling}
   ${ticks.join("")}
   ${liquids.join("")}
-  <text x="${(left + right) / 2}" y="${H - 6}" text-anchor="middle" font-family="Arial" font-size="11" fill="${INK}">mL</text>
+  <text x="${(left + right) / 2}" y="${H - 6}" text-anchor="middle" font-family="Arial" font-size="11" fill="${INK}">${escapeXml(opts.eenheid ?? "mL")}</text>
 </svg>`;
 }
 
