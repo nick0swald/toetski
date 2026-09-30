@@ -2,7 +2,7 @@ import { figuurIsGeldig } from "./figuren/bevriezing.ts";
 import type { Vraag } from "./types";
 
 /** Blokken op het leerlingblad, in afdrukvolgorde. */
-export type Blok = "context" | "stimulus" | "stam" | "figuur" | "tabel" | "opties" | "antwoordlijnen";
+export type Blok = "context" | "stimulus" | "stam" | "figuur" | "tabel" | "opties" | "antwoordlijnen" | "tekenvak";
 
 /** Oude figuurvelden (grafiek, schema, pictogram, maatcilinder) — alleen nog voor toetsen van vóór de beeldpijplijn. */
 export function heeftLegacyStimulus(q: Vraag): boolean {
@@ -53,6 +53,14 @@ export function blokkenVoorVraag(q: Vraag, opts: { pijplijn?: boolean } = {}): B
   if (heeftGoedgekeurdeFiguur(q)) out.push("figuur");
   if (q.tabel?.koppen?.length) out.push("tabel");
   if (q.opties?.length) out.push("opties");
+  // Tekenvraag: leeg (code-getekend) raster als antwoordkader in plaats van lijnen.
+  else if (q.tekenvak) out.push("tekenvak");
   else if (!tabelIsAntwoordgebied(q)) out.push("antwoordlijnen");
   return out;
+}
+
+/** Afmetingen van het tekenvak (hokjes van 1 cm), begrensd tot de bladbreedte. */
+export function tekenvakMaat(q: Vraag): { kolommen: number; rijen: number } {
+  const t = q.tekenvak;
+  return { kolommen: Math.min(16, Math.max(4, t?.kolommen ?? 14)), rijen: Math.min(12, Math.max(3, t?.rijen ?? 8)) };
 }

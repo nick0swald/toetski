@@ -50,6 +50,27 @@ export function presetVoorLeerjaar(jaar: 1 | 2 | 3 | 4): keyof typeof RTTI_PRESE
   return jaar <= 2 ? "onderbouw" : jaar === 3 ? "bovenbouw" : "klas4";
 }
 
+/**
+ * ENIGE bron van waarheid voor het RTTI-doel per klas (formulier, generatie, matrijs en feedback).
+ * Klas 1–2 35/40/20/5 → klas 3 25/40/27/8 → klas 4 15/45/34/6 → CSE (RTTI_EXAMEN, 2013–2026) ~8/58/32/2:
+ * R daalt en T2 stijgt richting het examen. Moeilijkheid schuift daar bovenop.
+ */
+export function rttiDoelVoor(leerjaar: number, moeilijkheid: Moeilijkheid = "normaal"): RttiVerdeling {
+  const jaar = (Math.min(4, Math.max(1, Math.round(leerjaar || 2))) as 1 | 2 | 3 | 4);
+  return rttiVoorMoeilijkheid(RTTI_PRESETS[presetVoorLeerjaar(jaar)]!.verdeling, moeilijkheid);
+}
+
+/** Wijkt een verdeling af van het standaarddoel voor deze klas (docent heeft zelf geschoven)? */
+export function isHandmatigRtti(v: RttiVerdeling, leerjaar: number, moeilijkheid: Moeilijkheid = "normaal"): boolean {
+  const d = rttiDoelVoor(leerjaar, moeilijkheid);
+  return RTTI_ORDER.some((k) => Math.round(v[k] ?? 0) !== d[k]);
+}
+
+/** Minimaal aantal I-vragen: klas 3–4 altijd minstens één inzichtvraag. */
+export function minInzichtVragen(leerjaar: number): number {
+  return leerjaar >= 3 ? 1 : 0;
+}
+
 export function rttiVoorMoeilijkheid(basis: RttiVerdeling, m: Moeilijkheid): RttiVerdeling {
   if (m === "makkelijk") return { R: basis.R + 10, T1: basis.T1 + 5, T2: Math.max(5, basis.T2 - 10), I: Math.max(0, basis.I - 5) };
   if (m === "moeilijk") return { R: Math.max(10, basis.R - 10), T1: Math.max(15, basis.T1 - 5), T2: basis.T2 + 10, I: basis.I + 5 };
@@ -62,3 +83,11 @@ export function normalizeLeerweg(s: string): Leerweg {
   if (x === "GT" || x === "TL" || x === "HGL" || x.includes("THEO")) return "GT";
   return "KB";
 }
+
+/** Generatie-invoer: het RTTI-doel komt uit rttiDoelVoor, tenzij de docent zelf schoof (rttiHandmatig). */
+export function metRttiDoel<T extends { rttiDoel: { R: number; T1: number; T2: number; I: number }; rttiHandmatig?: boolean; leerjaar: number; moeilijkheid?: string }>(data: T): T {
+  if (data.rttiHandmatig) return data;
+  const m = data.moeilijkheid === "makkelijk" || data.moeilijkheid === "moeilijk" ? data.moeilijkheid : "normaal";
+  return { ...data, rttiDoel: rttiDoelVoor(data.leerjaar, m) };
+}
+

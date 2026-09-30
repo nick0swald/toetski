@@ -55,7 +55,7 @@ export const EINDTERMEN: LeerdoelData[] = [
   d("K/3.1", ALLE, "CE", "Informatie uit bronnen (tekst, tabel, grafiek) selecteren en verwerken", ["S-AFLEZ", "S-VERBAND"], "tabel|grafiek|diagram|bron|aflez"),
   d("K/3.2", ALLE, "CE", "Rekenvaardigheden toepassen (verhoudingen, omrekenen, afronden)", ["S-EENH", "S-CALC-OV"], "omreken|afrond|verhouding|procent|wetenschappelijke notatie"),
   d("K/3.3", ALLE, "CE", "Grootheden met symbool en eenheden met afkorting gebruiken", ["S-EENH", "W-TEMP-C"], "grootheid|eenheid|eenheden|voorvoegsel|symbool"),
-  d("K/3.4", ALLE, "CE", "Natuurkundige meetapparatuur herkennen en gebruiken", ["E-METER", "S-AFLEZ"], "meetinstrument|maatcilinder|thermometer|multimeter|krachtmeter|stroommeter|spanningsmeter|balans|stopwatch|meten"),
+  d("K/3.4", ALLE, "CE", "Natuurkundige meetapparatuur herkennen en gebruiken", ["E-METER", "S-AFLEZ"], "meetinstrument|maatcilinder|thermometer|multimeter|krachtmeter|veerunster|stroommeter|spanningsmeter|balans|stopwatch|meten"),
   d("K/3.5", BB, "CE", "Resultaten van computermetingen interpreteren", ["S-AFLEZ", "S-GRAF"], "computer|sensor|meetprogramma"),
   d("K/3.5", KBGT, "CE", "De computer gebruiken bij metingen en verwerking (sensoren, grafieken)", ["S-AFLEZ", "S-GRAF"], "computer|sensor|meetprogramma"),
   d("K/3.6", BB, "CE", "Berekeningen uitvoeren met woordformules", ["S-CALC-OV"], "formule|bereken"),
@@ -85,7 +85,7 @@ export const EINDTERMEN: LeerdoelData[] = [
 
   // NASK1/K/5 Elektrische energie — BB (CE)
   d("K/5.1", BB, "CE", "Onderdelen van schakelingen naar functie onderscheiden en symbolen herkennen", ["E-COMP", "E-SCHEMA"], "symbool|schakelaar|lampje|batterij|spanningsbron|onderdel"),
-  d("K/5.2", BB, "CE", "Gesloten stroomkring toepassen in serie- en parallelschakelingen", ["E-SERPAR", "E-SCHEMA"], "stroomkring|serie|parallel"),
+  d("K/5.2", BB, "CE", "Gesloten stroomkring toepassen in serie- en parallelschakelingen", ["E-SERPAR", "E-SCHEMA"], "stroomkring|serie|parallel(?!logram)"),
   d("K/5.3", BB, "CE", "Uitleggen hoe een stroomkring beveiligd wordt (zekering, aardlekschakelaar, randaarde)", ["E-VEIL"], "zekering|aardlek|randaarde|kortsluiting|overbelast|beveilig"),
   d("K/5.4", BB, "CE", "Geleiders en isolatoren onderscheiden in toepassingen", ["W-MAT"], "geleider|isolator|isolatie"),
   d("K/5.5", BB, "CE", "Schema's van schakelingen gebruiken, interpreteren en aanpassen", ["E-SCHEMA", "E-COMP"], "schema|schakeling|ldr|ntc|led|diode"),
@@ -96,7 +96,7 @@ export const EINDTERMEN: LeerdoelData[] = [
 
   // NASK1/K/5 Elektrische energie — KB/GT (CE)
   d("K/5.1", KBGT, "CE", "Onderdelen van schakelingen naar functie onderscheiden en symbolen herkennen", ["E-COMP", "E-SCHEMA"], "symbool|schakelaar|lampje|batterij|spanningsbron|onderdel"),
-  d("K/5.2", KBGT, "CE", "Gesloten stroomkring toepassen in serie- en parallelschakelingen", ["E-SERPAR", "E-SCHEMA"], "stroomkring|serie|parallel"),
+  d("K/5.2", KBGT, "CE", "Gesloten stroomkring toepassen in serie- en parallelschakelingen", ["E-SERPAR", "E-SCHEMA"], "stroomkring|serie|parallel(?!logram)"),
   d("K/5.3", KBGT, "CE", "Beveiliging van een stroomkring en het principe ervan uitleggen", ["E-VEIL"], "zekering|aardlek|randaarde|kortsluiting|overbelast|beveilig|dubbel geïsoleerd"),
   d("K/5.4", KBGT, "CE", "Verschil tussen geleiders en isolatoren uitleggen in toepassingen", ["W-MAT"], "geleider|isolator|isolatie"),
   d("K/5.5", KBGT, "CE", "Schema's gebruiken en de werking van componenten verklaren (LDR, NTC, diode, relais, transistor …)", ["E-COMP", "E-SCHEMA"], "ldr|ntc|diode|led|relais|transistor|reedcontact|sensor|schema"),
@@ -134,7 +134,7 @@ export const EINDTERMEN: LeerdoelData[] = [
   d("K/8.7", KBGT, "CE", "Onderdelen en werking van een luidspreker uitleggen", ["M-TRAFO"], "luidspreker|conus|speaker"),
 
   // NASK1/K/9 Kracht en veiligheid — BB (CE)
-  d("K/9.1", BB, "CE", "Soorten krachten herkennen en hun werking en toepassing beschrijven", ["K-SOORT", "K-VECT"], "zwaartekracht|spierkracht|wrijving|veerkracht|normaalkracht|spankracht|kracht|newton"),
+  d("K/9.1", BB, "CE", "Soorten krachten herkennen en hun werking en toepassing beschrijven", ["K-SOORT", "K-VECT", "K-FZ", "K-VEER"], "zwaartekracht|spierkracht|wrijving|veerkracht|normaalkracht|spankracht|kracht|newton|veerconstante|uitrekking"),
   d("K/9.2", BB, "CE", "Bij hefbomen herkennen hoe een kleine kracht een grote kracht geeft", ["K-HEF", "K-ARM"], "hefboom|draaipunt|arm|koevoet|tang|kruiwagen|wip"),
   d("K/9.3", BB, "CE", "Uitleggen hoe een katrol de richting of grootte van een kracht verandert", ["K-HEF"], "katrol|takel"),
   d("K/9.4", BB, "CE", "De gemiddelde snelheid van een bewegend voorwerp berekenen", ["B-SNEL"], "gemiddelde snelheid|km/h|m/s|snelheid"),
@@ -145,7 +145,7 @@ export const EINDTERMEN: LeerdoelData[] = [
   d("K/9.9", BB, "CE", "Invloed van kracht en oppervlakte op de druk uitleggen", ["K-DRUKB", "K-DRUK"], "druk|oppervlakte|pascal|n/m2|sneeuwschoen|spijker"),
 
   // NASK1/K/9 Kracht en veiligheid — KB/GT (CE)
-  d("K/9.1", KBGT, "CE", "Soorten krachten herkennen, werking beschrijven en als vector tekenen", ["K-SOORT", "K-VECT", "K-SCHAAL"], "zwaartekracht|spierkracht|wrijving|veerkracht|normaalkracht|spankracht|krachtenschaal|vector|newton"),
+  d("K/9.1", KBGT, "CE", "Soorten krachten herkennen, werking beschrijven en als vector tekenen", ["K-SOORT", "K-VECT", "K-SCHAAL", "K-FZ", "K-VEER"], "zwaartekracht|spierkracht|wrijving|veerkracht|normaalkracht|spankracht|krachtenschaal|vector|newton|veerconstante|uitrekking"),
   d("K/9.2", KBGT, "CE", "Uitleggen hoe een hefboom in evenwicht met een kleine kracht een grote kracht geeft", ["K-HEF", "K-ARM", "K-MOM"], "hefboom|draaipunt|arm|moment|koevoet|tang|kruiwagen|wip"),
   d("K/9.3", KBGT, "CE", "Uitleggen hoe een katrol de richting of grootte van een kracht verandert", ["K-HEF"], "katrol|takel"),
   d("K/9.4", KBGT, "CE", "De gemiddelde snelheid van een bewegend voorwerp berekenen", ["B-SNEL"], "gemiddelde snelheid|km/h|m/s|snelheid"),

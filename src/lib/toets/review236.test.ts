@@ -227,7 +227,8 @@ describe("13/14. feedback en rubriek", () => {
     const r = repareerPunten([q], [n]);
     assert.deepEqual(r.nakijkmodel[0]!.puntenverdeling.map((p) => p.criterium), ["t = 1,2 / 2 = 0,6 s", "s = v × t", "206 m"]);
     assert.match(r.nakijkmodel[0]!.nietToekennen![0]!, /Geen deling door 2: 1 punt aftrek/);
-    assert.match(r.nakijkmodel[0]!.nietToekennen!.at(-1)!, /doorrekenen|eigen \(foute\) waarde/i);
-    assert.equal(rekenAftrek(rekenAftrek(["x"])).length, 2, "idempotent");
+    // Examenregel staat één keer bovenaan het nakijkmodel, niet onder elke vraag.
+    assert.ok(!r.nakijkmodel[0]!.nietToekennen!.some((x) => /^examenregel/i.test(x)));
+    assert.equal(rekenAftrek(rekenAftrek(["x"])).length, 1, "idempotent");
   });
 });

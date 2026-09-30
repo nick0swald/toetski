@@ -64,3 +64,22 @@ export function rttiHerschrijfPlan(vragen: Vraag[], doel: RttiVerdeling, opts: {
   }
   return issues;
 }
+
+/**
+ * Klas 3–4: minstens `min` inzichtvragen (I). Ontbreken ze, dan wordt een open meerpuntsvraag (liefst T2)
+ * herschreven tot een echte redeneervraag in een nieuwe situatie. De opdrachtzin ("Leg uit of …",
+ * "Voorspel …") maakt het I-label controleerbaar voor de RTTI-regels.
+ */
+export function inzichtIssues(vragen: Vraag[], min: number, vermijd: Set<number> = new Set()): ItemIssue[] {
+  const nu = vragen.filter((q) => q.rtti === "I").length;
+  if (!min || nu >= min) return [];
+  const volgorde: Record<Rtti, number> = { T2: 0, T1: 1, R: 2, I: 3 };
+  const kandidaten = vragen
+    .filter((q) => !vermijd.has(q.nummer) && !q.opties?.length && !q.figuur && !q.figuurId && (q.punten ?? 1) >= 2)
+    .sort((a, b) => volgorde[a.rtti] - volgorde[b.rtti] || (b.punten ?? 1) - (a.punten ?? 1));
+  return kandidaten.slice(0, min - nu).map((q) => ({
+    nummer: q.nummer,
+    code: "rtti",
+    uitleg: `RTTI: de toets heeft nog geen inzichtvraag (I); klas 3–4 moet er minstens één hebben. Herschrijf deze vraag tot een I-vraag over hetzelfde leerdoel en dezelfde paragraaf, ${q.punten} punten: een NIEUWE, realistische situatie waarin de leerling moet redeneren of voorspellen, met een opdrachtzin als "Leg uit of …" of "Voorspel wat er gebeurt met … als …". Geen herhaling van een verband dat al in een andere vraag getoetst wordt, en het antwoord staat niet in een andere vraag. Rubriek: 1 punt per redeneerstap (bijv. juiste conclusie + juiste redenering). Zet rtti op "I".`,
+  }));
+}

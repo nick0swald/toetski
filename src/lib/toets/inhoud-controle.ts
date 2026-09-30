@@ -23,6 +23,9 @@ export interface ControleOordeel {
   helderheid?: string;
   rubriekOk: boolean;
   rubriek?: string;
+  /** Meerkeuze: zijn alle afleiders plausibel, parallel en onder geen voorwaarde waar? */
+  afleiderOk?: boolean;
+  afleider?: string;
   rtti?: Rtti;
 }
 
@@ -30,13 +33,14 @@ export const CONTROLE_SYSTEM = `Je bent een strenge NaSk-docent en toetscontrole
 Bron van waarheid: het antwoordenboek en de lesstof hieronder; daarna standaard Binas-waarden (geluidssnelheid in lucht 343 m/s bij 20 °C, in water ongeveer 1500 m/s, in staal ongeveer 5000–6000 m/s; g = 9,8 N/kg; dichtheid water 1,0 g/cm³).
 Beoordeel per vraag:
 1. eigenAntwoord: jouw eigen korte uitwerking/antwoord.
-2. juisteOpties (alleen meerkeuze/juist-onjuist): ALLE letters die volgens de bron juist zijn. Precies één is goed; nul of twee is een fout. modelantwoordKlopt (alle vragen): komt het modelantwoord overeen met jouw eigen uitwerking (getal, eenheid, begrip)? Reken zelf na.
+2. juisteOpties (alleen meerkeuze/juist-onjuist): ALLE letters die volgens de bron juist of te verdedigen zijn — ook een optie die onder een voorwaarde waar is ('alleen bij kleine gewichten' bij een veer is ook waar: elasticiteitsgrens). Precies één is goed; nul of twee is een fout. modelantwoordKlopt (alle vragen): komt het modelantwoord overeen met jouw eigen uitwerking (getal, eenheid, begrip)? Reken zelf na.
 3. oplosbaar: staan ALLE gegevens die nodig zijn in de context, stam, tabel of figuurgegevens (of standaard in Binas)? En kan een vmbo-leerling van dit niveau het met de lesstof oplossen (geen sinus/cosinus of andere stof buiten de lesstof)? Zo nee: ontbreekt = welk gegeven. Het modelantwoord mag geen getal gebruiken dat de leerling nergens kan vinden.
-4. realistisch: kloppen de getallen met de situatie (afstanden, tijden, snelheden, massa's, temperaturen, prijzen, afmetingen), is de situatie natuurkundig mogelijk en herkenbaar voor een vmbo-leerling, en spreken context, figuurgegevens en antwoord elkaar niet tegen? Voorbeelden van NIET realistisch: een echo van een kaswand op 200 m, de knal van een schrikdraadapparaat horen op 500 m, een fietser met 90 km/h, een kopje thee van 5 kg, 'na 4 seconden hoort ze de knal' zonder dat de leerling weet wanneer de knal begon (een tijdsverschil meet je alleen met een startsignaal: lichtflits, zichtbare slag of eigen roep), een echo in een lokaal, hal of sporthal met een wand verder dan ~60 m (echotijd hooguit ~0,35 s), een meting die in de praktijk niet zo gaat. Zo nee: realisme = wat er mis is en een realistische waarde.
+4. realistisch: kloppen de getallen met de situatie (afstanden, tijden, snelheden, massa's, temperaturen, prijzen, afmetingen), is de situatie natuurkundig mogelijk en herkenbaar voor een vmbo-leerling, en spreken context, figuurgegevens en antwoord elkaar niet tegen? Voorbeelden van NIET realistisch: een echo van een kaswand op 200 m, de knal van een schrikdraadapparaat horen op 500 m, een fietser met 90 km/h, een kopje thee van 5 kg, 'na 4 seconden hoort ze de knal' zonder dat de leerling weet wanneer de knal begon (een tijdsverschil meet je alleen met een startsignaal: lichtflits, zichtbare slag of eigen roep), een echo in een lokaal, hal of sporthal met een wand verder dan ~60 m (echotijd hooguit ~0,35 s), een meting die in de praktijk niet zo gaat, een onrealistische vergelijking ('een punaise drukt met dezelfde kracht als een brede schoen'). Zo nee: realisme = wat er mis is en een realistische waarde.
 5. helder: is de vraag eenduidig; wordt elk ding/apparaat eerst genoemd voordat ernaar verwezen wordt ('de installatie', 'dit apparaat' zonder uitleg = niet helder); geen schoolnaam; geen verwijzing naar een figuur als er geen figuurgegevens zijn; 'Het flesje…' of 'De bak…' zonder te zeggen welk flesje/welke situatie = niet helder; juist/onjuist moet een stelling zijn (geen vraagzin); de leerling moet weten hoeveel dingen hij moet noemen; 'volgens de regel' zonder te zeggen welke regel = niet helder. Zo nee: helderheid = wat.
 6. rubriekOk: past de puntenverdeling bij het antwoord, zijn deelpunten mogelijk bij rekenvragen (een fout kost 1 punt, niet alles), en noemt de rubriek het juiste begrip? Elk rubriekcriterium is één los te scoren onderdeel (bijv. 1 punt per genoemd mengsel met kenmerk); criteria als 'gebruikt geen verkeerde kenmerken' of 'alles goed' zijn niet ok. Het aantal punten moet passen bij wat gevraagd wordt: 'noem twee … en leg uit' voor 1 punt = rubriek niet ok. Zo nee: rubriek = wat.
-7. rtti: R (feit/begrip reproduceren), T1 (toepassen in een bekende situatie, bijv. één formule invullen), T2 (toepassen in een nieuwe situatie: meer stappen of zelf de aanpak kiezen), I (inzicht: verklaren, voorspellen, redeneren).
-Antwoord ALLEEN met JSON: { "oordelen": [ { "nummer": number, "eigenAntwoord": string, "juisteOpties": string[], "modelantwoordKlopt": boolean, "oplosbaar": boolean, "ontbreekt": string, "realistisch": boolean, "realisme": string, "helder": boolean, "helderheid": string, "rubriekOk": boolean, "rubriek": string, "rtti": "R"|"T1"|"T2"|"I" } ] }`;
+7. afleiderOk (alleen meerkeuze): zijn alle afleiders plausibele leerlingfouten, grammaticaal parallel aan het juiste antwoord en in correct Nederlands? Niet ok: onzinopties ('Altijd 10 N', 'kleiner dan 0 N'), een kracht/begrip dat er niets mee te maken heeft ('magnetische kracht' bij een veer), taalfouten ('kleinere oppervlak'). Zo nee: afleider = welke optie en waarom.
+8. rtti: R (feit/begrip reproduceren), T1 (toepassen in een bekende situatie, bijv. één formule invullen), T2 (toepassen in een nieuwe situatie: meer stappen of zelf de aanpak kiezen), I (inzicht: verklaren, voorspellen, redeneren).
+Antwoord ALLEEN met JSON: { "oordelen": [ { "nummer": number, "eigenAntwoord": string, "juisteOpties": string[], "modelantwoordKlopt": boolean, "oplosbaar": boolean, "ontbreekt": string, "realistisch": boolean, "realisme": string, "helder": boolean, "helderheid": string, "rubriekOk": boolean, "rubriek": string, "afleiderOk": boolean, "afleider": string, "rtti": "R"|"T1"|"T2"|"I" } ] }`;
 
 export function controlePrompt(
   vragen: Vraag[],
@@ -116,6 +120,7 @@ export function parseControle(raw: string | null | undefined): ControleOordeel[]
       helderheid: tekstOf(r.helderheid),
       rubriekOk: ja(r.rubriekOk),
       rubriek: tekstOf(r.rubriek),
+      ...(r.afleiderOk === false || r.afleiderOk === "false" ? { afleiderOk: false, afleider: tekstOf(r.afleider) } : {}),
       rtti,
     });
   }
@@ -152,6 +157,8 @@ export function controleIssues(vragen: Vraag[], nakijk: NakijkItem[], oordelen: 
     if (!o.oplosbaar) issues.push({ nummer: q.nummer, code: "gegeven-ontbreekt", uitleg: `Niet oplosbaar: ${o.ontbreekt || "een benodigd gegeven ontbreekt"}. Zet het gegeven in de context/stam (of haal het uit het modelantwoord); lukt dat niet netjes, schrijf dan een nieuwe complete vraag over hetzelfde leerdoel.` });
     if (!o.realistisch) issues.push({ nummer: q.nummer, code: "realisme", uitleg: `Niet realistisch: ${o.realisme || "getallen of situatie kloppen niet"}. Maak de situatie en getallen realistisch en pas het antwoord aan.` });
     if (!o.helder) issues.push({ nummer: q.nummer, code: "onhelder", uitleg: `Niet helder: ${o.helderheid || "vraag is niet eenduidig"}.` });
+    if (q.opties && q.opties.length > 2 && o.afleiderOk === false)
+      issues.push({ nummer: q.nummer, code: "afleider", uitleg: `Afleiders: ${o.afleider || "niet plausibel of niet parallel"}. Maak alle afleiders plausibele leerlingfouten, grammaticaal parallel, in correct Nederlands en onder geen enkele voorwaarde waar.` });
     if (!o.rubriekOk) issues.push({ nummer: q.nummer, code: "rubriek", uitleg: `Rubriek: ${o.rubriek || "past niet bij het antwoord"}. Rekenvragen: deelpunten per stap; één fout kost 1 punt.` });
   }
   return issues;
@@ -171,4 +178,11 @@ export const CONTROLE_CODES: Record<string, string> = {
   "figuur-ontbreekt": "verwijzing naar ontbrekende figuur",
   dekking: "paragraafdekking",
   rtti: "RTTI-balans",
+  afleider: "zwakke afleider",
+  verklapt: "verklapt een andere vraag",
+  "dubbele-context": "dubbele situatie",
+  "dubbel-concept": "hetzelfde verband twee keer",
+  taal: "taal",
+  inzicht: "I-vraag ontbrak",
+  lengte: "toetslengte",
 };

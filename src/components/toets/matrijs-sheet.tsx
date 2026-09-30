@@ -138,6 +138,7 @@ export function MatrijsSheet({ toets }: { toets: GegenereerdeToets }) {
           </div>
           <p className="mt-2 text-sm">
             {ld.ongedekt.length ? `Niet getoetst: ${ld.ongedekt.map((r) => r.id).join(", ")}.` : "Alle leerdoelen van dit hoofdstuk zijn getoetst."}
+            {ld.alleenTekening.length ? ` Alleen met een tekening toetsbaar (zonder plaatjes): ${ld.alleenTekening.map((r) => r.id).join(", ")}.` : ""}
           </p>
           <p className="mt-1 text-xs text-muted">
             Leerdoel per vraag:{" "}

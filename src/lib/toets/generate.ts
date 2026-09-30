@@ -5,9 +5,13 @@ import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
 import { bijschavenInputSchema, bijschavenPayloadSchema, extraQuestionsInputSchema, extraQuestionsPayloadSchema, generateInputSchema, generatedPayloadSchema, matrijsInputSchema, matrijsPayloadSchema } from "./schema";
 import { bouwSystemPrompt, stuurdocumentTekst } from "./stuurdocument";
+import { metRttiDoel, minInzichtVragen } from "./constants";
+export { metRttiDoel };
 import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
+import { TOETSREVIEW_SYSTEM } from "./samenhang";
+import { gInstructie, gUitBron } from "./reken-check";
 import { extractParagrafen } from "./leerdoelen";
 import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan, zonderDoelJargon } from "./leerdoelen-plan";
 import { bouwKwaliteit } from "./kwaliteit-check";
@@ -208,7 +212,7 @@ const FIGUUR_BASIS =
 export function figuurRegel(modus: boolean | "auto" | "met" | "zonder"): string {
   const m = modus === true ? "auto" : modus === false ? "zonder" : modus;
   if (m === "zonder")
-    return "ZONDER PLAATJES: maak GEEN figuren — geen velden grafiek, schemaFiguur, pictogram of maatcilinder. Verwijs in geen enkele vraag naar een figuur, grafiek, afbeelding, plaatje, tekening of schema. Alle gegevens die nodig zijn staan in de tekst of in een tabel (veld tabel).";
+    return "ZONDER PLAATJES: maak GEEN figuren — geen velden grafiek, schemaFiguur, pictogram of maatcilinder. Verwijs in geen enkele vraag naar een figuur, grafiek, afbeelding, plaatje, tekening of schema. Alle gegevens die nodig zijn staan in de tekst of in een tabel (veld tabel). WEL toegestaan: een tekenvraag met veld tekenvak (leeg raster als antwoordkader, door de software getekend): krachtpijl tekenen met een krachtenschaal in de stam (1 cm ≙ 10 N), krachten samenstellen (parallellogram), of een F-u-grafiek tekenen uit een tabel; rubriek per getekend element.";
   if (m === "met")
     return `MET PLAATJES (keuze van de docent, verplicht): maak minstens 3 vragen waarbij de leerling een figuur echt nodig heeft — bijv. een grafiek aflezen (veld grafiek met exacte punten), een schakeling (veld schemaFiguur), krachten/hefboom, een maatcilinder aflezen of een gevarensymbool (pictogram) — passend bij de lesstof. ${FIGUUR_BASIS}`;
   return `Figuren: volg wat de docent in de instructies/extra eisen vraagt; anders alleen als een figuur echt iets toevoegt (aflezen, herkennen, schakeling, krachten). 0 figuren is prima. ${FIGUUR_BASIS}`;
@@ -295,6 +299,7 @@ ${puntenPlan}
 ${paragrafenRegel(bron, input.antwoordenmateriaal)}
 ${kal ? `${kalibratiePrompt(kal.k)}\n${kal.extra}` : ""}
 Context-eisen (verplicht): realistische getallen en situaties (een echo in een lokaal of hal: tientallen meters, niet honderden; geluid van een klein apparaat hoor je niet op 500 m); alle gegevens die nodig zijn staan in de vraag; noem een ding eerst concreet voordat je 'de/dit' gebruikt; nooit een schoolnaam; verzonnen bedrijven mogen grappig zijn (bijv. 'Frituur De Vette Hap'); personen hebben Nederlandse voornamen (Sanne, Daan, Lotte, Bram). Staat er een figuur of tabel bij, zet de getallen die nodig zijn ÓÓK in de vraagtekst (de figuur kan wegvallen). Een tijdsverschil (echo, onweer) meet je alleen met een startsignaal (flits, zichtbare klap, eigen roep). Juist/onjuist is altijd een stelling, nooit een vraagzin. Elke context is een echte zin (geen los woord als 'pictogram').
+Samenhang (verplicht): elke concrete situatie/voorwerp maar één keer in de toets (behalve één doorlopende situatie met contextTitel); elk verband (bijv. groter oppervlak → kleinere druk) hooguit één keer; geen vraag toont het antwoord, de formule of een scorestap van een andere vraag (geen formule als MC-optie als een andere vraag punten geeft voor die formule); herhaal de contextzin niet in de stam; precies één verdedigbare optie, afleiders plausibel en parallel (geen 'Altijd 10 N', geen voorwaardelijk ware optie); realistische, alledaagse vergelijkingen; correct Nederlands ('kleiner oppervlak', 'het krat'). Rekenen: één g zoals in de lesstof, correct afronden (nooit afkappen), nakijkmodel accepteert ook de uitkomst met g = 9,81 of 10 N/kg.
 Juist/onjuist: opties altijd in de volgorde A. Juist, B. Onjuist.
 Rekenvragen: 1 punt per stap: 2p = gebruik van de formule (grootheid benoemd) + rest van de berekening juist (uitkomst met eenheid); 3p = omrekenen/aflezen + formule + rest. Geen punt voor 'gegevens en gevraagde'. Een reken- en eenheidsfout kosten samen hooguit 1 punt; significantie kost geen punten.
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap; 'noem twee' = 2p, 'noem … en leg uit' = 2p. Haal het totaal met genoeg open meerpuntsvragen (uitleg, berekening), niet met extra 1-punts meerkeuze.
@@ -345,6 +350,7 @@ function leerdoelPlanVoor(data: GenerateData, k: Kalibratie | null, bron: string
     leerweg: k.leerweg,
     doelPunten: data.doelPunten,
     aantalVragen: data.aantalVragen,
+    zonderPlaatjes: plaatjesModus(data) === "zonder",
   });
 }
 type GeneratedPayload = z.infer<typeof generatedPayloadSchema>;
@@ -360,7 +366,7 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
   const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, 100000);
   if (!bron.trim()) throw new GebruikersFout("Plak lesstof, lever het leerlingboek in, of zet een openbare link.");
   const k = kalibratieVoor(data, bron);
-  data = metKalibratieLengte(data, k);
+  data = metRttiDoel(metKalibratieLengte(data, k));
   // Klas 4 / examenniveau: blok 'Examenvragen' met echte CSE-contexten (klas 1–3 nooit).
   const examen =
     k && magExamenvragen(k.leerjaar, k.examen) && data.examenvragen !== false && !wilGeenExamenvragen(`${data.extraEisen ?? ""}\n${data.feedback ?? ""}`)
@@ -445,6 +451,12 @@ async function vraagPayload(system: string, prompt: string, aantal: number, dead
 
 class GebruikersFout extends Error {}
 
+/** Eén regel over g op het blad (een eerdere g-regel van het model vervangen). */
+function metGInstructie(instructies: string[] | undefined, regel: string | null): string[] {
+  const rest = (instructies ?? []).filter((r) => !(regel && /\bg\s*=\s*\d/.test(r)));
+  return regel ? [...rest, regel] : rest;
+}
+
 /** Ruwe vragen uit de payload (genormaliseerd) — ook de basis voor de vroege beeldpijplijn. */
 export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
   return payload.vragen.map((q, i) =>
@@ -459,13 +471,15 @@ export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
 /** Stap 2: afwerken (reparatie, punten, MC-hussel, kwaliteit) → complete toets. */
 async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload, budgetMs = 60_000): Promise<GegenereerdeToets> {
   const kal = kalibratieVoor(data, bron);
-  data = metKalibratieLengte(data, kal);
+  data = metRttiDoel(metKalibratieLengte(data, kal));
   const examenCtx = CSE_CONTEXTEN.filter((c) => payload.examenContexten?.includes(c.id));
   const rttiDoel = normaliseer(data.rttiDoel);
   // Examencontexten vóór de controle herkennen (groep + intro), zodat controle en volgorde ze als blok zien.
   const vragenRaw = herstelGroepen(markeerExamenvragen(ruweVragen(payload), examenCtx));
   const vakNaam = data.vak?.trim() || payload.meta.vak || "";
   const skipMcEerst = wilGemengdeOfOpenEerst(`${data.extraEisen ?? ""}\n${data.feedback ?? ""}`);
+  const leerdoelPlan = leerdoelPlanVoor(data, kal, bron);
+  const g = gUitBron(bron);
   const af = await werkVragenAf({
     vragen: vragenRaw,
     nakijkmodel: payload.nakijkmodel,
@@ -484,7 +498,11 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
           minGesloten: Math.max(0, kal.gesloten - 0.05),
         }
       : {}),
+    plan: leerdoelPlan,
+    g,
+    minInzicht: minInzichtVragen(kal?.leerjaar ?? data.leerjaar),
     controleer: (prompt) => callControle(CONTROLE_SYSTEM, prompt).catch(() => null),
+    review: (prompt) => callControle(TOETSREVIEW_SYSTEM, prompt).catch(() => null),
     repair: (prompt) =>
       callGrok(
         [
@@ -494,7 +512,6 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
         Math.min(8000, Math.max(2000, Math.ceil(prompt.length / 3))),
       ).catch(() => null),
   });
-  const leerdoelPlan = leerdoelPlanVoor(data, kal, bron);
   const gelabeld = kal ? herstelLeerdoelen(zonderDoelJargon(markeerExamenvragen(normaliseerVraagtypen(af.vragen), examenCtx)), leerdoelPlan) : { vragen: af.vragen, hersteld: [] };
   const vragen = gelabeld.vragen;
   if (leerdoelPlan && gelabeld.hersteld.length) leerdoelPlan.hersteld = gelabeld.hersteld;
@@ -520,7 +537,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       duurMinuten: payload.meta.duurMinuten || data.duurMinuten,
       school: "",
       hulpmiddelen: payload.meta.hulpmiddelen,
-      instructies: payload.meta.instructies,
+      instructies: metGInstructie(payload.meta.instructies, gInstructie(vragen, g)),
       onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
       versie: data.versie,
       moeilijkheid: data.moeilijkheid,

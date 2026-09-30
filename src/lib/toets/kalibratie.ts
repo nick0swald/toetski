@@ -276,10 +276,33 @@ export function domeinenUitBron(bron: string): string[] {
 export function relevanteVraagtypen(bron: string, leerjaar: number, leerweg: Leerweg, max = 18) {
   const dom = new Set([...domeinenUitBron(bron).slice(0, 4), "vaardigheden"]);
   const onderbouw = leerjaar <= 2;
-  return VRAAGTYPEN.filter((t) => dom.has(t.domein))
+  const t0 = bron.slice(0, 30000);
+  // Schooltypen (K-FZ, K-VEER) alleen als de lesstof ze noemt; ze staan vooraan zodat berekeningen het juiste domeintype krijgen.
+  const school = VRAAGTYPEN.filter((t) => t.school && dom.has(t.domein) && leerjaar >= 2 && t.re && new RegExp(t.re, "i").test(t0));
+  const examen = VRAAGTYPEN.filter((t) => dom.has(t.domein) && !t.school)
     .filter((t) => (t.onderbouw ? onderbouw : leerweg === "BB" ? (t.niveaus.BB ?? 0) > 0 || t.domein === "vaardigheden" : true))
     .sort((a, b) => (leerjaar >= 3 ? b.freq - a.freq : (b.onderbouw ? 1 : 0) - (a.onderbouw ? 1 : 0) || b.freq - a.freq))
-    .slice(0, max);
+    .slice(0, Math.max(0, max - school.length));
+  return [...school, ...examen];
+}
+
+/**
+ * Vraagtype bijstellen op de inhoud: een Fz- of veerberekening is geen S-CALC-OV/S-EENH, een veervraag geen
+ * K-SOORT. Zo krijgen berekeningen het juiste domeintype (en daarmee de juiste RTTI-basis en leerdoel).
+ */
+export function verfijnVraagtype(q: Pick<Vraag, "vraagtype" | "stam" | "context" | "opties" | "type" | "tabel">): string | undefined {
+  const type = (q.vraagtype ?? "").trim().toUpperCase();
+  const tekst = `${q.context ?? ""} ${q.stam} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`.toLowerCase();
+  const reken = /\b(bereken|bepaal|hoe groot|hoeveel|hoe ver)\b/.test(q.stam.toLowerCase()) || q.type === "berekening";
+  const vaag = !type || ["S-CALC-OV", "S-EENH", "OVERIG", "K-SOORT", "S-VERBAND"].includes(type);
+  if (!vaag) return type || undefined;
+  const veer = /veerconstante|uitrek|\bveer\b|\bveren\b|veerunster/.test(tekst);
+  if (veer && (type !== "S-VERBAND" || reken)) return "K-VEER";
+  if (reken && /zwaartekracht|gewicht|\bfz\b/.test(tekst) && /\d\s*(kg|g)\b|massa/.test(tekst)) return "K-FZ";
+  if (reken && /\bdruk\b/.test(tekst) && /m²|cm²|m2|cm2|oppervlak/.test(tekst)) return "K-DRUK";
+  if (reken && /moment|hefboom|draaipunt|\barm\b/.test(tekst)) return "K-MOM";
+  if (reken && /nettokracht|resulterende/.test(tekst)) return "K-NET";
+  return type || undefined;
 }
 
 export function vraagtypenPrompt(bron: string, leerjaar: number, leerweg: Leerweg): string {
@@ -293,7 +316,7 @@ export function vraagtypenPrompt(bron: string, leerjaar: number, leerweg: Leerwe
 /** Onbekende of ontbrekende vraagtypen → OVERIG. */
 export function normaliseerVraagtypen(vragen: Vraag[]): Vraag[] {
   return vragen.map((q) => {
-    const id = (q.vraagtype ?? "").trim().toUpperCase();
+    const id = (verfijnVraagtype(q) ?? "").trim().toUpperCase();
     return { ...q, vraagtype: VRAAGTYPE_IDS.has(id) ? id : "OVERIG" };
   });
 }

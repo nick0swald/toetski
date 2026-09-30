@@ -198,6 +198,11 @@ export interface Vraag {
   /** Maatcilinderfiguur (aflezen), geen tabel. */
   maatcilinder?: MaatcilinderFiguur;
   /**
+   * Leeg antwoordkader voor een tekenvraag (krachtpijl, parallellogram, grafiek): door code getekend
+   * raster of leeg vak — nooit een AI-beeld. Vervangt de antwoordlijnen.
+   */
+  tekenvak?: Tekenvak;
+  /**
    * Oorspronkelijke tekst vóórdat gegevens/beschrijving naar een figuur verhuisden. Valt de figuur weg
    * en is de stam nog precies `na`, dan komt deze tekst terug (geen kapotte zinnen).
    */
@@ -310,6 +315,18 @@ export interface PuntenCriterium {
   criterium: string;
 }
 
+export interface Tekenvak {
+  soort: "raster" | "leeg";
+  /** Aantal hokjes van 1 cm (raster), standaard 14 × 8. */
+  kolommen?: number;
+  rijen?: number;
+  /** Schaal, bijv. "1 cm ≙ 10 N" (ook in de stam). */
+  schaal?: string;
+  /** Aslabels bij een grafiek (S-GRAF), bijv. "u (cm)" en "F (N)". */
+  xLabel?: string;
+  yLabel?: string;
+}
+
 export interface NakijkItem {
   nummer: number;
   modelantwoord: string;
@@ -389,6 +406,8 @@ export interface PlanLeerdoel {
   /** Richtpunten voor dit doel (stabiel per hoofdstuk + klas + leerweg + toetslengte). */
   doelPunten: number;
   wettelijk?: string;
+  /** Alleen met een tekening te toetsen (vector/parallellogram/arm tekenen). */
+  tekenen?: boolean;
 }
 
 export interface LeerdoelPlan {
@@ -401,6 +420,8 @@ export interface LeerdoelPlan {
   doelen: PlanLeerdoel[];
   /** Vraagnummers waarvan het leerdoelId lokaal is toegekend (onbekend/ontbrekend na generatie). */
   hersteld?: number[];
+  /** Toets zonder plaatjes: tekendoelen zonder tekenvraag tellen niet als gat. */
+  zonderPlaatjes?: boolean;
 }
 
 export interface ControleBevinding {
@@ -444,6 +465,8 @@ export interface GenerateInput {
   /** Leeg/undefined = auto. */
   openVragen?: number;
   rttiDoel: RttiVerdeling;
+  /** Docent schoof zelf aan het RTTI-doel; anders geldt rttiDoelVoor(klas). */
+  rttiHandmatig?: boolean;
   bronmateriaal: string;
   extraEisen: string;
   bronUrl?: string;

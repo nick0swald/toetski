@@ -1,5 +1,5 @@
 import { BronTabel, GoedgekeurdeFiguurBeeld, StimulusFiguren } from "@/components/toets/bron-figuur";
-import { blokkenVoorVraag } from "@/lib/toets/blad-volgorde";
+import { blokkenVoorVraag, tekenvakMaat } from "@/lib/toets/blad-volgorde";
 import { startGroep } from "@/lib/toets/context-groepen";
 import type { GegenereerdeToets } from "@/lib/toets/types";
 import { totaalPunten } from "@/lib/toets/rtti";
@@ -107,6 +107,26 @@ export function ToetsSheet({
                   </li>
                 ))}
               </ul>
+            ) : null}
+            {blokken.includes("tekenvak") ? (
+              <div className="mt-3">
+                {q.tekenvak?.schaal || q.tekenvak?.xLabel || q.tekenvak?.yLabel ? (
+                  <p className="mb-1 text-xs text-muted-foreground">
+                    {[q.tekenvak?.schaal ? `Schaal: ${q.tekenvak.schaal}` : "", q.tekenvak?.yLabel ? `verticaal: ${q.tekenvak.yLabel}` : "", q.tekenvak?.xLabel ? `horizontaal: ${q.tekenvak.xLabel}` : ""].filter(Boolean).join("   ")}
+                  </p>
+                ) : null}
+                <div
+                  aria-label="Tekenvak"
+                  className="border border-foreground"
+                  style={{
+                    width: `${tekenvakMaat(q).kolommen * 1.5}rem`,
+                    height: `${tekenvakMaat(q).rijen * 1.5}rem`,
+                    maxWidth: "100%",
+                    backgroundImage: q.tekenvak?.soort === "leeg" ? undefined : "linear-gradient(#c8c8c8 1px, transparent 1px), linear-gradient(90deg, #c8c8c8 1px, transparent 1px)",
+                    backgroundSize: "1.5rem 1.5rem",
+                  }}
+                />
+              </div>
             ) : null}
           </li>
           );
