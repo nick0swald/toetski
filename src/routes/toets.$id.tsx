@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { bijschavenToets, generateExtraQuestions } from "@/lib/toets/generate";
+import { figuurNaarVerwijzing } from "@/lib/toets/figuren/bevriezing";
+import { naModelRondeVeilig } from "@/lib/toets/figuren/veilig";
 import { finalizeVragen } from "@/lib/toets/mc-balance";
 import { withDefaults } from "@/lib/toets/defaults";
 import { maakVoorbeeldToets } from "@/lib/toets/sample";
@@ -162,7 +164,8 @@ function ToetsPage() {
           leerjaar: current.meta.leerjaar,
           bronmateriaal: current.bronmateriaal,
           stuurdocument: stuurdocument.trim() || undefined,
-          vragen: current.vragen,
+          // Beelddata gaat nooit naar het model: alleen een verwijzing naar de bevroren figuur.
+          vragen: current.vragen.map(figuurNaarVerwijzing),
           nakijkmodel: current.nakijkmodel,
         },
       });
@@ -170,11 +173,7 @@ function ToetsPage() {
         toast.error(result.error);
         return;
       }
-      upsert({
-        ...current,
-        vragen: result.vragen,
-        nakijkmodel: result.nakijkmodel,
-      });
+      upsert(await naModelRondeVeilig(current, { vragen: result.vragen, nakijkmodel: result.nakijkmodel }));
       setBijschavenTekst("");
       toast.success(result.toelichting || "Bijgeschaafd");
     } catch (err) {
@@ -220,11 +219,7 @@ function ToetsPage() {
         [...current.nakijkmodel, ...result.nakijkmodel],
         { skipOrder: true },
       );
-      upsert({
-        ...current,
-        vragen: merged.vragen,
-        nakijkmodel: merged.nakijkmodel,
-      });
+      upsert(await naModelRondeVeilig(current, { vragen: merged.vragen, nakijkmodel: merged.nakijkmodel }));
       const n = result.vragen.length;
       toast.success(n === 1 ? "1 extra vraag toegevoegd" : `${n} extra vragen toegevoegd`);
     } catch (err) {

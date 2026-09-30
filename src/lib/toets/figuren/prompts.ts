@@ -1,0 +1,106 @@
+import type { FiguurSpec, NakijkItem, Vraag } from "../types.ts";
+import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, specSamenvatting } from "./spec.ts";
+
+/** Vaste stijl voor elke sfeerplaat (Nova natuurkunde-lesboek). */
+export const NOVA_STIJL = [
+  "Flat, clean educational illustration in the style of a Dutch secondary-school physics/chemistry textbook (Nova natuurkunde).",
+  "Thin, clear dark contour lines. Soft, flat pastel colours. No photorealism, no 3D rendering, no shading gradients, no dramatic lighting.",
+  "Plain white background, simple schematic figures and objects, generous white space, one clear subject.",
+  "No text, no letters, no numbers, no labels, no captions, no watermarks, no logos anywhere in the image.",
+  "Lab safety must be correct: people doing experiments wear safety goggles, long hair tied back, no unsafe handling.",
+].join(" ");
+
+export function beeldPrompt(spec: FiguurSpec, scene: string): string {
+  const niet = spec.nietTonen.length ? ` Do NOT show: ${spec.nietTonen.join("; ")}.` : "";
+  const moet = spec.verplichteElementen.length ? ` Must clearly show: ${spec.verplichteElementen.join("; ")}.` : "";
+  return `${NOVA_STIJL}\n\nScene: ${scene}.${moet}${niet}`;
+}
+
+export function vraagTekst(v: Vraag): string {
+  const opties = v.opties?.length ? `\nOpties: ${v.opties.map((o) => `${o.letter}. ${o.tekst}`).join(" | ")}` : "";
+  return `Vraag ${v.nummer} [${v.type}, ${v.rtti}, ${v.punten}p]\n${v.context ? `Context: ${v.context}\n` : ""}Stam: ${v.stam}${opties}`;
+}
+
+export function sleutelTekst(n?: NakijkItem): string {
+  if (!n) return "(geen nakijkregel)";
+  return `Modelantwoord: ${n.modelantwoord ?? ""}\nRubriek: ${(n.puntenverdeling ?? []).map((p) => `${p.punt}p ${p.criterium}`).join("; ")}`;
+}
+
+const SPEC_UITLEG = `Een figuurspec is JSON:
+{ "soort": "lijngrafiek"|"staafdiagram"|"spreidingsdiagram"|"stroomkring"|"katrol"|"hefboom"|"krachtenschema"|"blokschema"|"maatcilinder"|"pictogram"|"sfeerplaat",
+  "titel": string (kort, mag leeg),
+  "doel": string (wat de figuur laat zien en waarom de vraag hem nodig heeft),
+  "verplichteElementen": string[], "labels": string[],
+  "getallen": [{"label": string, "waarde": number, "eenheid": string}],
+  "eenheden": string[],
+  "nietTonen": string[] (wat NIET in beeld mag, zodat het antwoord niet wordt weggegeven — bijv. de gevraagde waarde of de naam van het gevraagde begrip),
+  "data": object per soort:
+    lijngrafiek: {"xLabel","yLabel","xEenheid","yEenheid","reeksen":[{"naam"?, "punten":[{"x":n,"y":n}]}],"toonPunten":bool}
+    staafdiagram: {"yLabel","yEenheid","xLabel"?,"staven":[{"label","waarde":n}],"toonWaarden":bool}
+    spreidingsdiagram: {"xLabel","yLabel","xEenheid","yEenheid","punten":[{"x","y"}]}
+    stroomkring: {"schakeling":"serie"|"parallel","bron":{"soort":"batterij"|"spanningsbron","label":"6 V"},"componenten":[{"soort":"lampje"|"weerstand"|"schakelaar-open"|"schakelaar-dicht"|"ampèremeter"|"motor"|"led"|"zoemer","label"?}],"takken":[[component,...]] (alleen parallel),"voltmeters":[{"over":index|"bron","label"?}]}
+    katrol: {"type":"vast"|"los"|"takel","touwdelen":n,"last":string,"kracht":string}
+    hefboom: {"lengte":n,"eenheid":"m","draaipunt":n (afstand vanaf linkeruiteinde),"krachten":[{"positie":n,"label":string,"richting":"omlaag"|"omhoog"}],"toonMaten":bool}
+    krachtenschema: {"voorwerp":string,"krachten":[{"naam":"Fz","richting":"omhoog"|"omlaag"|"links"|"rechts","grootte":n,"eenheid":"N"}],"toonGrootte":bool,"schaal"?:n}
+    blokschema: {"blokken":[string,...]}
+    maatcilinder: {"maxMl":n,"standen":[{"label","ml":n}]}
+    sfeerplaat: {"scene": string (Engelse beschrijving van een eenvoudige situatie/voorwerp, zonder tekst in beeld)}
+Grafieken en schema's tekent de app zelf exact uit "data". Een sfeerplaat is alleen sfeer/situatie en mag nooit gegevens bevatten die nodig zijn voor het antwoord.`;
+
+export const PLANNER_SYSTEM = `Je bent beeldredacteur voor VMBO-toetsen (NaSk, methode Nova). Je bepaalt welke vragen een figuur NODIG hebben en schrijft per figuur eerst een precieze figuurspec. Je tekent niets.
+Regels:
+- Alleen een figuur als die de vraag echt beter of beantwoordbaar maakt (aflezen, schakeling herkennen, krachten, situatie). Niet bij elke vraag. Maximaal ${MAX_FIGUREN_PER_TOETS} figuren, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten.
+- Getallen in de figuur moeten exact kloppen met de vraag en het nakijkmodel. Bereken het antwoord zelf na.
+- De figuur mag het antwoord NIET weggeven: zet het gevraagde in "nietTonen" en laat het uit data/labels weg.
+- Geef "nieuweStam" alleen als de stam moet verwijzen naar de figuur (bijv. "Bekijk de grafiek."), anders weglaten. Verander nooit wat er gevraagd wordt of het antwoord.
+- "vraagVerwijstAlNaarFiguur": true als de huidige tekst al over een figuur/grafiek/afbeelding praat die er nog niet is.
+${SPEC_UITLEG}
+Antwoord ALLEEN met JSON: { "figuren": [ { "nummer": number, "vraagVerwijstAlNaarFiguur": boolean, "nieuweStam"?: string, "spec": figuurspec } ] }`;
+
+export function plannerUser(input: { vak: string; vragen: Vraag[]; nakijk: NakijkItem[]; overslaan: number[] }): string {
+  const blok = input.vragen
+    .filter((v) => !input.overslaan.includes(v.nummer))
+    .map((v) => `${vraagTekst(v)}\n${sleutelTekst(input.nakijk.find((n) => n.nummer === v.nummer))}`)
+    .join("\n\n");
+  return `Vak: ${input.vak || "NaSk"}\nVragen die al een figuur hebben (niet opnieuw plannen): ${input.overslaan.join(", ") || "geen"}\n\n${blok}`;
+}
+
+export const KEURING_SYSTEM = `Je bent de strenge beeldkeurder (go/no-go) van een Nederlandse VMBO-toetsmaker. Je krijgt één figuur, de vraag, de figuurspec en het antwoordmodel.
+Keur ALLEEN "go" als alles klopt. Controleer:
+1. klopt_met_spec: alle verplichte elementen staan erin, soort klopt, niets wezenlijks ontbreekt.
+2. labels_en_getallen_correct: elk label, getal en elke eenheid in beeld is correct gespeld, klopt met spec en vraag; geen verzonnen of onleesbare tekst.
+3. past_bij_vraag_en_antwoord: de leerling kan met deze figuur de vraag beantwoorden en komt dan op het modelantwoord uit.
+4. verklapt_antwoord_niet: de figuur toont het antwoord niet (ook niet via label, getal of duidelijke hint) en niets uit "NIET tonen".
+5. leesbaar: scherp, niet overvol, tekst groot genoeg om geprint te lezen, geen overlap.
+6. juiste_stijl: schone educatieve lesboekstijl (Nova): vlak, dunne donkere contouren, witte achtergrond; geen fotorealisme. Bij een sfeerplaat: géén tekst in beeld.
+7. veilig_en_vakinhoudelijk_juist: geen onveilige situatie (bij proeven: veiligheidsbril), geen natuurkundige/scheikundige fouten, niets ongepasts voor 12–16-jarigen.
+Antwoord ALLEEN met JSON:
+{ "besluit": "go"|"no_go", "checks": { "klopt_met_spec": bool, "labels_en_getallen_correct": bool, "past_bij_vraag_en_antwoord": bool, "verklapt_antwoord_niet": bool, "leesbaar": bool, "juiste_stijl": bool, "veilig_en_vakinhoudelijk_juist": bool }, "redenen": [string], "feedback": string (concrete aanwijzing wat anders moet bij no_go) }`;
+
+export function keuringUser(input: { vraag: Vraag; nakijk?: NakijkItem; spec: FiguurSpec; bron: "code" | "ai" }): string {
+  return `${vraagTekst(input.vraag)}
+
+${sleutelTekst(input.nakijk)}
+
+Figuurspec:
+${specSamenvatting(input.spec)}
+
+Herkomst: ${input.bron === "code" ? "door code getekend uit de spec-data (getallen exact)" : "AI-illustratie (sfeerplaat)"}.
+De figuur komt op het leerlingblad direct onder de vraagstam.`;
+}
+
+export const REVISIE_SYSTEM = `Je verbetert een figuurspec op basis van feedback van de beeldkeurder. Antwoord ALLEEN met JSON: { "spec": figuurspec }.
+Houd dezelfde "soort". Getallen in data blijven gelijk (die horen bij de vraag); pas presentatie aan: titel, labels, asopschriften, toonWaarden/toonMaten/toonGrootte/toonPunten, nietTonen, of bij een sfeerplaat de "scene".
+${SPEC_UITLEG}`;
+
+export function revisieUser(input: { vraag: Vraag; nakijk?: NakijkItem; spec: FiguurSpec; feedback: string[] }): string {
+  return `${vraagTekst(input.vraag)}\n${sleutelTekst(input.nakijk)}\n\nHuidige spec:\n${JSON.stringify(input.spec)}\n\nFeedback van de keurder:\n- ${input.feedback.join("\n- ")}`;
+}
+
+export const HERSCHRIJF_SYSTEM = `De figuur bij deze VMBO-vraag is afgekeurd en wordt NIET geplaatst. Maak de vraag zo dat hij zonder figuur werkt: herschrijf hem (gegevens in tekst of een kleine tabel), of vervang hem door een gelijkwaardige vraag over hetzelfde leerdoel.
+Regels: zelfde nummer, type, rtti, domein, leerdoel en puntental. Noem geen figuur, grafiek, afbeelding of plaatje. Verklap het antwoord niet. Precies één verdedigbaar antwoord. Meerkeuze: modelantwoord = letter + tekst.
+Antwoord ALLEEN met JSON: { "actie": "herschreven"|"vervangen", "vraag": { "nummer", "type", "rtti", "domein", "leerdoel", "punten", "context", "stam", "opties": [{"letter","tekst"}], "tabel"?: {"koppen": string[], "rijen": string[][]} }, "nakijk": { "nummer", "modelantwoord", "puntenverdeling": [{"punt","criterium"}], "nietToekennen": string[] } }`;
+
+export function herschrijfUser(input: { vraag: Vraag; nakijk?: NakijkItem; spec: FiguurSpec; redenen: string[] }): string {
+  return `${vraagTekst(input.vraag)}\n${sleutelTekst(input.nakijk)}\n\nAfgekeurde figuur:\n${specSamenvatting(input.spec)}\n\nWaarom afgekeurd:\n- ${input.redenen.join("\n- ")}`;
+}

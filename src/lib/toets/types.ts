@@ -133,6 +133,93 @@ export interface Vraag {
   pictogram?: GhsSymbool;
   /** Maatcilinderfiguur (aflezen), geen tabel. */
   maatcilinder?: MaatcilinderFiguur;
+  /**
+   * Goedgekeurde, bevroren figuur (alleen na een "go" van de beeldkeuring).
+   * Wordt na plaatsing nooit meer gewijzigd; zie figuren/bevriezing.ts.
+   */
+  figuur?: GoedgekeurdeFiguur;
+  /** Verwijzing naar een bevroren figuur (voor rondes via het model, zonder beelddata). */
+  figuurId?: string;
+}
+
+/** Soorten figuren in de beeldpijplijn. Alles behalve "sfeerplaat" tekent de code zelf (SVG → PNG). */
+export type FiguurSoort =
+  | "lijngrafiek"
+  | "staafdiagram"
+  | "spreidingsdiagram"
+  | "stroomkring"
+  | "katrol"
+  | "hefboom"
+  | "krachtenschema"
+  | "blokschema"
+  | "pictogram"
+  | "maatcilinder"
+  | "sfeerplaat";
+
+/** JSON-waarde (serialiseerbaar over serverfuncties). */
+export type JsonWaarde = string | number | boolean | null | JsonWaarde[] | { [k: string]: JsonWaarde };
+
+/** Gestructureerde figuurspecificatie die het model eerst schrijft (vóór er iets getekend wordt). */
+export interface FiguurSpec {
+  soort: FiguurSoort;
+  titel?: string;
+  /** Wat de figuur moet laten zien en waarom de vraag hem nodig heeft. */
+  doel: string;
+  verplichteElementen: string[];
+  labels: string[];
+  getallen: { label: string; waarde: number; eenheid?: string }[];
+  eenheden: string[];
+  /** Wat NIET in beeld mag (zodat het antwoord niet wordt weggegeven). */
+  nietTonen: string[];
+  /** Tekendata per soort (zie figuren/spec.ts). */
+  data: { [k: string]: JsonWaarde };
+}
+
+export interface FiguurKeuring {
+  besluit: "go";
+  redenen: string[];
+  model: string;
+  tijdstip: string;
+}
+
+/** Een figuur die door de go/no-go-keuring is gekomen. Bevroren en gehasht. */
+export interface GoedgekeurdeFiguur {
+  id: string;
+  soort: FiguurSoort;
+  bron: "code" | "ai";
+  mime: "image/png" | "image/jpeg";
+  /** Base64 van precies de bytes die de keuring heeft gezien. */
+  data: string;
+  breedte: number;
+  hoogte: number;
+  alt: string;
+  spec: FiguurSpec;
+  pogingen: number;
+  keuring: FiguurKeuring;
+  /** sha256 over id/soort/bron/mime/data/maten/spec/keuring. */
+  hash: string;
+}
+
+export type FiguurStatus = "go" | "gedropt";
+
+export interface FiguurRapportItem {
+  /** Vraagnummer op het moment van de keuring. */
+  nummer: number;
+  soort: FiguurSoort;
+  bron: "code" | "ai";
+  status: FiguurStatus;
+  pogingen: number;
+  redenen: string[];
+  /** Wat er met de vraag gebeurde als de figuur is gedropt. */
+  fallback?: "herschreven" | "vervangen" | "tabel" | "tekst" | "geen-figuur" | "verwijderd";
+  figuurId?: string;
+}
+
+export interface FiguurRapport {
+  versie: 1;
+  items: FiguurRapportItem[];
+  /** Algemene meldingen (bijv. planner niet bereikbaar). */
+  meldingen: string[];
 }
 
 export interface PuntenCriterium {
@@ -194,6 +281,12 @@ export interface GegenereerdeToets {
   kwaliteit: Kwaliteitscheck;
   soort?: "toets" | "matrijs";
   feedbackGewenst?: boolean;
+  /**
+   * Gezet zodra de beeldpijplijn heeft gedraaid. Vanaf dan tonen blad en Word
+   * alleen goedgekeurde figuren (vraag.figuur), nooit ongekeurde oude figuurvelden.
+   */
+  figuurPijplijn?: 1;
+  figuurRapport?: FiguurRapport;
 }
 
 export interface GenerateInput {

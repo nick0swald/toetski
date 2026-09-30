@@ -56,7 +56,7 @@ export const generateInputSchema = z.object({
   stuurdocument: z.string().max(20000).optional(),
 });
 
-const vraagSchema = z.object({
+export const vraagSchema = z.object({
   nummer: z.coerce.number(),
   type: z
     .string()
@@ -125,9 +125,11 @@ const vraagSchema = z.object({
     })
     .nullish()
     .transform((v) => v ?? undefined),
+  /** Verwijzing naar een bevroren, goedgekeurde figuur (beelddata gaat nooit naar het model). */
+  figuurId: z.string().max(80).nullish().transform((v) => v || undefined),
 });
 
-const nakijkSchema = z.object({
+export const nakijkSchema = z.object({
   nummer: z.coerce.number(),
   modelantwoord: z.string(),
   puntenverdeling: z

@@ -23,7 +23,8 @@ import { totaalPunten } from "./rtti";
 import { slug } from "./text";
 import { ghsPictogramSvg, grafiekSvg, maatcilinderSvg, schemaFiguurSvg } from "./figuur-svg";
 import { blokkenVoorVraag } from "./blad-volgorde";
-import type { CijferNorm, GegenereerdeToets, SchemaFiguur, Vraag, VraagTabel } from "./types";
+import { figuurIsGeldig } from "./figuren/bevriezing";
+import type { CijferNorm, GegenereerdeToets, GoedgekeurdeFiguur, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
 
 const GREEN = "004422";
@@ -132,6 +133,49 @@ async function stimulusBlocks(q: Vraag): Promise<DocChild[]> {
     if (svg) out.push(await svgImageParagraph(svg, 280, 320));
   }
   return out;
+}
+
+function base64NaarBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** Figuurnummers in bladvolgorde (alleen goedgekeurde, onveranderde figuren). */
+export function figuurNummers(t: GegenereerdeToets): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const q of t.vragen) if (figuurIsGeldig(q.figuur)) m.set(q.figuur.id, m.size + 1);
+  return m;
+}
+
+/**
+ * Goedgekeurde figuur: exact de bytes die de keuring zag, ongewijzigd (geen re-render, geen bewerking).
+ * Een figuur met een ongeldige hash wordt geweigerd.
+ */
+function goedgekeurdeFiguurBlocks(fig: GoedgekeurdeFiguur | undefined, nr: number | undefined): DocChild[] {
+  if (!figuurIsGeldig(fig)) return [];
+  const maxBreedte = 440; // px, past ruim binnen de A4-marges
+  const f = Math.min(1, maxBreedte / fig.breedte);
+  return [
+    new Paragraph({
+      spacing: { before: 80, after: 40 },
+      indent: { left: 709 },
+      children: [
+        new ImageRun({
+          type: fig.mime === "image/jpeg" ? "jpg" : "png",
+          data: base64NaarBytes(fig.data),
+          transformation: { width: Math.round(fig.breedte * f), height: Math.round(fig.hoogte * f) },
+          altText: { title: nr ? `Figuur ${nr}` : "Figuur", description: fig.alt, name: `figuur-${fig.id}` },
+        }),
+      ],
+    }),
+    new Paragraph({
+      spacing: { after: 120 },
+      indent: { left: 709 },
+      children: [new TextRun({ text: nr ? `Figuur ${nr}` : "Figuur", font: FONT, size: SMALL_SIZE, italics: true, color: MUTED })],
+    }),
+  ];
 }
 
 function tabelBlocks(q: Vraag): DocChild[] {
@@ -379,19 +423,23 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
     for (const s of m.instructies) out.push(p(s, { size: SMALL_SIZE, after: 40 }));
     out.push(p("", { after: 120 }));
   }
+  const nummers = figuurNummers(t);
+  const pijplijn = Boolean(t.figuurPijplijn);
   for (const q of t.vragen) {
     const stam = (q.stam || "").trim();
-    // context → stimulusfiguur → punten/nummer/stam → tabel. Invultabel = antwoordgebied.
-    for (const blok of blokkenVoorVraag(q)) {
+    // context → (oude) stimulusfiguur → punten/nummer/stam → goedgekeurde figuur → tabel. Invultabel = antwoordgebied.
+    for (const blok of blokkenVoorVraag(q, { pijplijn })) {
       if (blok === "context" && q.context?.trim()) {
         out.push(p(q.context.trim(), { size: BODY_SIZE, before: 200, after: 80 }));
       } else if (blok === "stimulus") {
         out.push(...(await stimulusBlocks(q)));
+      } else if (blok === "figuur") {
+        out.push(...goedgekeurdeFiguurBlocks(q.figuur, q.figuur ? nummers.get(q.figuur.id) : undefined));
       } else if (blok === "stam") {
         out.push(
           new Paragraph({
             spacing: {
-              before: q.context?.trim() || q.grafiek || q.schemaFiguur || q.pictogram || q.maatcilinder ? 40 : 200,
+              before: q.context?.trim() || (!pijplijn && (q.grafiek || q.schemaFiguur || q.pictogram || q.maatcilinder)) ? 40 : 200,
               after: 80,
               line: 276,
               lineRule: "auto",
@@ -438,8 +486,17 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
   return out;
 }
 
+function figuurVerwijzing(fig: GoedgekeurdeFiguur, nr: number | undefined): string {
+  const g = fig.spec.getallen
+    .slice(0, 6)
+    .map((x) => `${x.label} = ${String(x.waarde).replace(".", ",")}${x.eenheid ? ` ${x.eenheid}` : ""}`)
+    .join("; ");
+  return `Zie figuur ${nr ?? ""} bij deze vraag (${fig.alt.toLowerCase()}; goedgekeurd na ${fig.pogingen} keuringspoging${fig.pogingen === 1 ? "" : "en"}).${g ? ` Gegevens in de figuur: ${g}.` : ""}`.replace("figuur  bij", "figuur bij");
+}
+
 function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const t = withDefaults(toets);
+  const nummers = figuurNummers(t);
   const max = totaalPunten(t.vragen);
   const out: (Paragraph | Table)[] = [
     p(`Nakijkmodel · ${t.meta.titel}`, { bold: true, size: 28, after: 80 }),
@@ -469,6 +526,9 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
         ],
       }),
     );
+    if (q && figuurIsGeldig(q.figuur)) {
+      out.push(p(figuurVerwijzing(q.figuur, nummers.get(q.figuur.id)), { size: SMALL_SIZE, italics: true, after: 40 }));
+    }
     out.push(p(`Modelantwoord: ${n.modelantwoord}`, { after: 60 }));
     for (const pc of n.puntenverdeling) {
       out.push(
