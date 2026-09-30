@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/app-shell";
 import { DekkingHintBanner } from "@/components/toets/dekking-hint";
+import { FiguurOverzicht } from "@/components/toets/figuur-overzicht";
 import { KwaliteitPanel } from "@/components/toets/kwaliteit-panel";
 import { MatrijsSheet } from "@/components/toets/matrijs-sheet";
 import { NakijkSheet } from "@/components/toets/nakijk-sheet";
@@ -66,6 +67,7 @@ function ToetsPage() {
     (id === "voorbeeld-fotosynthese" ? maakVoorbeeldToets() : undefined);
   const toets = raw ? withDefaults(raw) : undefined;
   const updateVraag = useToetsStore((s) => s.updateVraag);
+  const verwijderFiguur = useToetsStore((s) => s.verwijderFiguur);
   const updateNakijk = useToetsStore((s) => s.updateNakijk);
   const update = useToetsStore((s) => s.update);
   const [tab, setTab] = useState<TabId>("toets");
@@ -344,7 +346,16 @@ function ToetsPage() {
       <div className="mx-auto max-w-[210mm] px-3 py-8 sm:px-6">
         {visibleTab === "toets" ? (
           <>
-            <ToetsSheet toets={toets} editing={editing} onStam={(nummer, stam) => updateVraag(toets.id, nummer, { stam })} />
+            <ToetsSheet
+              toets={toets}
+              editing={editing}
+              onStam={(nummer, stam) => updateVraag(toets.id, nummer, { stam })}
+              onVerwijderFiguur={(nummer) => {
+                verwijderFiguur(toets.id, nummer);
+                toast.success(`Figuur bij vraag ${nummer} verwijderd`);
+              }}
+            />
+            {isMatrijs ? null : <FiguurOverzicht toets={toets} />}
             {isMatrijs ? null : <DekkingHintBanner toets={toets} />}
           </>
         ) : null}
