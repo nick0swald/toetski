@@ -31,7 +31,8 @@ function reparatiePrompt(vragen: Vraag[], nakijk: NakijkItem[], issues: ItemIssu
     .map((nr) => {
       // Beelddata gaat nooit naar het model; een bevroren figuur is alleen een verwijzing.
       const gevonden = vragen.find((v) => v.nummer === nr);
-      const q = gevonden ? figuurNaarVerwijzing(gevonden) : gevonden;
+      const q0 = gevonden ? figuurNaarVerwijzing(gevonden) : gevonden;
+      const { tekstZonderFiguur: _t, ...q } = q0 ?? ({} as Vraag);
       const n = nakijk.find((item) => item.nummer === nr);
       const waarom = issues.filter((i) => i.nummer === nr).map((i) => `- ${i.code}: ${i.uitleg}`).join("\n");
       return `Vraag ${nr}\n${waarom}\n${JSON.stringify({ vraag: q, nakijk: n })}`;
@@ -238,6 +239,17 @@ export async function werkVragenAf(input: {
   const t0 = nu();
   const budget = input.budgetMs ?? 55_000;
   const rest = () => budget - (nu() - t0);
+  // Elke modelaanroep krijgt hooguit het resterende budget (+6 s): het geheel blijft binnen ~100 s.
+  const binnenTijd = (f?: Repair): Repair | undefined =>
+    f &&
+    ((p) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const stop = new Promise<null>((res) => {
+        timer = setTimeout(() => res(null), Math.max(4_000, rest() + 6_000));
+      });
+      return Promise.race([f(p).catch(() => null), stop]).finally(() => clearTimeout(timer));
+    });
+  input = { ...input, controleer: binnenTijd(input.controleer), repair: binnenTijd(input.repair) };
   let stap = repareerItemsDeterministisch(input.vragen, input.nakijkmodel, bron);
   let vragen = stap.vragen;
   let nakijk = stap.nakijkmodel;

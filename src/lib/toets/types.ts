@@ -185,6 +185,11 @@ export interface Vraag {
   /** Maatcilinderfiguur (aflezen), geen tabel. */
   maatcilinder?: MaatcilinderFiguur;
   /**
+   * Oorspronkelijke tekst vóórdat gegevens/beschrijving naar een figuur verhuisden. Valt de figuur weg
+   * en is de stam nog precies `na`, dan komt deze tekst terug (geen kapotte zinnen).
+   */
+  tekstZonderFiguur?: { stam: string; context?: string; na: string };
+  /**
    * Goedgekeurde, bevroren figuur (alleen na een "go" van de beeldkeuring).
    * Wordt na plaatsing nooit meer gewijzigd; zie figuren/bevriezing.ts.
    */
@@ -432,3 +437,27 @@ export function pictogramPastBijVraag(q: Pick<Vraag, "stam" | "context" | "leerd
   const t = `${q.context ?? ""} ${q.stam} ${q.leerdoel ?? ""} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`;
   return /symbool|pictogram|\bbord|etiket|gevaar|gevaarlijk|veilig|bescherming|\bbril|handschoen|brandbaar|ontvlambaar|giftig|bijtend|explosie|oxider|milieu|irriter|schadelijk|lawaai|verplicht|verboden/i.test(t);
 }
+
+/** Wat je op het symbool/bord ZIET (zonder de betekenis te noemen): voor een vraag waarvan de figuur wegviel. */
+export const PICTOGRAM_BESCHRIJVING: Record<GhsSymbool, string> = {
+  ontvlambaar: "een zwarte vlam in een rode ruit",
+  giftig: "een doodshoofd met gekruiste botten in een rode ruit",
+  bijtend: "druppels die een hand en een plaatje aantasten, in een rode ruit",
+  milieu: "een dode boom en een dode vis in een rode ruit",
+  schadelijk: "een uitroepteken in een rode ruit",
+  explosief: "een ontploffende bom in een rode ruit",
+  oxiderend: "een vlam boven een cirkel in een rode ruit",
+  "gas-onder-druk": "een gasfles in een rode ruit",
+  gezondheidsgevaar: "het silhouet van een bovenlichaam met een ster op de borst in een rode ruit",
+  "gebod-gehoorbescherming": "een wit hoofd met oorkappen op een blauw rond bord",
+  "gebod-oogbescherming": "een wit hoofd met een veiligheidsbril op een blauw rond bord",
+  "gebod-handschoenen": "een witte handschoen op een blauw rond bord",
+  "gebod-veiligheidsschoenen": "een witte werkschoen op een blauw rond bord",
+  "gebod-stofmasker": "een wit hoofd met een mondkapje op een blauw rond bord",
+  "gebod-helm": "een wit hoofd met een helm op een blauw rond bord",
+  "waarschuwing-algemeen": "een zwart uitroepteken in een gele driehoek",
+  "waarschuwing-elektriciteit": "een zwarte bliksemschicht in een gele driehoek",
+  "waarschuwing-heet": "golvende lijnen boven een heet oppervlak in een gele driehoek",
+  "verbod-roken": "een brandende sigaret met een rode streep erdoor in een rode cirkel",
+  "verbod-open-vuur": "een lucifer met vlam met een rode streep erdoor in een rode cirkel",
+};

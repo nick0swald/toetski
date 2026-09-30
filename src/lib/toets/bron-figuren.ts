@@ -193,11 +193,13 @@ export function plaatsPictogrammen(vragen: Vraag[], nakijk: NakijkItem[] = []): 
         criterium: bord ? p.criterium.replace(/\b(?:GHS-?)?(?:gezondheidsgevaar|gevaren?)[- ]?(?:pictogram|symbool)\b/gi, "veiligheidsbord") : p.criterium,
       }));
     }
+    const stam = woord(schrapSymboolbeschrijving(q.stam));
     return {
       ...q,
       pictogram: soort,
       context: q.context ? woord(schrapSymboolbeschrijving(q.context)) : q.context,
-      stam: woord(schrapSymboolbeschrijving(q.stam)),
+      stam,
+      ...(stam !== q.stam || q.tekstZonderFiguur ? { tekstZonderFiguur: q.tekstZonderFiguur ?? { stam: q.stam, context: q.context, na: stam } } : {}),
     };
   });
 }
@@ -245,7 +247,7 @@ export function plaatsMaatcilinders(vragen: Vraag[]): Vraag[] {
         stam = `Lees de beginstand en de stand na het onderdompelen af van de maatcilinder. ${stam}`.trim();
       }
     }
-    return { ...q, stam, maatcilinder: fig };
+    return { ...q, stam, maatcilinder: fig, ...(stam !== q.stam ? { tekstZonderFiguur: { stam: q.stam, context: q.context, na: stam } } : {}) };
   });
 }
 
