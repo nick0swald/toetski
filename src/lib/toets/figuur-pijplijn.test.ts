@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import { sha256Hex } from "./figuren/sha256.ts";
 import { tekenCodeFiguur, tekstenInSvg } from "./figuren/svg.ts";
-import { parseFiguurSpec, legacySpecs } from "./figuren/spec.ts";
+import { parseFiguurSpec, legacySpecs, veiligeNieuweStam } from "./figuren/spec.ts";
 import { beoordeelKeuring, KEURING_CHECKS, voorcheckNietTonen } from "./figuren/keuring.ts";
 import { bevriesGoedgekeurd, bewaakFiguren, figuurIsGeldig, figuurNaarVerwijzing } from "./figuren/bevriezing.ts";
 import { maakFiguurMetKeuring, type PijplijnDeps, type FiguurOpdracht } from "./figuren/pijplijn.ts";
@@ -303,5 +303,31 @@ describe("kwaliteit: figuurkeuring", () => {
       meldingen: [],
     }, { nask: true });
     assert.match(r.samenvatting, /1 geplaatst \(go\), 1 gedropt, 5 keuringspogingen/);
+  });
+});
+
+describe("veiligeNieuweStam", () => {
+  const oud = "Een kop thee koelt af van 80 °C naar 37 °C in 20 minuten. Lees af hoe warm de thee is na 7,5 minuten.";
+  it("weigert een stam die alleen naar de figuur verwijst", () => {
+    assert.equal(veiligeNieuweStam(oud, "Bekijk de grafiek."), undefined);
+  });
+  it("weigert een stam waarin gegevens ontbreken", () => {
+    assert.equal(veiligeNieuweStam(oud, "Een kop thee koelt af, zie de grafiek. Lees af hoe warm de thee is na 7,5 minuten."), undefined);
+  });
+  it("accepteert een volledige stam met verwijzing", () => {
+    const n = "In de grafiek zie je hoe een kop thee afkoelt van 80 °C naar 37 °C in 20 minuten. Lees in de grafiek af hoe warm de thee is na 7,5 minuten.";
+    assert.equal(veiligeNieuweStam(oud, n), n);
+  });
+});
+
+describe("verwerkFiguren met onvolledige nieuweStam", () => {
+  it("houdt de oude stam als de planner alleen 'Bekijk de grafiek.' geeft", async () => {
+    const q1 = vraag(1);
+    const uit = await verwerkFiguren(toets([q1]), {
+      plan: async () => ({ ok: true, figuren: [{ nummer: 1, spec: grafiekSpec(), verwijst: true, nieuweStam: "Bekijk de grafiek." }] }),
+      maak: (o) => maakFiguurMetKeuring(o, nepDeps([alleGo()])),
+    });
+    assert.ok(figuurIsGeldig(uit.vragen[0]!.figuur));
+    assert.equal(uit.vragen[0]!.stam, q1.stam);
   });
 });

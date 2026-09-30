@@ -52,7 +52,7 @@ Regels:
 - Alleen een figuur als die de vraag echt beter of beantwoordbaar maakt (aflezen, schakeling herkennen, krachten, situatie). Niet bij elke vraag. Maximaal ${MAX_FIGUREN_PER_TOETS} figuren, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten.
 - Getallen in de figuur moeten exact kloppen met de vraag en het nakijkmodel. Bereken het antwoord zelf na.
 - De figuur mag het antwoord NIET weggeven: zet het gevraagde in "nietTonen" en laat het uit data/labels weg.
-- Geef "nieuweStam" alleen als de stam moet verwijzen naar de figuur (bijv. "Bekijk de grafiek."), anders weglaten. Verander nooit wat er gevraagd wordt of het antwoord.
+- Geef "nieuweStam" alleen als de stam moet gaan verwijzen naar de figuur, anders weglaten. "nieuweStam" is dan de VOLLEDIGE nieuwe stam: de hele oude stam met alle gegevens en de vraagzin, plus een korte verwijzing (bijv. "In de grafiek zie je ... . Lees af ..."). Nooit alleen "Bekijk de grafiek.". Verander nooit wat er gevraagd wordt of het antwoord.
 - "vraagVerwijstAlNaarFiguur": true als de huidige tekst al over een figuur/grafiek/afbeelding praat die er nog niet is.
 ${SPEC_UITLEG}
 Antwoord ALLEEN met JSON: { "figuren": [ { "nummer": number, "vraagVerwijstAlNaarFiguur": boolean, "nieuweStam"?: string, "spec": figuurspec } ] }`;

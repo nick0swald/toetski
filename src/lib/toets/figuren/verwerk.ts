@@ -13,7 +13,7 @@ import type {
 import { bewaakFiguren, diepBevriezen, figuurIsGeldig, zonderLegacyFiguren } from "./bevriezing.ts";
 import { vraagZonderFiguur } from "./fallback.ts";
 import type { FiguurOpdracht, FiguurUitkomst } from "./pijplijn.ts";
-import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, heeftLegacyFiguur, isCodeFiguur, legacySpecs } from "./spec.ts";
+import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, heeftLegacyFiguur, isCodeFiguur, legacySpecs, veiligeNieuweStam } from "./spec.ts";
 
 export interface PlanAntwoord {
   ok: boolean;
@@ -112,7 +112,7 @@ export async function verwerkFiguren(
           if (f.spec.soort === "sfeerplaat" && sfeer >= MAX_SFEERPLATEN_PER_TOETS) continue;
           if (f.spec.soort === "sfeerplaat") sfeer++;
           totaal++;
-          jobs.push({ nummer: q.nummer, vraag: licht(q), nakijk: nakijkVan(q.nummer), spec: f.spec, legacy: false, verwijst: f.verwijst, nieuweStam: f.nieuweStam });
+          jobs.push({ nummer: q.nummer, vraag: licht(q), nakijk: nakijkVan(q.nummer), spec: f.spec, legacy: false, verwijst: f.verwijst, nieuweStam: veiligeNieuweStam(q.stam, f.nieuweStam) });
         }
       } catch (err) {
         meldingen.push(`Figuurplanner mislukt (${err instanceof Error ? err.message.slice(0, 120) : "fout"}).`);
@@ -138,7 +138,7 @@ export async function verwerkFiguren(
       if (!q) return;
       if (u.status === "go" && figuurIsGeldig(u.figuur)) {
         const figuur = diepBevriezen(u.figuur);
-        const nieuw: Vraag = zonderLegacyFiguren({ ...q, stam: u.nieuweStam?.trim() || q.stam, figuur });
+        const nieuw: Vraag = zonderLegacyFiguren({ ...q, stam: veiligeNieuweStam(q.stam, u.nieuweStam) ?? q.stam, figuur });
         delete nieuw.figuurId;
         vragen = vragen.map((v) => (v.nummer === job.nummer ? nieuw : v));
         items.push({ nummer: job.nummer, soort: figuur.soort, bron, status: "go", pogingen: u.pogingen, redenen: figuur.keuring.redenen.slice(0, 3), figuurId: figuur.id });

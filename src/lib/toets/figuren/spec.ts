@@ -363,3 +363,31 @@ export function altTekst(spec: FiguurSpec): string {
   };
   return spec.titel ? `${naam[spec.soort]}: ${spec.titel}` : naam[spec.soort];
 }
+
+function woorden(s: string): string[] {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z0-9,.]+/)
+    .filter((w) => w.length > 2);
+}
+
+/**
+ * Een door de planner voorgestelde nieuwe stam wordt alleen overgenomen als hij de VOLLEDIGE
+ * vraag bevat: ongeveer even lang, en de vraagzin (laatste zin) en getallen van de oude stam staan erin.
+ * Anders blijft de oude stam staan (bijv. planner gaf alleen "Bekijk de grafiek.").
+ */
+export function veiligeNieuweStam(oud: string, nieuw: string | undefined): string | undefined {
+  const n = nieuw?.trim();
+  if (!n || n === oud.trim()) return undefined;
+  if (n.length < Math.min(oud.trim().length * 0.6, oud.trim().length - 10)) return undefined;
+  const zinnen = oud.trim().split(/(?<=[.?!])\s+/).filter(Boolean);
+  const vraagzin = [...zinnen].reverse().find((z) => /\?$/.test(z)) ?? zinnen[zinnen.length - 1] ?? "";
+  const nw = new Set(woorden(n));
+  const vz = woorden(vraagzin);
+  if (vz.length && vz.filter((w) => nw.has(w)).length / vz.length < 0.7) return undefined;
+  const getallen = oud.match(/\d+(?:[.,]\d+)?/g) ?? [];
+  if (getallen.some((g) => !n.includes(g))) return undefined;
+  return n;
+}

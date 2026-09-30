@@ -120,7 +120,10 @@ function maakAssen(
 ): Assen {
   const pad = { l: 72, r: 24, t: opts.titel ? 40 : 18, b: 58 };
   const x = niceAs(opts.xMin ?? Math.min(0, ...xs), opts.xMax ?? Math.max(...xs));
-  const y = niceAs(opts.yMin ?? Math.min(0, ...ys), opts.yMax ?? Math.max(...ys));
+  // Kleine marge boven het hoogste punt, zodat een punt nooit tegen de rand van het assenstelsel valt.
+  const yHoog = Math.max(...ys);
+  const yLaag = opts.yMin ?? Math.min(0, ...ys);
+  const y = niceAs(yLaag, opts.yMax ?? yHoog + Math.max(1e-9, (yHoog - yLaag) * 0.04));
   const xOf = (v: number) => pad.l + ((v - x.min) / (x.max - x.min)) * (W - pad.l - pad.r);
   const yOf = (v: number) => pad.t + (1 - (v - y.min) / (y.max - y.min)) * (H - pad.t - pad.b);
   return { W, H, pad, x, y, xOf, yOf };
