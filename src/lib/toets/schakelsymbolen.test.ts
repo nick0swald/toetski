@@ -156,3 +156,26 @@ describe("pijplijn: symboolcheck vóór de vision-keuring", () => {
     if (u.status === "gedropt") assert.ok(u.redenen.some((r) => /standaardsymbool/.test(r)));
   });
 });
+
+describe("planner zet de batterij ook als onderdeel", () => {
+  it("bron-onderdeel wordt verwijderd; code-check slaagt; spanningsmeter schuift mee", () => {
+    const r = parseFiguurSpec({
+      soort: "stroomkring",
+      doel: "x",
+      data: { schakeling: "serie", bron: { soort: "batterij", label: "6 V" }, componenten: [{ soort: "batterij" }, { soort: "lampje" }, { soort: "schakelaar-dicht" }], voltmeters: [{ over: 1 }] },
+    });
+    assert.ok(r.spec, r.fout);
+    const d = r.spec!.data as { componenten: { soort: string }[]; voltmeters: { over: unknown }[] };
+    assert.deepEqual(d.componenten.map((c) => c.soort), ["lampje", "schakelaar-dicht"]);
+    assert.deepEqual(d.voltmeters.map((v) => v.over), [0]);
+    const g = tekenCodeFiguur(r.spec!);
+    assert.deepEqual(controleerStroomkringSymbolen(r.spec!, g.svg), []);
+  });
+  it("bron als tekst of onbekende soort wordt genormaliseerd", () => {
+    for (const bron of ["batterij", { soort: "accu", label: "12 V" }, { soort: "voeding" }]) {
+      const r = parseFiguurSpec({ soort: "stroomkring", doel: "x", data: { bron, componenten: [{ soort: "lampje" }] } });
+      assert.ok(r.spec, `${JSON.stringify(bron)}: ${r.fout}`);
+      assert.deepEqual(controleerStroomkringSymbolen(r.spec!, tekenCodeFiguur(r.spec!).svg), []);
+    }
+  });
+});

@@ -103,9 +103,21 @@ const dataSchemas = {
   }),
   stroomkring: z.object({
     schakeling: z.enum(["serie", "parallel"]).default("serie"),
-    bron: z
-      .object({ soort: z.enum(["batterij", "spanningsbron"]).default("batterij"), label: tekst(20).optional() })
-      .default({ soort: "batterij" }),
+    bron: z.preprocess(
+      (v) => {
+        // Robuust voor planner-varianten: "batterij", { soort: "accu" }, { soort: "voeding" } …
+        const o = typeof v === "string" ? { soort: v } : v;
+        if (!o || typeof o !== "object") return o;
+        const r = o as { soort?: unknown };
+        if (typeof r.soort === "string" && r.soort !== "batterij" && r.soort !== "spanningsbron") {
+          return { ...r, soort: /spanningsbron|voeding|adapter|bron/i.test(r.soort) ? "spanningsbron" : "batterij" };
+        }
+        return o;
+      },
+      z
+        .object({ soort: z.enum(["batterij", "spanningsbron"]).default("batterij"), label: tekst(20).optional() })
+        .default({ soort: "batterij" }),
+    ),
     /** Serie: onderdelen in de kring. Parallel: onderdelen in de hoofdstroom (bijv. schakelaar, A-meter). */
     componenten: z.array(z.object({ soort: tekst(30), label: tekst(20).optional() })).max(6).default([]),
     /** Alleen bij parallel: elke tak is een rijtje onderdelen. */
@@ -218,8 +230,9 @@ const METEN_OVER = /lamp|weerstand|motor|led|zoemer|ldr|ntc/i;
  * NOOIT over de spanningsbron of batterij. Zo'n meter wordt verplaatst naar het eerste lampje of de
  * eerste weerstand zonder meter, of geschrapt. Ongeldige indexen worden ook geschrapt.
  */
-export function novaStroomkring(d: SpecData<"stroomkring">): { data: SpecData<"stroomkring">; aanpassingen: string[] } {
+export function novaStroomkring(invoer: SpecData<"stroomkring">): { data: SpecData<"stroomkring">; aanpassingen: string[] } {
   const aanpassingen: string[] = [];
+  const d = zonderBronComponenten(invoer, aanpassingen);
   const parallel = d.schakeling === "parallel" && d.takken.length > 0;
   const bezet = new Set<string>();
   const sleutel = (o: number | { tak: number; index: number }) => (typeof o === "number" ? `c${o}` : `t${o.tak}.${o.index}`);
@@ -256,6 +269,58 @@ export function novaStroomkring(d: SpecData<"stroomkring">): { data: SpecData<"s
     } else aanpassingen.push("spanningsmeter over een onbekend of niet-meetbaar onderdeel geschrapt");
   }
   return { data: { ...d, voltmeters }, aanpassingen };
+}
+
+const IS_BRON = (soort: string) => {
+  const k = symboolSoort(soort);
+  return k === "batterij" || k === "spanningsbron";
+};
+
+/**
+ * De bron wordt altijd apart getekend (veld bron). Een planner die de batterij óók als onderdeel in
+ * componenten/takken zet, gaf een tweede, half getekende bron → code-check "batterij: geen lange + korte
+ * plaat" → elke stroomkring gedropt. Zulke onderdelen gaan eruit; spanningsmeters worden meegeschoven.
+ */
+function zonderBronComponenten(d: SpecData<"stroomkring">, aanpassingen: string[]): SpecData<"stroomkring"> {
+  const heeftBron = d.componenten.some((c) => IS_BRON(c.soort)) || d.takken.some((t) => t.some((c) => IS_BRON(c.soort)));
+  if (!heeftBron) return d;
+  const kaart = new Map<number, number>();
+  const componenten: typeof d.componenten = [];
+  let bronLabel: string | undefined;
+  d.componenten.forEach((c, i) => {
+    if (IS_BRON(c.soort)) {
+      bronLabel ??= c.label;
+      return;
+    }
+    kaart.set(i, componenten.length);
+    componenten.push(c);
+  });
+  const takKaart = new Map<string, { tak: number; index: number }>();
+  const takken: typeof d.takken = [];
+  d.takken.forEach((tak, t) => {
+    const nieuw: typeof tak = [];
+    tak.forEach((c, i) => {
+      if (IS_BRON(c.soort)) {
+        bronLabel ??= c.label;
+        return;
+      }
+      takKaart.set(`${t}.${i}`, { tak: takken.length, index: nieuw.length });
+      nieuw.push(c);
+    });
+    if (nieuw.length) takken.push(nieuw);
+  });
+  const voltmeters: typeof d.voltmeters = d.voltmeters.map((vm) => {
+    if (vm.over === "bron") return vm;
+    if (typeof vm.over === "number") {
+      const n = kaart.get(vm.over);
+      return { ...vm, over: n ?? "bron" };
+    }
+    const n = takKaart.get(`${vm.over.tak}.${vm.over.index}`);
+    return { ...vm, over: n ?? "bron" };
+  });
+  aanpassingen.push("batterij/spanningsbron uit de onderdelen gehaald (de bron wordt apart getekend)");
+  const bron = !d.bron.label && bronLabel ? { ...d.bron, label: bronLabel } : d.bron;
+  return { ...d, bron, componenten, takken, voltmeters };
 }
 
 function basis(soort: FiguurSoort, doel: string, data: Record<string, unknown>, extra?: Partial<FiguurSpec>): FiguurSpec {
