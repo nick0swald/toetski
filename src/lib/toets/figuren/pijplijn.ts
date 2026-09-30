@@ -14,6 +14,7 @@ import {
 } from "./prompts.ts";
 import { altTekst, isCodeFiguur, parseFiguurSpec, parseSpecData } from "./spec.ts";
 import { tekenCodeFiguur } from "./svg.ts";
+import { controleerStroomkringSymbolen } from "./schakelsymbolen.ts";
 
 /** Afhankelijkheden (netwerk/render) — in productie xAI + resvg, in tests nep. */
 export interface PijplijnDeps {
@@ -181,7 +182,11 @@ export async function maakFiguurMetKeuring(
       let hoogte: number;
       if (code) {
         const getekend = tekenCodeFiguur(spec);
-        const voor = voorcheckNietTonen(spec, getekend.teksten);
+        const voor = [
+          ...voorcheckNietTonen(spec, getekend.teksten),
+          // Code-keuring: elk onderdeel met zijn standaardsymbool; schakelaar als losse stippen = no_go.
+          ...(spec.soort === "stroomkring" ? controleerStroomkringSymbolen(spec, getekend.svg) : []),
+        ];
         if (voor.length) throw Object.assign(new Error(voor.join("; ")), { voorcheck: true });
         bytes = await deps.tekenPng(getekend.svg, getekend.breedte);
         mime = "image/png";

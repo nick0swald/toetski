@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { symboolSoort } from "./schakelsymbolen.ts";
 import { GHS_SYMBOLEN, type FiguurSoort, type FiguurSpec, type GhsSymbool, type JsonWaarde, type Vraag } from "../types.ts";
 
 export const FIGUUR_SOORTEN: FiguurSoort[] = [
@@ -215,14 +216,11 @@ function eenheidUitLabel(label: string): { label: string; eenheid?: string } {
 }
 
 function componentUitLabel(label: string): { soort: string; label?: string } {
-  const t = label.toLowerCase();
-  if (/lamp/.test(t)) return { soort: "lampje", label };
-  if (/weerstand|\br\b/.test(t)) return { soort: "weerstand", label };
-  if (/schakel/.test(t)) return { soort: "schakelaar-dicht", label };
-  if (/amp|\ba\b|stroommeter/.test(t)) return { soort: "ampèremeter" };
-  if (/motor/.test(t)) return { soort: "motor", label };
-  if (/zoemer|bel/.test(t)) return { soort: "zoemer", label };
-  return { soort: "lampje", label };
+  const soort = symboolSoort(label);
+  if (soort === "onbekend") return { soort: "lampje", label };
+  if (soort === "schakelaar-open" && !/open/i.test(label)) return { soort: "schakelaar-dicht", label };
+  if (soort === "ampèremeter" || soort === "voltmeter") return { soort };
+  return { soort, label };
 }
 
 /**

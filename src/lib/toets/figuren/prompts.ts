@@ -1,3 +1,4 @@
+import { symboolLijstVoorKeuring } from "./schakelsymbolen.ts";
 import type { FiguurSpec, NakijkItem, Vraag } from "../types.ts";
 import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, specSamenvatting } from "./spec.ts";
 
@@ -38,7 +39,7 @@ const SPEC_UITLEG = `Een figuurspec is JSON:
     lijngrafiek: {"xLabel","yLabel","xEenheid","yEenheid","reeksen":[{"naam"?, "punten":[{"x":n,"y":n}]}],"toonPunten":bool}
     staafdiagram: {"yLabel","yEenheid","xLabel"?,"staven":[{"label","waarde":n}],"toonWaarden":bool}
     spreidingsdiagram: {"xLabel","yLabel","xEenheid","yEenheid","punten":[{"x","y"}]}
-    stroomkring: {"schakeling":"serie"|"parallel","bron":{"soort":"batterij"|"spanningsbron","label":"6 V"},"componenten":[{"soort":"lampje"|"weerstand"|"schakelaar-open"|"schakelaar-dicht"|"ampèremeter"|"motor"|"led"|"zoemer","label"?}],"takken":[[component,...]] (alleen parallel),"voltmeters":[{"over":index|"bron","label"?}]}
+    stroomkring: {"schakeling":"serie"|"parallel","bron":{"soort":"batterij"|"spanningsbron","label":"6 V"},"componenten":[{"soort":"lampje"|"weerstand"|"variabele weerstand"|"LDR"|"NTC"|"schakelaar-open"|"schakelaar-dicht"|"ampèremeter"|"motor"|"led"|"diode"|"zoemer"|"zekering","label"?}],"takken":[[component,...]] (alleen parallel),"voltmeters":[{"over":index|"bron","label"?}]}
     katrol: {"type":"vast"|"los"|"takel","touwdelen":n,"last":string,"kracht":string}
     hefboom: {"lengte":n,"eenheid":"m","draaipunt":n (afstand vanaf linkeruiteinde),"krachten":[{"positie":n,"label":string,"richting":"omlaag"|"omhoog"}],"toonMaten":bool}
     krachtenschema: {"voorwerp":string,"krachten":[{"naam":"Fz","richting":"omhoog"|"omlaag"|"links"|"rechts","grootte":n,"eenheid":"N"}],"toonGrootte":bool,"schaal"?:n}
@@ -74,6 +75,13 @@ Keur ALLEEN "go" als alles klopt. Controleer:
 5. leesbaar: scherp, niet overvol, tekst groot genoeg om geprint te lezen, geen overlap.
 6. juiste_stijl: schone educatieve lesboekstijl (Nova): vlak, dunne donkere contouren, witte achtergrond; geen fotorealisme. Bij een sfeerplaat: géén tekst in beeld.
 7. veilig_en_vakinhoudelijk_juist: geen onveilige situatie (bij proeven: veiligheidsbril), geen natuurkundige/scheikundige fouten, niets ongepasts voor 12–16-jarigen.
+Extra bij een stroomkring (schakelschema) — tel en controleer ELK symbool tegen de lijst "Verwachte symbolen":
+- Elk onderdeel moet met het Nederlandse standaardsymbool (VMBO/Nova) getekend zijn: lampje = cirkel met kruis; batterij = lange dunne plaat (+) en korte dikke plaat (−); weerstand = rechthoek; stroommeter = cirkel met A (in serie); spanningsmeter = cirkel met V (parallel over het onderdeel); motor = cirkel met M; led = driehoek met streep en twee pijltjes naar buiten; zoemer = halve cirkel.
+- Open schakelaar = twee OPEN (holle) contactcirkeltjes met een hendeltje dat schuin omhoog staat vanaf het ene contactpunt richting het andere. Gesloten schakelaar = twee OPEN (holle) contactcirkeltjes met een rechte, iets dikkere hendel ertussen. Twee dichte stippen op een doorlopende draad lijken op knooppunten en zijn GEEN herkenbaar schakelaarsymbool → no_go. Alleen twee stippen of een onderbroken draad zonder hendel is ook GEEN schakelaar → no_go (zet klopt_met_spec en veilig_en_vakinhoudelijk_juist op false).
+- Staat in de spec een schakelaar en kun je hem niet als schakelaar aanwijzen, dan is het altijd no_go.
+- Stand van de schakelaar (open/dicht) moet overeenkomen met de spec en met de vraag.
+- Ontbreekt een onderdeel, staat er een extra onderdeel, of is een symbool fout/onduidelijk → no_go.
+- Draden vormen een gesloten kring (behalve bij een open schakelaar); geen losse draadeinden of kortsluiting die niet in de spec staat.
 Antwoord ALLEEN met JSON:
 { "besluit": "go"|"no_go", "checks": { "klopt_met_spec": bool, "labels_en_getallen_correct": bool, "past_bij_vraag_en_antwoord": bool, "verklapt_antwoord_niet": bool, "leesbaar": bool, "juiste_stijl": bool, "veilig_en_vakinhoudelijk_juist": bool }, "redenen": [string], "feedback": string (concrete aanwijzing wat anders moet bij no_go) }`;
 
@@ -86,7 +94,9 @@ Figuurspec:
 ${specSamenvatting(input.spec)}
 
 Herkomst: ${input.bron === "code" ? "door code getekend uit de spec-data (getallen exact)" : "AI-illustratie (sfeerplaat)"}.
-De figuur komt op het leerlingblad direct onder de vraagstam.`;
+De figuur komt op het leerlingblad direct onder de vraagstam.${
+    input.spec.soort === "stroomkring" ? `\n\nVerwachte symbolen (precies deze, niet meer en niet minder):\n${symboolLijstVoorKeuring(input.spec)}` : ""
+  }`;
 }
 
 export const REVISIE_SYSTEM = `Je verbetert een figuurspec op basis van feedback van de beeldkeurder. Antwoord ALLEEN met JSON: { "spec": figuurspec }.
