@@ -86,13 +86,19 @@ export const maakFiguur = createServerFn({ method: "POST" })
     try {
       const { spec, fout } = parseFiguurSpec(data.spec);
       if (!spec) return { status: "gedropt", pogingen: 0, redenen: [`spec ongeldig: ${fout}`], log: [] };
-      const [{ maakFiguurMetKeuring }, png, jpeg, xai, bank] = await Promise.all([
+      const [{ maakFiguurMetKeuring }, png, jpeg, xai] = await Promise.all([
         import("./figuren/pijplijn"),
         import("./figuren/png.server"),
         import("./figuren/jpeg.server"),
         import("./figuren/xai.server"),
-        import("./figuren/bank.server"),
       ]);
+      // Figuurbank is optioneel: laden/configuratie mislukt → gewoon genereren (nooit blokkeren).
+      let bank: import("./figuren/bank").FiguurBank | undefined;
+      try {
+        bank = (await import("./figuren/bank.server")).maakServerBank();
+      } catch {
+        bank = undefined;
+      }
       return await maakFiguurMetKeuring(
         {
           vraag: data.vraag as Vraag,
@@ -106,11 +112,11 @@ export const maakFiguur = createServerFn({ method: "POST" })
           tekenPng: (svg, breedte) => png.svgNaarPng(svg, breedte, 1.5),
           genereerBeeld: (prompt, timeoutMs) => xai.genereerBeeld(prompt, { timeoutMs }),
           verkleinJpeg: (bytes) => jpeg.verkleinJpeg(bytes),
-          keur: (system, user, beeld, timeoutMs) => xai.keurMetVisie(system, user, beeld, { timeoutMs }),
+          keur: (system, user, beeld, timeoutMs, o) => xai.keurMetVisie(system, user, beeld, { timeoutMs, reasoningEffort: o?.snel ? "low" : undefined }),
           vraagJson: (system, user, timeoutMs) => xai.vraagJson(system, user, { timeoutMs, maxTokens: 3000 }),
           nu: () => Date.now(),
           nieuwId: () => crypto.randomUUID(),
-          bank: bank.maakServerBank(),
+          bank,
         },
         { budgetMs: data.budgetMs },
       );

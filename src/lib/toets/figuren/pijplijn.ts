@@ -22,7 +22,8 @@ export interface PijplijnDeps {
   tekenPng: (svg: string, breedte: number) => Promise<Uint8Array>;
   genereerBeeld: (prompt: string, timeoutMs: number) => Promise<{ bytes: Uint8Array; mime: string }>;
   verkleinJpeg: (bytes: Uint8Array) => { bytes: Uint8Array; breedte: number; hoogte: number };
-  keur: (system: string, user: string, beeld: { mime: string; base64: string }, timeoutMs: number) => Promise<unknown>;
+  /** `snel`: code-figuur (deterministisch + code-checks) → vision met lage reasoning-inzet (sneller, zelfde oordeel in tests). */
+  keur: (system: string, user: string, beeld: { mime: string; base64: string }, timeoutMs: number, opts?: { snel?: boolean }) => Promise<unknown>;
   vraagJson: (system: string, user: string, timeoutMs: number) => Promise<unknown>;
   nu: () => number;
   nieuwId: () => string;
@@ -252,6 +253,7 @@ export async function maakFiguurMetKeuring(
         keuringUser({ vraag: vraagVoorKeuring, nakijk: opdracht.nakijk, spec, bron: code ? "code" : "ai" }),
         { mime, base64 },
         Math.min(T.visieMs, Math.max(5_000, rest() - 2_000)),
+        { snel: code },
       );
       const uitslag = beoordeelKeuring(raw);
       if (uitslag.besluit === "go") {

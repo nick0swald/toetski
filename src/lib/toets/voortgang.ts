@@ -52,7 +52,7 @@ export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): 
     case "vragen": {
       const [a, b] = RANGE.vragen;
       const pct = a + (b - a) * 0.97 * ease(inFase, t.verwachtVragenMs);
-      const rest = Math.max(5_000, t.verwachtVragenMs - inFase) + (v.metPlaatjes ? 25_000 : 12_000);
+      const rest = Math.max(5_000, t.verwachtVragenMs - inFase) + (v.metPlaatjes ? 40_000 : 12_000);
       return { pct, label: "Vragen maken…", restS: rond5(rest), wachtOpPlaatjes: false };
     }
     case "afwerken": {

@@ -127,7 +127,7 @@ export async function verwerkFiguren(
 
     const overslaan = vragen.filter((q) => !scope.has(q.nummer) || figuurIsGeldig(q.figuur) || jobs.some((j) => j.nummer === q.nummer)).map((q) => q.nummer);
     // Planner krijgt hooguit wat er overblijft minus de tijd die een figuur minimaal nodig heeft.
-    const plannerTijd = Math.min(40_000, rest() - MIN_FIGUUR_BUDGET_MS - 5_000);
+    const plannerTijd = Math.min(20_000, rest() - MIN_FIGUUR_BUDGET_MS - 5_000);
     if (!opts.zonderPlanner && plannerTijd < 5_000 && scope.size) meldingen.push("Geen tijd meer om extra figuren te plannen (60 s-doel).");
     if (!opts.zonderPlanner && plannerTijd >= 5_000 && totaal < MAX_FIGUREN_PER_TOETS && vragen.some((q) => !overslaan.includes(q.nummer))) {
       deps.voortgang?.("Figuren plannen…");

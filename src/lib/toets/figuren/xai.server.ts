@@ -80,7 +80,7 @@ export async function keurMetVisie(
   system: string,
   user: string,
   beeld: { mime: string; base64: string },
-  opts: { timeoutMs: number },
+  opts: { timeoutMs: number; reasoningEffort?: "low" | "medium" | "high" },
 ): Promise<unknown> {
   const body = await post(
     "/chat/completions",
@@ -88,6 +88,7 @@ export async function keurMetVisie(
       model: VISIE_MODEL,
       temperature: 0,
       max_tokens: 1500,
+      ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
