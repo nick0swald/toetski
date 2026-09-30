@@ -11,6 +11,8 @@ import type { ControleBevinding, ControleLog, NakijkItem, RttiVerdeling, Vraag }
 import { CONTROLE_SYSTEM, controleIssues, controlePrompt, parseControle, type ControleOordeel } from "./inhoud-controle.ts";
 import { extractParagrafen, paragraafDekking, type Paragraaf } from "./leerdoelen.ts";
 import { rttiHerschrijfPlan } from "./rtti-balans.ts";
+import { groepIntro, herstelGroepen, type Volgorde } from "./context-groepen.ts";
+import { labelRtti } from "./rtti-regels.ts";
 
 const REPAIR_SYSTEM = `Je verbetert ALLEEN de aangewezen VMBO-vragen. Antwoord met één JSON-object:
 { "vragen": [ volledige vraagobjecten van alleen de aangewezen nummers ], "nakijkmodel": [ bijbehorende nakijkregels ], "toelichting": "kort" }
@@ -20,7 +22,8 @@ Realistisch (verplicht): getallen passen bij de situatie (afstanden, tijden, sne
 Helder: noem elk ding/apparaat eerst concreet voordat je 'de/dit/deze' gebruikt. Verwijs niet naar een figuur, tabel of pictogram dat er niet bij staat.
 Contexten: alledaagse situaties of verzonnen bedrijven (mag grappig, passend bij 12–16-jarigen, bijv. 'Frituur De Vette Hap'). NOOIT een schoolnaam of 'leerbedrijf van school'. Personen: Nederlandse voornamen (Sanne, Daan, Lotte, Bram).
 Juist/onjuist: opties precies "Juist" en "Onjuist". Meerkeuze: modelantwoord = letter + tekst.
-Rekenvragen: rubriek in stappen (formule, invullen/berekenen, antwoord met eenheid), één fout kost 1 punt, doorrekenen met een eigen foute waarde telt.
+Rekenvragen: 1 punt per stap: 2p = gebruik van de formule (grootheid benoemd) + rest van de berekening juist (uitkomst met eenheid); 3p = omrekenen/aflezen + formule + rest; geen punt voor 'gegevens en gevraagde'. Een reken- en eenheidsfout kosten samen hooguit 1 punt; doorrekenen met een eigen foute waarde telt; significantie kost geen punten.
+Doorlopende context: houd contextTitel en bronvermelding zoals ze zijn; de gedeelde inleiding (gedeeldeContext) niet herhalen in de stam.
 Rubriek: elk criterium is één los te scoren onderdeel (1 punt per gevraagd ding); geen criteria als 'maakt geen fouten'. Punten = aantal gevraagde onderdelen. Herhaal de context niet in de stam.
 Vraag om een andere RTTI of een andere paragraaf: schrijf een nieuwe vraag die daar echt bij past en zet rtti/domein goed.
 Pictogramvragen: veld pictogram (GHS-symbool of veiligheidsbord, bijv. gebod-gehoorbescherming) en beschrijf het symbool niet in de stam; de rubriek noemt hetzelfde soort pictogram. Een bestaande goedgekeurde figuur (figuurverwijzing) blijft; pas alleen de tekst aan zodat die klopt met de figuur.`;
@@ -32,13 +35,24 @@ function reparatiePrompt(vragen: Vraag[], nakijk: NakijkItem[], issues: ItemIssu
       // Beelddata gaat nooit naar het model; een bevroren figuur is alleen een verwijzing.
       const gevonden = vragen.find((v) => v.nummer === nr);
       const q0 = gevonden ? figuurNaarVerwijzing(gevonden) : gevonden;
-      const { tekstZonderFiguur: _t, ...q } = q0 ?? ({} as Vraag);
+      const { tekstZonderFiguur: _t, rttiUitleg: _r, ...q } = q0 ?? ({} as Vraag);
       const n = nakijk.find((item) => item.nummer === nr);
       const waarom = issues.filter((i) => i.nummer === nr).map((i) => `- ${i.code}: ${i.uitleg}`).join("\n");
-      return `Vraag ${nr}\n${waarom}\n${JSON.stringify({ vraag: q, nakijk: n })}`;
+      const groep = gevonden ? groepIntro(vragen, gevonden) : undefined;
+      return `Vraag ${nr}\n${waarom}\n${JSON.stringify({ vraag: q, nakijk: n, ...(groep ? { gedeeldeContext: `${groep.titel}: ${groep.intro}` } : {}) })}`;
     })
     .join("\n\n");
   return `Verbeter alleen deze vragen. Houd het nummer. Lever ze compleet terug.\n\nLesstof (kader, niet kopiëren):\n${bron.slice(0, 4000)}\n\n${blok}`;
+}
+
+/** Contexttitel, bronvermelding en vraagtype blijven bij een reparatie staan (het model laat ze vaak weg). */
+function behoudGroep(oud: Vraag, nieuw: Vraag): Vraag {
+  return {
+    ...nieuw,
+    contextTitel: oud.contextTitel ?? nieuw.contextTitel,
+    bronvermelding: oud.bronvermelding ?? nieuw.bronvermelding,
+    vraagtype: nieuw.vraagtype ?? oud.vraagtype,
+  };
 }
 
 function mergeOpNummer(
@@ -55,9 +69,9 @@ function mergeOpNummer(
     // Een goedgekeurde figuur blijft staan zoals hij is; de reparatie mag er niets aan veranderen.
     if (q.figuur || q.figuurId) {
       const { figuur: _f, figuurId: _i, ...rest } = vervanging;
-      return zonderLegacyFiguren({ ...q, ...rest, nummer: q.nummer, figuur: q.figuur, figuurId: q.figuurId });
+      return behoudGroep(q, zonderLegacyFiguren({ ...q, ...rest, nummer: q.nummer, figuur: q.figuur, figuurId: q.figuurId }));
     }
-    return { ...q, ...vervanging, nummer: q.nummer };
+    return behoudGroep(q, { ...q, ...vervanging, nummer: q.nummer });
   });
   const n = nakijk.map((item) => {
     if (!nummers.has(item.nummer)) return item;
@@ -100,11 +114,12 @@ async function controleerVragen(
   nakijk: NakijkItem[],
   bron: { lesstof: string; antwoorden?: string },
   controleer: Repair,
+  alle: Vraag[] = vragen,
 ): Promise<{ oordelen: ControleOordeel[]; gelukt: number }> {
   const stukken = inStukken(vragen, 3);
   const res = await Promise.all(
     stukken.map(async (st) => {
-      const raw = await controleer(controlePrompt(st.map(figuurNaarVerwijzing), nakijk.filter((n) => st.some((q) => q.nummer === n.nummer)), bron)).catch(() => null);
+      const raw = await controleer(controlePrompt(st.map(figuurNaarVerwijzing), nakijk.filter((n) => st.some((q) => q.nummer === n.nummer)), bron, alle)).catch(() => null);
       return parseControle(raw);
     }),
   );
@@ -155,7 +170,7 @@ async function repareerRonde(
  * Lengte: ligt het totaal ruim onder het doel (tijd van de toets), dan een paar 1-punts gesloten vragen
  * laten herschrijven tot open vragen van 2 punten (zelfde leerdoel en rtti) — geen extra vragen.
  */
-export function lengteIssues(vragen: Vraag[], doelPunten: number | undefined, vermijd: Set<number>): ItemIssue[] {
+export function lengteIssues(vragen: Vraag[], doelPunten: number | undefined, vermijd: Set<number>, minGesloten = 0.5): ItemIssue[] {
   if (!doelPunten) return [];
   const totaal = vragen.reduce((s, q) => s + (q.punten ?? 1), 0);
   if (totaal >= doelPunten - 2) return [];
@@ -168,12 +183,12 @@ export function lengteIssues(vragen: Vraag[], doelPunten: number | undefined, ve
     if (tekort <= 0 || out.length >= 5) break;
     const nieuw = (q.punten ?? 1) + 1;
     tekort -= 1;
-    out.push({ nummer: q.nummer, code: "lengte", uitleg: `${kop} Breid deze open vraag uit met één extra onderdeel (bijv. 'leg uit waarom' of een rekenstap met gegevens in de tekst) en maak er ${nieuw} punten van, zelfde leerdoel en rtti ${q.rtti}. Rubriek: ${nieuw} criteria van elk 1 punt.` });
+    out.push({ nummer: q.nummer, code: "lengte", uitleg: `${kop} Breid deze open vraag uit met één extra onderdeel: liefst een extra reken- of noteerstap (Bereken/Noteer) met de gegevens in de tekst; 'leg uit' alleen als het niet anders kan en maak er ${nieuw} punten van, zelfde leerdoel en rtti ${q.rtti}. Rubriek: ${nieuw} criteria van elk 1 punt.` });
   }
-  // 2) Pas daarna gesloten vragen omzetten, zolang minstens de helft gesloten blijft.
+  // 2) Pas daarna gesloten vragen omzetten, zolang het gesloten aandeel boven het doel blijft (standaard de helft).
   let gesloten = vragen.filter((q) => q.opties?.length).length;
   for (const q of vragen.filter((x) => vrij(x) && x.opties?.length && x.rtti !== "R")) {
-    if (tekort <= 0 || out.length >= 5 || (gesloten - 1) * 2 < vragen.length) break;
+    if (tekort <= 0 || out.length >= 5 || gesloten - 1 < minGesloten * vragen.length) break;
     gesloten -= 1;
     tekort -= 1;
     out.push({ nummer: q.nummer, code: "lengte", uitleg: `${kop} Herschrijf deze vraag tot een OPEN vraag van 2 punten over hetzelfde leerdoel (rtti ${q.rtti}), bijv. noem + leg uit. Rubriek: 2 criteria van elk 1 punt.` });
@@ -233,6 +248,12 @@ export async function werkVragenAf(input: {
    * "minimaal": oud gedrag (minstens één figuur bij NaSk).
    */
   figuren?: "nodig" | "geen" | "minimaal";
+  /** Volgorde: mc-eerst (standaard), blokken (BB: juist/onjuist → meerkeuze → open), behoud (contexten). */
+  volgorde?: Volgorde;
+  /** Paragrafen uit een herkend Nova-hoofdstuk als de bron zelf geen koppen heeft. */
+  paragrafen?: Paragraaf[];
+  /** Minimaal gesloten aandeel bij het verlengen (NaSk: gekalibreerd; anders 0,5). */
+  minGesloten?: number;
 }): Promise<{ vragen: Vraag[]; nakijkmodel: NakijkItem[]; issues: ItemIssue[]; controle?: ControleLog }> {
   const bron = input.bron ?? "";
   const nu = input.nu ?? (() => Date.now());
@@ -255,7 +276,8 @@ export async function werkVragenAf(input: {
   let nakijk = stap.nakijkmodel;
   // Zonder plaatjes: figuurvelden er meteen uit, zodat controle en reparatie geen spookfiguren beoordelen.
   if (input.figuren === "geen") vragen = vragen.map(zonderFiguurVelden);
-  const paragrafen = extractParagrafen(bron, input.antwoorden);
+  const eigen = extractParagrafen(bron, input.antwoorden);
+  const paragrafen = eigen.length >= 2 ? eigen : (input.paragrafen ?? []);
   const bronW = { lesstof: bron, antwoorden: input.antwoorden };
   let controle: ControleLog | undefined;
 
@@ -268,6 +290,8 @@ export async function werkVragenAf(input: {
       const eerste = await controleerVragen(vragen, nakijk, bronW, input.controleer);
       // Onafhankelijk RTTI-oordeel telt (eerlijk herlabelen), daarna pas balanceren.
       if (eerste.gelukt) vragen = herlabel(vragen, eerste.oordelen);
+      // Regel-RTTI (type → basis, bijgesteld op opdracht/stappen/context) is leidend voor de balans.
+      vragen = labelRtti(vragen);
       const inhoud = controleIssues(vragen, nakijk, eerste.oordelen);
       const heur = stap.issues;
       const bezet = new Set([...inhoud, ...heur].map((i) => i.nummer));
@@ -275,7 +299,7 @@ export async function werkVragenAf(input: {
       dek.forEach((i) => bezet.add(i.nummer));
       const rtti = input.rttiDoel ? rttiHerschrijfPlan(vragen, input.rttiDoel, { vermijd: bezet }) : [];
       rtti.forEach((i) => bezet.add(i.nummer));
-      const lengte = lengteIssues(vragen, input.doelPunten, bezet);
+      const lengte = lengteIssues(vragen, input.doelPunten, bezet, input.minGesloten);
       const alle = [...heur, ...inhoud, ...dek, ...rtti, ...lengte];
       gevonden.push(...alle.map((i) => ({ nummer: i.nummer, code: i.code, uitleg: i.uitleg })));
       let open = alle;
@@ -290,7 +314,7 @@ export async function werkVragenAf(input: {
         const nietGerepareerd = alle.filter((i) => !gewijzigd.includes(i.nummer));
         let hercontrole: ItemIssue[] = [];
         if (gewijzigd.length && rest() > 6_000) {
-          const tweede = await controleerVragen(vragen.filter((q) => gewijzigd.includes(q.nummer)), nakijk, bronW, input.controleer);
+          const tweede = await controleerVragen(vragen.filter((q) => gewijzigd.includes(q.nummer)), nakijk, bronW, input.controleer, vragen);
           vragen = herlabel(vragen, tweede.oordelen);
           hercontrole = controleIssues(vragen, nakijk, tweede.oordelen);
         } else if (gewijzigd.length) {
@@ -310,7 +334,7 @@ export async function werkVragenAf(input: {
           open = open.filter((i) => !r2.gewijzigd.includes(i.nummer));
           const nieuw = [...new Set(r2.gewijzigd)];
           if (nieuw.length && rest() > -4_000) {
-            const derde = await controleerVragen(vragen.filter((q) => nieuw.includes(q.nummer)), nakijk, bronW, input.controleer);
+            const derde = await controleerVragen(vragen.filter((q) => nieuw.includes(q.nummer)), nakijk, bronW, input.controleer, vragen);
             vragen = herlabel(vragen, derde.oordelen);
             open.push(...controleIssues(vragen, nakijk, derde.oordelen));
           } else {
@@ -324,7 +348,8 @@ export async function werkVragenAf(input: {
       // zolang er genoeg vragen overblijven. Liever een vraag minder dan een foute vraag.
       const weg = [...new Set(blijft.filter((i) => ONBRUIKBAAR.has(i.code)).map((i) => i.nummer))].slice(0, Math.max(0, vragen.length - 8));
       if (weg.length) {
-        vragen = vragen.filter((q) => !weg.includes(q.nummer));
+        const voor = vragen;
+        vragen = herstelGroepen(vragen.filter((q) => !weg.includes(q.nummer)), voor);
         nakijk = nakijk.filter((n) => !weg.includes(n.nummer));
         blijft = blijft.filter((i) => !weg.includes(i.nummer));
         verwijderd.push(...weg);
@@ -389,8 +414,8 @@ export async function werkVragenAf(input: {
         ? verzekerBronFiguren(punten.vragen, bron, detectVakProfiel(input.vak, bron), punten.nakijkmodel)
         : plaatsMaatcilinders(plaatsPictogrammen(punten.vragen, punten.nakijkmodel));
   nakijk = punten.nakijkmodel;
-  vragen = groepeerDomeinen(vragen, bron);
-  const klaar = finalizeVragen(vragen, nakijk, { skipOrder: input.skipOrder });
+  vragen = labelRtti(herstelGroepen(groepeerDomeinen(vragen, bron)));
+  const klaar = finalizeVragen(vragen, nakijk, { skipOrder: input.skipOrder, volgorde: input.volgorde });
   // Vragen met een bevroren figuur krijgen nooit (opnieuw) ongekeurde figuurvelden.
   const beschermd = klaar.vragen.map((q) => (q.figuur || q.figuurId ? zonderLegacyFiguren(q) : q));
   if (controle) {

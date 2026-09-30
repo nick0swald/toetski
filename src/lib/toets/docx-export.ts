@@ -26,6 +26,7 @@ import { blokkenVoorVraag } from "./blad-volgorde";
 import { figuurIsGeldig } from "./figuren/bevriezing";
 import type { CijferNorm, GegenereerdeToets, GoedgekeurdeFiguur, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
+import { startGroep } from "./context-groepen";
 
 const GREEN = "004422";
 const INK = "000000";
@@ -425,8 +426,14 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
   }
   const nummers = figuurNummers(t);
   const pijplijn = Boolean(t.figuurPijplijn);
-  for (const q of t.vragen) {
+  for (const [qi, q] of t.vragen.entries()) {
     const stam = (q.stam || "").trim();
+    // Doorlopende context (examenstijl): titel (+ bronvermelding) boven de eerste vraag van de context.
+    const groepTitel = startGroep(t.vragen, qi);
+    if (groepTitel) {
+      out.push(p(groepTitel, { bold: true, size: BODY_SIZE + 4, before: 360, after: 40 }));
+      if (q.bronvermelding) out.push(p(`(${q.bronvermelding})`, { size: SMALL_SIZE, italics: true, after: 60 }));
+    }
     // context → (oude) stimulusfiguur → punten/nummer/stam → goedgekeurde figuur → tabel. Invultabel = antwoordgebied.
     for (const blok of blokkenVoorVraag(q, { pijplijn })) {
       if (blok === "context" && q.context?.trim()) {
@@ -528,6 +535,10 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
     );
     if (q && figuurIsGeldig(q.figuur)) {
       out.push(p(figuurVerwijzing(q.figuur, nummers.get(q.figuur.id)), { size: SMALL_SIZE, italics: true, after: 40 }));
+    }
+    if (q?.rttiUitleg || q?.vraagtype || q?.bronvermelding) {
+      const bits = [q.rttiUitleg ? `RTTI ${q.rttiUitleg}` : `RTTI ${q.rtti}`, q.vraagtype && q.vraagtype !== "OVERIG" ? `type ${q.vraagtype}` : "", q.bronvermelding ?? ""].filter(Boolean);
+      out.push(p(bits.join(" · "), { size: SMALL_SIZE, italics: true, after: 40 }));
     }
     out.push(p(`Modelantwoord: ${n.modelantwoord}`, { after: 60 }));
     for (const pc of n.puntenverdeling) {

@@ -1,5 +1,6 @@
 import type { NakijkItem, Vraag, VraagOptie } from "./types";
 import { ordenVragenMcEerst } from "./vraag-volgorde.ts";
+import { heeftGroepen, ordenVragen, type Volgorde } from "./context-groepen.ts";
 
 function shuffle<T>(items: T[]): T[] {
   const a = [...items];
@@ -522,10 +523,14 @@ export function balanceMcAntwoorden(
 export function finalizeVragen(
   vragen: Vraag[],
   nakijkmodel: NakijkItem[],
-  opts?: { skipOrder?: boolean },
+  opts?: { skipOrder?: boolean; volgorde?: Volgorde },
 ): { vragen: Vraag[]; nakijkmodel: NakijkItem[] } {
-  const geordend = opts?.skipOrder
-    ? { vragen, nakijkmodel }
-    : ordenVragenMcEerst(vragen, nakijkmodel);
+  // Doorlopende contexten blijven altijd één blok; BB-blokken: juist/onjuist → meerkeuze → open.
+  const geordend =
+    opts?.volgorde || heeftGroepen(vragen)
+      ? ordenVragen(vragen, nakijkmodel, opts?.skipOrder ? "behoud" : (opts?.volgorde ?? "mc-eerst"))
+      : opts?.skipOrder
+        ? { vragen, nakijkmodel }
+        : ordenVragenMcEerst(vragen, nakijkmodel);
   return shuffleMcAnswers(geordend.vragen, geordend.nakijkmodel);
 }

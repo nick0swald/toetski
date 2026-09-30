@@ -13,6 +13,44 @@ import { extractParagrafen } from "./leerdoelen";
 import { bouwKwaliteit } from "./kwaliteit-check";
 import { CONTROLE_MODEL as CONTROLE_MODEL_NAAM, TEKST_MODEL } from "./figuren/modellen";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
+import {
+  annoteerKalibratie,
+  isExamenNiveau,
+  isNaskVak,
+  kalibratie,
+  kalibratiePrompt,
+  normaliseerVraagtypen,
+  novaParagrafen,
+  novaPrompt,
+  vraagtypenPrompt,
+  type Kalibratie,
+} from "./kalibratie";
+import { CSE_CONTEXTEN } from "./cse-contexten";
+import { deelOpdracht, deelPlan, voegDelenSamen } from "./delen";
+import {
+  aantalExamenContexten,
+  examenvragenPrompt,
+  kiesExamenContexten,
+  magExamenvragen,
+  markeerExamenvragen,
+  wilGeenExamenvragen,
+} from "./examenvragen";
+
+/** NaSk-kalibratie voor deze aanvraag (null bij andere vakken). */
+function kalibratieVoor(data: { vak?: string; titel?: string; extraEisen?: string; leerjaar: number; leerweg: "BB" | "KB" | "GT"; duurMinuten: number; moeilijkheid?: string }, bron: string): Kalibratie | null {
+  if (!isNaskVak(data.vak, bron)) return null;
+  const examen = isExamenNiveau(`${data.titel ?? ""} ${data.extraEisen ?? ""}`);
+  return kalibratie(data.leerjaar, data.leerweg, data.duurMinuten, {
+    examen,
+    moeilijkheid: data.moeilijkheid === "makkelijk" || data.moeilijkheid === "moeilijk" ? data.moeilijkheid : "normaal",
+  });
+}
+
+/** Zette de docent niets vast, dan volgen aantal vragen en punten de kalibratie (alleen NaSk). */
+function metKalibratieLengte<T extends { lengteAuto?: boolean; mcVragen?: number; openVragen?: number; aantalVragen: number; doelPunten: number }>(data: T, k: Kalibratie | null): T {
+  if (!k || !data.lengteAuto || data.mcVragen != null || data.openVragen != null) return data;
+  return { ...data, aantalVragen: k.items, doelPunten: k.punten };
+}
 
 function stripJsonFence(raw: string): string {
   const trimmed = raw.trim();
@@ -199,6 +237,7 @@ function userPrompt(
     plaatjes?: "auto" | "met" | "zonder";
   },
   bron: string,
+  kal?: { k: Kalibratie; extra: string } | null,
 ): string {
   const rtti = normaliseer(input.rttiDoel);
   const moe = input.moeilijkheid ?? "normaal";
@@ -218,13 +257,15 @@ function userPrompt(
   } else if (openN != null) {
     verdelingTekst = `VAST: ${openN} open/andere; vul aan met meerkeuze tot ongeveer ${input.aantalVragen} vragen totaal waar passend.`;
   } else {
-    verdelingTekst = `AUTO (~${input.aantalVragen} vragen): kies MC vs open op basis van de lesstof. Dictee/schrijf/luister/spreek → vooral open, weinig of geen MC. Hoofdstuktoets met voldoende stof → ${mcShareDoelTekst()} Anders gemengd.`;
+    verdelingTekst = kal
+      ? `AUTO (~${input.aantalVragen} vragen): volg de vraagvormen uit het KALIBRATIE-blok hieronder (gesloten ≈${Math.round(kal.k.gesloten * 100)}%).`
+      : `AUTO (~${input.aantalVragen} vragen): kies MC vs open op basis van de lesstof. Dictee/schrijf/luister/spreek → vooral open, weinig of geen MC. Hoofdstuktoets met voldoende stof → ${mcShareDoelTekst()} Anders gemengd.`;
   }
   // Puntenplan: gesloten vragen zijn 1 punt, dus de open vragen moeten de rest van het totaal dragen.
   const geslotenN = mcN ?? Math.ceil(input.aantalVragen / 2);
   const openPlanN = Math.max(1, (openN ?? input.aantalVragen - geslotenN));
   const openPunten = Math.max(openPlanN, input.doelPunten - geslotenN);
-  const puntenPlan = `Puntenplan (verplicht, tel na): ${geslotenN} gesloten vragen × 1 punt = ${geslotenN} punten; ${openPlanN} open vragen samen ${openPunten} punten (gemiddeld ${(openPunten / openPlanN).toFixed(1).replace(".", ",")} per open vraag: 2–4 punten, met een rubriek van 1 punt per onderdeel). Totaal ${geslotenN + openPunten}.`;
+  const puntenPlan = kal ? "" : `Puntenplan (verplicht, tel na): ${geslotenN} gesloten vragen × 1 punt = ${geslotenN} punten; ${openPlanN} open vragen samen ${openPunten} punten (gemiddeld ${(openPunten / openPlanN).toFixed(1).replace(".", ",")} per open vraag: 2–4 punten, met een rubriek van 1 punt per onderdeel). Totaal ${geslotenN + openPunten}.`;
   let feedbackBlok = "";
   if (input.feedback?.trim() || input.vorigeSamenvatting?.trim()) {
     feedbackBlok = `
@@ -251,13 +292,14 @@ Vraagverdeling: ${verdelingTekst}
 Totaal punten: ${input.doelPunten} (± 2; passend bij ${input.duurMinuten} minuten, tenzij de docent anders stuurt)
 ${puntenPlan}
 ${paragrafenRegel(bron, input.antwoordenmateriaal)}
+${kal ? `${kalibratiePrompt(kal.k)}\n${kal.extra}` : ""}
 Context-eisen (verplicht): realistische getallen en situaties (een echo in een lokaal of hal: tientallen meters, niet honderden; geluid van een klein apparaat hoor je niet op 500 m); alle gegevens die nodig zijn staan in de vraag; noem een ding eerst concreet voordat je 'de/dit' gebruikt; nooit een schoolnaam; verzonnen bedrijven mogen grappig zijn (bijv. 'Frituur De Vette Hap'); personen hebben Nederlandse voornamen (Sanne, Daan, Lotte, Bram). Staat er een figuur of tabel bij, zet de getallen die nodig zijn ÓÓK in de vraagtekst (de figuur kan wegvallen). Een tijdsverschil (echo, onweer) meet je alleen met een startsignaal (flits, zichtbare klap, eigen roep). Juist/onjuist is altijd een stelling, nooit een vraagzin. Elke context is een echte zin (geen los woord als 'pictogram').
 Juist/onjuist: opties altijd in de volgorde A. Juist, B. Onjuist.
-Rekenvragen: rubriek in stappen (formule – invullen/berekenen – antwoord met eenheid); een rekenfout kost 1 punt, niet alles.
+Rekenvragen: 1 punt per stap: 2p = gebruik van de formule (grootheid benoemd) + rest van de berekening juist (uitkomst met eenheid); 3p = omrekenen/aflezen + formule + rest. Geen punt voor 'gegevens en gevraagde'. Een reken- en eenheidsfout kosten samen hooguit 1 punt; significantie kost geen punten.
 Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap; 'noem twee' = 2p, 'noem … en leg uit' = 2p. Haal het totaal met genoeg open meerpuntsvragen (uitleg, berekening), niet met extra 1-punts meerkeuze.
 MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam, alleen als die iets toevoegt.
-Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
+Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Vragen met dezelfde contextTitel staan aaneen. Alleen afwijken als Extra eisen of het KALIBRATIE-blok dat vragen.
 ${figuurRegel(plaatjesModus(input))}
 Kwaliteit in JSON: alleen een korte kwalitatieve opmerking. Verzin geen puntentotaal, RTTI-percentages, figuuraantal of "dekt alle leerdoelen" — de app rekent die zelf uit.
 Domein = paragraaf uit de leerdoelen (bijv. "2.1 Stoffen herkennen"), niet een losse deelvaardigheid. Zet PLUS in het leerdoel als het leerdoel PLUS is. Spelling: stofeigenschap.
@@ -302,11 +344,52 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
   bron = bron.slice(0, 100000);
   const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, 100000);
   if (!bron.trim()) throw new GebruikersFout("Plak lesstof, lever het leerlingboek in, of zet een openbare link.");
+  const k = kalibratieVoor(data, bron);
+  data = metKalibratieLengte(data, k);
+  // Klas 4 / examenniveau: blok 'Examenvragen' met echte CSE-contexten (klas 1–3 nooit).
+  const examen =
+    k && magExamenvragen(k.leerjaar, k.examen) && data.examenvragen !== false && !wilGeenExamenvragen(`${data.extraEisen ?? ""}\n${data.feedback ?? ""}`)
+      ? kiesExamenContexten(bron, k.leerweg, aantalExamenContexten(k.leerweg, k.items))
+      : [];
+  const kal = k
+    ? {
+        k,
+        extra: [
+          vraagtypenPrompt(bron, k.leerjaar, k.leerweg),
+          novaPrompt(data.titel ?? "", bron, k.leerjaar, k.leerweg, extractParagrafen(bron, antwoorden).length >= 2),
+          examenvragenPrompt(examen),
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      }
+    : null;
+  const system = bouwSystemPrompt(data.stuurdocument);
+  const basisPrompt = userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron, kal);
+  // Lange NaSk-toetsen: gesloten en open deel parallel (binnen 100 s).
+  const plan = k && !data.feedback?.trim() ? deelPlan(k, data.aantalVragen, data.doelPunten) : null;
+  let payload: GeneratedPayload;
+  if (plan) {
+    const [a, b] = await Promise.all(
+      plan.map((d, i) =>
+        vraagPayload(system, `${deelOpdracht(d, plan[1 - i]!)}\n\n${basisPrompt}\n\n${deelOpdracht(d, plan[1 - i]!)}`, d.aantal).catch(() => null),
+      ),
+    );
+    if (!b && (a?.vragen.length ?? 0) < 8) throw new Error("De AI-respons was onvolledig. Probeer opnieuw.");
+    payload = voegDelenSamen(a, b);
+  } else {
+    payload = await vraagPayload(system, basisPrompt, data.aantalVragen);
+  }
+  if (examen.length) payload.examenContexten = examen.map((c) => c.id);
+  return { bron, payload };
+}
+
+/** Eén generatie-aanroep met één herkansing voor kapotte JSON. */
+async function vraagPayload(system: string, prompt: string, aantal: number): Promise<GeneratedPayload> {
   const messages = [
-    { role: "system", content: bouwSystemPrompt(data.stuurdocument) },
-    { role: "user", content: userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron) },
+    { role: "system", content: system },
+    { role: "user", content: prompt },
   ];
-  const maxTok = tokensVoorAantalVragen(data.aantalVragen);
+  const maxTok = tokensVoorAantalVragen(aantal);
   let raw = await callGrok(messages, maxTok);
   let parsed: unknown;
   try {
@@ -316,16 +399,13 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
       [
         ...messages,
         { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
-        {
-          role: "user",
-          content: "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object, zonder markdown. Kap niet af.",
-        },
+        { role: "user", content: "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object, zonder markdown. Kap niet af." },
       ],
       maxTok,
     );
     parsed = parseAiJson(raw);
   }
-  return { bron, payload: generatedPayloadSchema.parse(parsed) };
+  return generatedPayloadSchema.parse(parsed);
 }
 
 class GebruikersFout extends Error {}
@@ -343,6 +423,9 @@ export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
 
 /** Stap 2: afwerken (reparatie, punten, MC-hussel, kwaliteit) → complete toets. */
 async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload, budgetMs = 60_000): Promise<GegenereerdeToets> {
+  const kal = kalibratieVoor(data, bron);
+  data = metKalibratieLengte(data, kal);
+  const examenCtx = CSE_CONTEXTEN.filter((c) => payload.examenContexten?.includes(c.id));
   const rttiDoel = normaliseer(data.rttiDoel);
   const vragenRaw = ruweVragen(payload);
   const vakNaam = data.vak?.trim() || payload.meta.vak || "";
@@ -358,6 +441,13 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
     rttiDoel,
     doelPunten: data.doelPunten,
     budgetMs,
+    ...(kal
+      ? {
+          volgorde: skipMcEerst ? undefined : kal.opbouw === "blokken" ? ("blokken" as const) : kal.opbouw === "cse" ? ("behoud" as const) : ("mc-eerst" as const),
+          paragrafen: novaParagrafen(data.titel ?? "", bron, kal.leerjaar, kal.leerweg),
+          minGesloten: Math.max(0, kal.gesloten - 0.05),
+        }
+      : {}),
     controleer: (prompt) => callControle(CONTROLE_SYSTEM, prompt).catch(() => null),
     repair: (prompt) =>
       callGrok(
@@ -368,7 +458,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
         Math.min(8000, Math.max(2000, Math.ceil(prompt.length / 3))),
       ).catch(() => null),
   });
-  const vragen = af.vragen;
+  const vragen = kal ? markeerExamenvragen(normaliseerVraagtypen(af.vragen), examenCtx) : af.vragen;
   const nakijkmodel = af.nakijkmodel;
   const max = totaalPunten(vragen);
   const cijferNorm = data.cijferNorm;
@@ -406,7 +496,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       formule: formuleTekst(cijferNorm, max),
     },
     matrijs: bouwMatrijs(vragen, rttiDoel),
-    kwaliteit: annoteerMcAandeel(
+    kwaliteit: (kal ? (kw: GegenereerdeToets["kwaliteit"]) => annoteerKalibratie(kw, vragen, kal, bron) : (kw: GegenereerdeToets["kwaliteit"]) => kw)(annoteerMcAandeel(
       bouwKwaliteit({
         vragen,
         nakijkmodel,
@@ -418,15 +508,17 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
         controle: af.controle,
       }),
       vragen,
-      wilHogeMcShare({
-        bron,
-        extraEisen: data.extraEisen,
-        titel: data.titel || payload.meta.titel,
-        vak: data.vak || payload.meta.vak,
-        mcVragen: data.mcVragen,
-        openVragen: data.openVragen,
-      }),
-    ),
+      // NaSk: het gekalibreerde gesloten aandeel (zie KALIBRATIE) vervangt de algemene ≥50%-regel.
+      !kal &&
+        wilHogeMcShare({
+          bron,
+          extraEisen: data.extraEisen,
+          titel: data.titel || payload.meta.titel,
+          vak: data.vak || payload.meta.vak,
+          mcVragen: data.mcVragen,
+          openVragen: data.openVragen,
+        }),
+    )),
   };
   if (af.controle) toets.controle = af.controle;
   const modus = plaatjesModus(data);

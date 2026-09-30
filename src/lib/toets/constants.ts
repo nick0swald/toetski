@@ -31,11 +31,24 @@ export const RTTI_META: Record<Rtti, { kort: string; naam: string; uitleg: strin
 
 export const RTTI_PRESETS: Record<string, { label: string; verdeling: RttiVerdeling }> = {
   onderbouw: { label: "Onderbouw (klas 1–2)", verdeling: { R: 35, T1: 40, T2: 20, I: 5 } },
-  bovenbouw: { label: "Bovenbouw (klas 3–4)", verdeling: { R: 25, T1: 35, T2: 25, I: 15 } },
+  bovenbouw: { label: "Klas 3", verdeling: { R: 25, T1: 40, T2: 25, I: 10 } },
+  klas4: { label: "Klas 4 (richting examen)", verdeling: { R: 15, T1: 45, T2: 32, I: 8 } },
+  examen: { label: "CSE NaSk1 2013–2026 (referentie)", verdeling: { R: 7, T1: 55, T2: 35, I: 3 } },
+};
+
+/**
+ * RTTI-verdeling (punten %) van de echte CSE's NaSk1 2013–2026, berekend met dezelfde regels als de app
+ * (rtti-regels.ts, tools/examen-rtti.ts). Referentie voor klas 4.
+ */
+export const RTTI_EXAMEN: Record<"BB" | "KB" | "GT" | "alle", RttiVerdeling> = {
+  BB: { R: 8, T1: 69, T2: 22, I: 1 },
+  KB: { R: 8, T1: 60, T2: 29, I: 3 },
+  GT: { R: 7, T1: 51, T2: 39, I: 3 },
+  alle: { R: 7, T1: 55, T2: 35, I: 3 },
 };
 
 export function presetVoorLeerjaar(jaar: 1 | 2 | 3 | 4): keyof typeof RTTI_PRESETS {
-  return jaar <= 2 ? "onderbouw" : "bovenbouw";
+  return jaar <= 2 ? "onderbouw" : jaar === 3 ? "bovenbouw" : "klas4";
 }
 
 export function rttiVoorMoeilijkheid(basis: RttiVerdeling, m: Moeilijkheid): RttiVerdeling {

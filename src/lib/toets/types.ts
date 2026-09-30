@@ -171,6 +171,17 @@ export interface Vraag {
   punten: number;
   /** Optionele situatieschets/inleiding; wordt vóór de stam getoond (Cito-volgorde). */
   context?: string;
+  /**
+   * Titel van een doorlopende context (examenstijl). Alle vragen van één context hebben dezelfde titel;
+   * de inleiding staat alleen in `context` van de eerste vraag van die context.
+   */
+  contextTitel?: string;
+  /** Vraagtype uit de NaSk-taxonomie (bijv. G-ECHO, E-PUI, O-LICHT); OVERIG als niets past. */
+  vraagtype?: string;
+  /** Korte uitleg van het RTTI-label (regel: type → basis, bijgesteld op opdracht/stappen/context). */
+  rttiUitleg?: string;
+  /** Bronvermelding bij een bewerkte examenvraag, bijv. "naar: examen 2019 tijdvak 1". */
+  bronvermelding?: string;
   /** Vraagtekst: bij lege context eerst inleiding, daarna vraagzin — nooit omgekeerd. */
   stam: string;
   opties?: VraagOptie[];
@@ -397,6 +408,10 @@ export interface GenerateInput {
   duurMinuten: number;
   doelPunten: number;
   aantalVragen: number;
+  /** Geen aantallen/punten vastgezet: de server gebruikt bij NaSk de gekalibreerde lengte. */
+  lengteAuto?: boolean;
+  /** Blok 'Examenvragen' (echte CSE-contexten) in klas 4; undefined = standaard (aan in klas 4). */
+  examenvragen?: boolean;
   /** Leeg/undefined = auto (AI kiest op basis van lesstof). */
   mcVragen?: number;
   /** Leeg/undefined = auto. */

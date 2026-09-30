@@ -1,5 +1,6 @@
 import { BronTabel, GoedgekeurdeFiguurBeeld, StimulusFiguren } from "@/components/toets/bron-figuur";
 import { blokkenVoorVraag } from "@/lib/toets/blad-volgorde";
+import { startGroep } from "@/lib/toets/context-groepen";
 import type { GegenereerdeToets } from "@/lib/toets/types";
 import { totaalPunten } from "@/lib/toets/rtti";
 
@@ -46,10 +47,17 @@ export function ToetsSheet({
         </p>
       ) : null}
       <ol className="mt-8 grid gap-8">
-        {toets.vragen.map((q) => {
+        {toets.vragen.map((q, qi) => {
           const blokken = blokkenVoorVraag(q, { pijplijn });
+          const groepTitel = startGroep(toets.vragen, qi);
           return (
           <li key={q.nummer}>
+            {groepTitel ? (
+              <p className="mb-2 font-bold text-brand">
+                {groepTitel}
+                {q.bronvermelding ? <span className="ml-2 text-xs font-normal italic text-muted">({q.bronvermelding})</span> : null}
+              </p>
+            ) : null}
             {blokken.includes("context") && q.context ? (
               <p className="text-sm italic text-muted">{q.context}</p>
             ) : null}
