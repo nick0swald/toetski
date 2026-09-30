@@ -23,7 +23,6 @@ export function ToetsSheet({
   for (const q of toets.vragen) if (q.figuur && blokkenVoorVraag(q).includes("figuur")) figuurNr.set(q.figuur.id, figuurNr.size + 1);
   return (
     <article className="rounded-[var(--radius-xl)] bg-paper p-6 shadow-[var(--shadow-sheet)] sm:p-10">
-      <p className="text-sm font-semibold text-brand">{m.school}</p>
       <h1 className="mt-2 text-3xl font-bold tracking-tight text-brand">{m.titel}</h1>
       <p className="mt-2 text-sm text-muted">
         {m.vak} · {m.leerweg} klas {m.leerjaar} · versie {m.versie} · {m.duurMinuten} min · {max}{" "}

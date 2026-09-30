@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CONSTRUCTOR_SLEUTEL_HASH, hashSleutel, stuurdocumentTekst } from "@/lib/toets/stuurdocument";
 import { useToetsStore } from "@/store/toets-store";
 
-const OPEN_KEY = "ares058-stuur-open";
+const OPEN_KEY = "toetski-stuur-open";
 
 export function StuurEditor() {
   const opgeslagen = useToetsStore((s) => s.stuurdocument);

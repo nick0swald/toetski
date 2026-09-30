@@ -1,4 +1,4 @@
-import { RTTI_META, RTTI_ORDER, SCHOOL } from "@/lib/toets/constants";
+import { RTTI_META, RTTI_ORDER } from "@/lib/toets/constants";
 import { cesuurPunten } from "@/lib/toets/cijfer";
 import { totaalPunten } from "@/lib/toets/rtti";
 import type { GegenereerdeToets } from "@/lib/toets/types";
@@ -12,9 +12,7 @@ export function MatrijsSheet({ toets }: { toets: GegenereerdeToets }) {
   return (
     <article className="rounded-[var(--radius-xl)] bg-paper p-6 sm:p-8">
       <h2 className="text-2xl font-bold text-brand">Toetsmatrijs · schriftelijke toets</h2>
-      <p className="mt-1 text-sm text-muted">
-        RTTI · versie {t.meta.versie} · {SCHOOL}
-      </p>
+      <p className="mt-1 text-sm text-muted">RTTI · versie {t.meta.versie}</p>
 
       <dl className="mt-6 grid gap-2 text-sm sm:grid-cols-2">
         <div>
