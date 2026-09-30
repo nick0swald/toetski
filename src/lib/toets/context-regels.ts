@@ -120,6 +120,12 @@ function zinnen(t: string): string[] {
 
 const LOS_FIGUURDEEL = /\s*\b(?:in|op|uit|van|bij|volgens)\s+(?:de|het|dit|deze|onderstaande|bovenstaande)\s+(?:figuur|grafiek|diagram|afbeelding|plaatje|tekening|foto|schema)(?:\s+(?:hieronder|hierboven|hiernaast))?\b/gi;
 
+/** Een open vraag moet een opdracht of vraag bevatten (r8: "Emma ziet een fles met … doodshoofd." zonder vraag). */
+export function heeftOpdracht(q: { type: string; stam: string }): boolean {
+  if (q.type === "juist-onjuist" || q.type === "meerkeuze" || q.type === "invul") return true;
+  return /\?|\b(?:noem|noteer|bereken|leg|geef|teken|bepaal|maak|kies|omcirkel|vul|schrijf|verklaar|beschrijf|zet|kruis|voorspel|beredeneer|toon|controleer|lees)\b/i.test(q.stam);
+}
+
 /**
  * Laatste bewaking: een vraag zonder figuur mag nergens naar een figuur verwijzen.
  * 1) losse verwijszinnen ("Kijk naar de grafiek hieronder.") weg; 2) "in de figuur" uit de vraagzin;
@@ -136,6 +142,12 @@ export function borgFiguurVerwijzingen(
   let uitN = nakijk.slice();
   for (const q0 of vragen) {
     const n0 = nakijk.find((x) => x.nummer === q0.nummer);
+    if (!heeftOpdracht(q0)) {
+      verwijderd.push(q0.nummer);
+      uitN = uitN.filter((x) => x.nummer !== q0.nummer);
+      meldingen.push(`Vraag ${q0.nummer} verwijderd: er staat geen vraag of opdracht in.`);
+      continue;
+    }
     if (!figuurVerwijzingenZonderFiguur(q0, n0).length) {
       uitV.push(q0);
       continue;

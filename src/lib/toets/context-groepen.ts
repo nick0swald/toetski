@@ -29,9 +29,20 @@ export function herstelGroepen(vragen: Vraag[], vorige: Vraag[] = []): Vraag[] {
     if (k && q.context?.trim() && !intros.has(k)) intros.set(k, q.context.trim());
   }
   const gezien = new Set<string>();
-  return vragen.map((q) => {
-    const k = titelSleutel(q.contextTitel);
-    if (!k) return q;
+  const eerderInGroep = new Map<string, Set<string>>();
+  return vragen.map((q0) => {
+    const k = titelSleutel(q0.contextTitel);
+    if (!k) return q0;
+    // Zinnen die al in de situatie of een eerdere vraag van deze groep stonden niet herhalen in de stam
+    // (r8: "Luuk ziet op de oscilloscoop dat een toon 440 trillingen…" opnieuw vóór een andere vraag).
+    const al = eerderInGroep.get(k) ?? new Set<string>();
+    const intro0 = intros.get(k);
+    if (intro0) for (const z of zinDelen(intro0)) al.add(zinSleutel(z));
+    const delen = zinDelen(q0.stam);
+    const blijf = delen.filter((z, i) => i === delen.length - 1 || !al.has(zinSleutel(z)));
+    const q = blijf.length < delen.length ? { ...q0, stam: blijf.join(" ") } : q0;
+    for (const z of [...zinDelen(q0.context ?? ""), ...delen]) al.add(zinSleutel(z));
+    eerderInGroep.set(k, al);
     const intro = intros.get(k);
     if (!gezien.has(k)) {
       gezien.add(k);
@@ -39,6 +50,14 @@ export function herstelGroepen(vragen: Vraag[], vorige: Vraag[] = []): Vraag[] {
     }
     return intro && q.context?.trim() === intro ? { ...q, context: "" } : q;
   });
+}
+
+function zinDelen(t: string): string[] {
+  return (t.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? []).map((z) => z.trim()).filter(Boolean);
+}
+
+function zinSleutel(z: string): string {
+  return z.toLowerCase().replace(/[^a-z0-9à-ÿ]+/g, " ").trim();
 }
 
 export function heeftGroepen(vragen: Vraag[]): boolean {
