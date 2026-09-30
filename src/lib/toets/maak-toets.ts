@@ -5,7 +5,7 @@ import { figuurDeadline } from "./voortgang";
 import { koppelVroegeFiguren, zonderPlaatjes, type VroegeRonde } from "./figuren/vroeg";
 import { zonderLegacyFiguren } from "./figuren/bevriezing";
 import type { GegenereerdeToets, GenerateInput, PlaatjesModus } from "./types";
-import { MAX_TOTAAL_MS } from "./voortgang";
+import { MAX_TOTAAL_MS, eersteRondeEinde } from "./voortgang";
 import { eindControle } from "./eind-controle";
 
 export { eindControle };
@@ -16,7 +16,7 @@ export { DOEL_TOTAAL_MS, MAX_TOTAAL_MS, MIN_FIGUURVENSTER_MS, figuurDeadline } f
 export const MIN_MET_GEPLAATST = 2;
 export const MET_DOEL_FIGUREN = 3;
 /** Eerste figuurronde bij "Met plaatjes" stopt hier, zodat er tijd is voor een extra ronde binnen 100 s. */
-export const MET_EERSTE_RONDE_MS = 72_000;
+export { MET_EERSTE_RONDE_MS, eersteRondeEinde } from "./voortgang";
 
 export type Fase = "vragen" | "afwerken" | "plaatjes" | "word" | "klaar";
 
@@ -62,7 +62,7 @@ export async function maakToets(
 
   if (!met) {
     meld({ fase: "afwerken" });
-    const af = await afwerkToets({ data: afwerkData });
+    const af = await afwerkToets({ data: { ...afwerkData, verstrekenMs: nu() - t0 } });
     if (!af.ok) return { ok: false, error: af.error };
     const toets = eindControle(zonderPlaatjes(af.toets));
     const t1 = nu();
@@ -71,7 +71,7 @@ export async function maakToets(
     return { ok: true, toets };
   }
 
-  const deadline = verplicht ? Math.min(figuurDeadline(t0, tVragen), t0 + MET_EERSTE_RONDE_MS) : figuurDeadline(t0, tVragen);
+  const deadline = verplicht ? Math.min(figuurDeadline(t0, tVragen), eersteRondeEinde(t0, tVragen)) : figuurDeadline(t0, tVragen);
   meld({ fase: "afwerken", figuurDeadline: deadline, figuurStart: tVragen, figuren: { klaar: 0, totaal: 0, gepland: false } });
   const gebeurtenis = (e: FiguurGebeurtenis) => {
     if (e.soort === "gepland") meld({ figuren: { klaar: 0, totaal: e.totaal, gepland: true } });
@@ -100,7 +100,7 @@ export async function maakToets(
     ? verwerkFiguren(voorlopig, deps, { deadline, ...(verplicht ? { minFiguren: MET_DOEL_FIGUREN } : {}) }).catch(() => null)
     : Promise.resolve(null);
 
-  const af = await afwerkToets({ data: afwerkData });
+  const af = await afwerkToets({ data: { ...afwerkData, verstrekenMs: nu() - t0 } });
   if (!af.ok) return { ok: false, error: af.error };
   const tAf = nu();
   meld({ fase: "plaatjes", afwerkenKlaar: true, wachtOpPlaatjes: true });

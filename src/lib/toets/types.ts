@@ -373,6 +373,8 @@ export interface ControleLog {
   /** Vragen die na reparatie of vervanging schoon zijn. */
   opgelost: number[];
   vervangen: number[];
+  /** Vervangen maar (door tijdgebrek) niet opnieuw gecontroleerd. */
+  nietHercontroleerd?: number[];
   /** Nog open na reparatie (docent moet kijken). */
   blijft: ControleBevinding[];
   paragrafen?: { code: string; titel: string; vragen: number[] }[];

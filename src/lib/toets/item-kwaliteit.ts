@@ -239,6 +239,43 @@ function repareerStamVerklapt(q: Vraag, n: NakijkItem | undefined, issues: ItemI
   if (zonder.length && zonder.length < zinnen.length) q.stam = zonder.join(" ").trim();
 }
 
+const TELWOORD: Record<string, number> = { twee: 2, drie: 3, vier: 4, vijf: 5 };
+
+/** Een context van hooguit twee woorden zonder getal of zin is geen situatie. */
+export function isStubContext(c: string): boolean {
+  const t = c.trim();
+  return t.split(/\s+/).length <= 2 && !/\d/.test(t) && !/[.!?]$/.test(t);
+}
+
+/** Juist/onjuist moet een stelling zijn, geen vraagzin. */
+export function isVraagzinStelling(q: Vraag): boolean {
+  if (q.type !== "juist-onjuist") return false;
+  const stelling = q.stam.replace(/^.*?(?:stelling|bewering)\s*:\s*/i, "").trim();
+  return /\?\s*["”']?\s*$/.test(stelling) && !/juist of onjuist\??\s*$/i.test(stelling);
+}
+
+/** "Noem twee …" of "noem … en leg uit" met minder punten dan gevraagde onderdelen. */
+export function tekortPunten(q: Vraag): string | null {
+  if (q.opties?.length) return null;
+  const t = q.stam.toLowerCase();
+  const m = t.match(/\b(?:noem|geef|beschrijf|schrijf op)\s+(twee|drie|vier|vijf)\b/);
+  const n = m ? TELWOORD[m[1]!]! : 0;
+  const uitleg = /\b(leg (?:ook )?uit|verklaar|waarom)\b/.test(t) ? 1 : 0;
+  const nodig = Math.max(n, 1) + (uitleg && (n || /\b(noem|geef)\b/.test(t)) ? 1 : 0);
+  if (nodig > (q.punten ?? 1) && nodig >= 2) return `Vraagt ${nodig} onderdelen maar geeft ${q.punten} punt(en); maak de punten gelijk aan het aantal gevraagde onderdelen of vraag minder.`;
+  return null;
+}
+
+const VAAG_OBJECT = /^(het|de|dit|deze)\s+([a-zà-ÿ]+(?:je|tje|pje|kje)|fles|potje|bak|beker|emmer|doos|kist|blik|vat|ton|pot|slang|kraan|auto|kar|bus|machine|apparaat|toestel)\b/i;
+
+/** Stam zonder context die begint met "Het flesje …" zonder dat het flesje is geïntroduceerd. */
+export function vaagObjectBegin(q: Vraag): string | null {
+  if ((q.context ?? "").trim()) return null;
+  if (q.figuur || q.figuurId || q.grafiek || q.schemaFiguur || q.pictogram || q.maatcilinder || q.tabel) return null;
+  const m = q.stam.trim().match(VAAG_OBJECT);
+  return m ? m[0] : null;
+}
+
 function repareerContext(q: Vraag, n: NakijkItem | undefined, issues: ItemIssue[]): void {
   let c = (q.context ?? "").trim();
   if (/ontstopper/i.test(c) && /kas/i.test(c)) {
@@ -248,6 +285,11 @@ function repareerContext(q: Vraag, n: NakijkItem | undefined, issues: ItemIssue[
   if (/kurkplug|waterbuis/i.test(c)) {
     issues.push({ nummer: q.nummer, code: "context-onrealistisch", uitleg: "Een kurkplug in een waterbuis is geen realistische context." });
     c = "Een kurk valt in een emmer water.";
+  }
+  // Losse stub als context ("pictogram", "Werkplaats") zegt niets: weg ermee.
+  if (c && isStubContext(c)) {
+    issues.push({ nummer: q.nummer, code: "context-loos", uitleg: `Context '${c}' is geen situatie.` });
+    c = "";
   }
   q.context = c || undefined;
   const idx = sleutelIndex(q, n);
@@ -430,6 +472,15 @@ function verzamel(vragen: Vraag[], nakijk: NakijkItem[], bron: string): ItemIssu
     if (onduidelijk.length) {
       issues.push({ nummer: q.nummer, code: "vage-verwijzing", uitleg: `Verwijst naar '${onduidelijk[0]}' zonder dat die eerder is genoemd; noem concreet welk ding/apparaat het is.` });
     }
+    const vaag = vaagObjectBegin(q);
+    if (vaag && !onduidelijk.length) {
+      issues.push({ nummer: q.nummer, code: "vage-verwijzing", uitleg: `Begint met '${vaag}' zonder te zeggen welk ding en in welke situatie; geef een korte, concrete context.` });
+    }
+    if (isVraagzinStelling(q)) {
+      issues.push({ nummer: q.nummer, code: "onhelder", uitleg: "Juist/onjuist met een vraagzin; maak er een stelling van die juist of onjuist is." });
+    }
+    const tekort = tekortPunten(q);
+    if (tekort) issues.push({ nummer: q.nummer, code: "rubriek", uitleg: tekort });
     const figRef = figuurVerwijzingenZonderFiguur(q, n);
     if (figRef.length) {
       issues.push({ nummer: q.nummer, code: "figuur-ontbreekt", uitleg: `Verwijst naar '${figRef[0]}' maar er staat geen figuur/tabel bij; maak de vraag zelfstandig (gegevens in de tekst).` });
