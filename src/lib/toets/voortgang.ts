@@ -110,3 +110,21 @@ export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): 
       return { pct: 100, label: "Klaar", restMs: 0, wachtOpPlaatjes: false };
   }
 }
+
+/** Eerste figuurronde bij "Met plaatjes" stopt standaard hier (ruimte voor een extra ronde binnen 100 s). */
+export const MET_EERSTE_RONDE_MS = 72_000;
+
+/**
+ * Einde van de eerste figuurronde bij "Met plaatjes": minstens 72 s na start, maar altijd ≥ 40 s na de
+ * vragen (anders krijgen keuringen geen kans als de vragen traag waren), en nooit later dan 100 s − 16 s.
+ */
+export function eersteRondeEinde(t0: number, tVragen: number): number {
+  return Math.min(t0 + MAX_TOTAAL_MS - 16_000, Math.max(t0 + MET_EERSTE_RONDE_MS, tVragen + 40_000));
+}
+
+
+/** Afwerkbudget: maximaal 60 s, en zo dat de hele toets binnen ~100 s klaar is (≥ 25 s voor de controle). */
+export function afwerkBudget(verstrekenMs?: number): number {
+  if (verstrekenMs === undefined) return 60_000;
+  return Math.max(25_000, Math.min(60_000, 100_000 - 12_000 - verstrekenMs));
+}

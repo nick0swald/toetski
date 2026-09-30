@@ -133,6 +133,32 @@ async function repareerRonde(
   return { vragen: v, nakijkmodel: n, gewijzigd };
 }
 
+/**
+ * Lengte: ligt het totaal ruim onder het doel (tijd van de toets), dan een paar 1-punts gesloten vragen
+ * laten herschrijven tot open vragen van 2 punten (zelfde leerdoel en rtti) — geen extra vragen.
+ */
+export function lengteIssues(vragen: Vraag[], doelPunten: number | undefined, vermijd: Set<number>): ItemIssue[] {
+  if (!doelPunten) return [];
+  const totaal = vragen.reduce((s, q) => s + (q.punten ?? 1), 0);
+  if (totaal >= Math.round(doelPunten * 0.9)) return [];
+  let tekort = doelPunten - totaal;
+  const kandidaten = vragen
+    .filter((q) => !vermijd.has(q.nummer) && (q.punten ?? 1) <= 1 && !q.figuur && !q.figuurId && !q.pictogram)
+    .sort((a, b) => Number(!!b.opties?.length) - Number(!!a.opties?.length) || (a.rtti === "R" ? 1 : 0) - (b.rtti === "R" ? 1 : 0));
+  const out: ItemIssue[] = [];
+  for (const q of kandidaten) {
+    if (tekort <= 0 || out.length >= 5) break;
+    const nieuw = tekort >= 2 && q.rtti !== "R" && out.length === 0 ? 3 : 2;
+    tekort -= nieuw - (q.punten ?? 1);
+    out.push({
+      nummer: q.nummer,
+      code: "lengte",
+      uitleg: `De toets is te kort (${totaal} van ${doelPunten} punten voor deze tijd). Herschrijf deze vraag tot een OPEN vraag van ${nieuw} punten over hetzelfde leerdoel (rtti ${q.rtti}), bijv. noem + leg uit, of een korte berekening met gegevens in de tekst. Geef een rubriek met ${nieuw} criteria van elk 1 punt.`,
+    });
+  }
+  return out;
+}
+
 /** Dekking per paragraaf: ontbrekende paragrafen → een vraag uit de drukste paragraaf vervangen. */
 function dekkingIssues(vragen: Vraag[], paragrafen: Paragraaf[], vermijd: Set<number>): ItemIssue[] {
   if (paragrafen.length < 2) return [];
@@ -174,6 +200,8 @@ export async function werkVragenAf(input: {
   controleer?: Repair;
   antwoorden?: string;
   rttiDoel?: RttiVerdeling;
+  /** Beoogd totaal punten (uit de toetsduur); ruim te weinig → vragen uitbreiden. */
+  doelPunten?: number;
   /** Tijdsbudget voor controle + reparatie (ms). */
   budgetMs?: number;
   nu?: () => number;
@@ -199,6 +227,7 @@ export async function werkVragenAf(input: {
   if (input.controleer && input.repair) {
     const gevonden: ControleBevinding[] = [];
     const vervangen: number[] = [];
+    const nietHercontroleerd: number[] = [];
     try {
       const eerste = await controleerVragen(vragen, nakijk, bronW, input.controleer);
       // Onafhankelijk RTTI-oordeel telt (eerlijk herlabelen), daarna pas balanceren.
@@ -214,7 +243,9 @@ export async function werkVragenAf(input: {
       const dek = dekkingIssues(vragen, paragrafen, bezet);
       dek.forEach((i) => bezet.add(i.nummer));
       const rtti = input.rttiDoel ? rttiHerschrijfPlan(vragen, input.rttiDoel, { vermijd: bezet }) : [];
-      const alle = [...heur, ...inhoud, ...dek, ...rtti];
+      rtti.forEach((i) => bezet.add(i.nummer));
+      const lengte = lengteIssues(vragen, input.doelPunten, bezet);
+      const alle = [...heur, ...inhoud, ...dek, ...rtti, ...lengte];
       gevonden.push(...alle.map((i) => ({ nummer: i.nummer, code: i.code, uitleg: i.uitleg })));
       let open = alle;
       if (alle.length && rest() > 12_000) {
@@ -241,7 +272,16 @@ export async function werkVragenAf(input: {
           nakijk = det2.nakijkmodel;
           stap = det2;
           vervangen.push(...r2.gewijzigd);
-          open = open.filter((i) => !r2.gewijzigd.includes(i.nummer) || !ERNSTIG.has(i.code));
+          // Oude bevindingen van vervangen vragen gelden niet meer; de nieuwe vraag opnieuw controleren als er tijd is.
+          open = open.filter((i) => !r2.gewijzigd.includes(i.nummer));
+          const nieuw = [...new Set(r2.gewijzigd)];
+          if (nieuw.length && rest() > 7_000) {
+            const derde = await controleerVragen(vragen.filter((q) => nieuw.includes(q.nummer)), nakijk, bronW, input.controleer);
+            open.push(...controleIssues(vragen, nakijk, derde.oordelen));
+          } else {
+            nietHercontroleerd.push(...nieuw);
+          }
+          open.push(...det2.issues.filter((i) => INHOUD.has(i.code) && nieuw.includes(i.nummer)));
         }
       }
       const blijft = [...new Map(open.filter((i) => INHOUD.has(i.code)).map((i) => [`${i.nummer}:${i.code}`, i])).values()];
@@ -251,6 +291,7 @@ export async function werkVragenAf(input: {
         gevonden,
         opgelost: [...probleemNrs].filter((nr) => !blijft.some((b) => b.nummer === nr)),
         vervangen: [...new Set(vervangen)],
+        ...(nietHercontroleerd.length ? { nietHercontroleerd: [...new Set(nietHercontroleerd)] } : {}),
         blijft: blijft.map((i) => ({ nummer: i.nummer, code: i.code, uitleg: i.uitleg })),
         duurMs: nu() - t0,
         ...(eerste.gelukt ? {} : { fout: "controlemodel gaf geen oordeel" }),
@@ -308,6 +349,7 @@ export async function werkVragenAf(input: {
       blijft: controle.blijft.map(b),
       opgelost: controle.opgelost.map(his),
       vervangen: controle.vervangen.map(his),
+      ...(controle.nietHercontroleerd ? { nietHercontroleerd: controle.nietHercontroleerd.map(his) } : {}),
     };
   }
   if (controle && paragrafen.length >= 2) {

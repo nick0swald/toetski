@@ -1,3 +1,4 @@
+import { afwerkBudget } from "./voortgang";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { SCHOOL } from "./constants";
@@ -244,10 +245,10 @@ Aantal vragen: ${input.aantalVragen} (lever er echt zoveel; de toets moet de toe
 Vraagverdeling: ${verdelingTekst}
 Totaal punten: ${input.doelPunten} (± 2; passend bij ${input.duurMinuten} minuten, tenzij de docent anders stuurt)
 ${paragrafenRegel(bron, input.antwoordenmateriaal)}
-Context-eisen (verplicht): realistische getallen en situaties (een echo in een lokaal of hal: tientallen meters, niet honderden; geluid van een klein apparaat hoor je niet op 500 m); alle gegevens die nodig zijn staan in de vraag; noem een ding eerst concreet voordat je 'de/dit' gebruikt; nooit een schoolnaam; verzonnen bedrijven mogen grappig zijn (bijv. 'Frituur De Vette Hap'); personen hebben Nederlandse voornamen (Sanne, Daan, Lotte, Bram).
+Context-eisen (verplicht): realistische getallen en situaties (een echo in een lokaal of hal: tientallen meters, niet honderden; geluid van een klein apparaat hoor je niet op 500 m); alle gegevens die nodig zijn staan in de vraag; noem een ding eerst concreet voordat je 'de/dit' gebruikt; nooit een schoolnaam; verzonnen bedrijven mogen grappig zijn (bijv. 'Frituur De Vette Hap'); personen hebben Nederlandse voornamen (Sanne, Daan, Lotte, Bram). Staat er een figuur of tabel bij, zet de getallen die nodig zijn ÓÓK in de vraagtekst (de figuur kan wegvallen). Een tijdsverschil (echo, onweer) meet je alleen met een startsignaal (flits, zichtbare klap, eigen roep). Juist/onjuist is altijd een stelling, nooit een vraagzin. Elke context is een echte zin (geen los woord als 'pictogram').
 Juist/onjuist: opties altijd in de volgorde A. Juist, B. Onjuist.
 Rekenvragen: rubriek in stappen (formule – invullen/berekenen – antwoord met eenheid); een rekenfout kost 1 punt, niet alles.
-Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
+Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap; 'noem twee' = 2p, 'noem … en leg uit' = 2p. Haal het totaal met genoeg open meerpuntsvragen (uitleg, berekening), niet met extra 1-punts meerkeuze.
 MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam, alleen als die iets toevoegt.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
@@ -335,7 +336,7 @@ export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
 }
 
 /** Stap 2: afwerken (reparatie, punten, MC-hussel, kwaliteit) → complete toets. */
-async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload): Promise<GegenereerdeToets> {
+async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload, budgetMs = 60_000): Promise<GegenereerdeToets> {
   const rttiDoel = normaliseer(data.rttiDoel);
   const vragenRaw = ruweVragen(payload);
   const vakNaam = data.vak?.trim() || payload.meta.vak || "";
@@ -349,7 +350,8 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
     figuren: plaatjesModus(data) === "zonder" ? "geen" : "nodig",
     antwoorden: data.antwoordenmateriaal ?? "",
     rttiDoel,
-    budgetMs: 60_000,
+    doelPunten: data.doelPunten,
+    budgetMs,
     controleer: (prompt) => callControle(CONTROLE_SYSTEM, prompt).catch(() => null),
     repair: (prompt) =>
       callGrok(
@@ -453,7 +455,10 @@ const afwerkInputSchema = z.object({
   input: generateInputSchema,
   bron: z.string().max(210000),
   payload: z.unknown(),
+  /** Tijd sinds de start van de generatie (client-klok), voor het afwerkbudget binnen 100 s. */
+  verstrekenMs: z.number().min(0).max(300_000).optional(),
 });
+
 
 /** Stap 2 los: afwerken + kwaliteit. Payload wordt opnieuw gevalideerd (komt van de client). */
 export const afwerkToets = createServerFn({ method: "POST" })
@@ -461,7 +466,7 @@ export const afwerkToets = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ ok: true; toets: GegenereerdeToets } | { ok: false; error: string }> => {
     try {
       const payload = generatedPayloadSchema.parse(data.payload);
-      return { ok: true, toets: await rondAf(data.input, data.bron, payload) };
+      return { ok: true, toets: await rondAf(data.input, data.bron, payload, afwerkBudget(data.verstrekenMs)) };
     } catch (err) {
       return { ok: false, error: vriendelijkeAiFout(err) };
     }
@@ -637,7 +642,7 @@ Moeilijkheid: ${moeTekst}
 RTTI-doel (richtlijn voor de nieuwe vragen): R ${rtti.R}% · T1 ${rtti.T1}% · T2 ${rtti.T2}% · I ${rtti.I}%
 Vraagverdeling: ${verdelingTekst}
 Startnummer: ${input.startNummer} (nummer de nieuwe vragen opeenvolgend vanaf hier)
-Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap.
+Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); eenvoudige open 1–2p; overige open/berekening = 1p per nakijkstap; 'noem twee' = 2p, 'noem … en leg uit' = 2p. Haal het totaal met genoeg open meerpuntsvragen (uitleg, berekening), niet met extra 1-punts meerkeuze.
 MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).

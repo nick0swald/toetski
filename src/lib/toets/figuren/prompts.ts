@@ -34,7 +34,7 @@ const SPEC_UITLEG = `Een figuurspec is JSON:
   "verplichteElementen": string[], "labels": string[],
   "getallen": [{"label": string, "waarde": number, "eenheid": string}],
   "eenheden": string[],
-  "nietTonen": string[] (wat NIET in beeld mag, zodat het antwoord niet wordt weggegeven — bijv. de gevraagde waarde of de naam van het gevraagde begrip),
+  "nietTonen": string[] (wat NIET in beeld mag, zodat het antwoord niet wordt weggegeven — de gevraagde waarde (bijv. "12 N") of de naam van het gevraagde begrip; nooit een symbool/label zoals "F2" of "Fz"),
   "data": object per soort:
     lijngrafiek: {"xLabel","yLabel","xEenheid","yEenheid","reeksen":[{"naam"?, "punten":[{"x":n,"y":n}]}],"toonPunten":bool}
     staafdiagram: {"yLabel","yEenheid","xLabel"?,"staven":[{"label","waarde":n}],"toonWaarden":bool}

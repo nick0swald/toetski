@@ -64,6 +64,12 @@ function norm(s: string): string {
     .trim();
 }
 
+/** Kort label zonder spatie en zonder los getal, zoals "F2", "Fz", "Fres", "v1", "Δt". */
+export function isSymboolnaam(item: string): boolean {
+  const t = item.trim();
+  return /^[A-Za-zΔαβγλρ][A-Za-z]{0,3}\d?$/.test(t) && !/^(ja|nee)$/i.test(t);
+}
+
 function getalTokens(s: string): number[] {
   return (norm(s).match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number).filter(Number.isFinite);
 }
@@ -79,6 +85,8 @@ export function voorcheckNietTonen(spec: FiguurSpec, teksten: string[]): string[
   for (const item of spec.nietTonen) {
     const n = norm(item);
     if (!n || n.length < 2) continue;
+    // Pure symboolnamen (F2, Fz, Fres, v, Δt) zijn labels, geen verboden antwoord.
+    if (isSymboolnaam(item)) continue;
     const getallen = getalTokens(item);
     const alleenGetal = /^-?\d+(?:\.\d+)?\s*[a-zµ°Ω/%³²]*$/i.test(n);
     if (alleenGetal && getallen.length === 1) {

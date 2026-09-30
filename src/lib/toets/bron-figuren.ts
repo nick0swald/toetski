@@ -172,10 +172,11 @@ export function plaatsPictogrammen(vragen: Vraag[], nakijk: NakijkItem[] = []): 
     if (q.figuur || q.figuurId) return q; // bevroren figuur: niets toevoegen
     if (!isPictogramVraag(q) && !q.pictogram) return q;
     const n = nakijk.find((item) => item.nummer === q.nummer);
-    const soort =
-      q.pictogram ??
+    const uitTekst =
       inferGhs(n?.modelantwoord ?? "") ??
       inferGhs(`${q.context ?? ""} ${q.stam} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`);
+    // Het model koos een GHS-symbool terwijl de tekst over een veiligheidsbord gaat (bijv. gehoorbescherming): tekst wint.
+    const soort = q.pictogram && !(uitTekst && isVeiligheidsbord(uitTekst) && !isVeiligheidsbord(q.pictogram)) ? q.pictogram : (uitTekst ?? q.pictogram);
     if (!soort) return q;
     const bord = isVeiligheidsbord(soort);
     // Een gebods-/waarschuwingsbord heet geen gevarensymbool (en omgekeerd): tekst en rubriek consistent.
