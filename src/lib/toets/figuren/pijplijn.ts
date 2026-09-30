@@ -15,6 +15,7 @@ import {
 import { altTekst, isCodeFiguur, parseFiguurSpec, parseSpecData } from "./spec.ts";
 import { tekenCodeFiguur } from "./svg.ts";
 import { controleerStroomkringSymbolen } from "./schakelsymbolen.ts";
+import { bankSleutel, figuurUitBank, naarBankItem, type FiguurBank } from "./bank.ts";
 
 /** Afhankelijkheden (netwerk/render) — in productie xAI + resvg, in tests nep. */
 export interface PijplijnDeps {
@@ -25,6 +26,8 @@ export interface PijplijnDeps {
   vraagJson: (system: string, user: string, timeoutMs: number) => Promise<unknown>;
   nu: () => number;
   nieuwId: () => string;
+  /** Gedeelde figuurbank (optioneel): eerst zoeken, na een go bewaren. */
+  bank?: FiguurBank;
 }
 
 export interface FiguurOpdracht {
@@ -52,6 +55,8 @@ export type FiguurUitkomst =
       nieuweStam?: string;
       pogingen: number;
       log: PogingLog[];
+      /** Direct uit de figuurbank (geen generatie/keuring in deze aanroep). */
+      uitBank?: boolean;
     }
   | {
       status: "gedropt";
@@ -61,7 +66,19 @@ export type FiguurUitkomst =
       herschreven?: { actie: "herschreven" | "vervangen"; vraag: Vraag; nakijk: NakijkItem };
     };
 
+function binnen<T>(p: Promise<T>, ms: number): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    p,
+    new Promise<T>((_, rej) => {
+      t = setTimeout(() => rej(new Error("figuurbank: tijdslimiet")), ms);
+    }),
+  ]).finally(() => clearTimeout(t));
+}
+
 export const PIJPLIJN_TIJDEN = {
+  /** Maximale wachttijd op de figuurbank (zoeken/bewaren). */
+  bankMs: 2_500,
   /** Standaardbudget binnen de Vercel-functie (maxDuration 180 s); de client geeft meestal een krapper budget mee. */
   budgetMs: 165_000,
   visieMs: 30_000,
@@ -171,6 +188,30 @@ export async function maakFiguurMetKeuring(
   let spec = opdracht.spec;
   let pogingen = 0;
 
+  // 1. Figuurbank: exact dezelfde spec al eens goedgekeurd → direct hergebruiken (zelfde bytes).
+  const sleutel = bankSleutel(opdracht.spec);
+  if (deps.bank) {
+    try {
+      const item = await binnen(deps.bank.zoek(sleutel), Math.min(T.bankMs, Math.max(500, rest() - 1_000)));
+      const figuur = item ? figuurUitBank(item, sleutel, deps.nieuwId()) : null;
+      if (figuur) {
+        log.push({ poging: 0, besluit: "go", redenen: ["uit de figuurbank"] });
+        return { status: "go", figuur, nieuweStam: opdracht.nieuweStam, pogingen: 0, log, uitBank: true };
+      }
+    } catch {
+      /* bank niet bereikbaar → gewoon maken */
+    }
+  }
+  const bewaar = async (figuur: GoedgekeurdeFiguur) => {
+    if (!deps.bank) return;
+    const sleutels = new Set([sleutel, bankSleutel(figuur.spec)]);
+    try {
+      await binnen(Promise.all([...sleutels].map((k) => deps.bank!.bewaar(naarBankItem(k, figuur, log)))), T.bankMs);
+    } catch {
+      /* opslaan mislukt → figuur telt gewoon; volgende keer opnieuw */
+    }
+  };
+
   for (let p = 1; p <= max; p++) {
     if (rest() < (code ? T.nodigCodeMs : T.nodigAiMs)) {
       log.push({ poging: p, besluit: "fout", redenen: ["tijdslimiet: geen tijd voor nog een poging"] });
@@ -230,6 +271,7 @@ export async function maakFiguurMetKeuring(
           pogingen: p,
           keuring: { besluit: "go", redenen: uitslag.redenen, model: VISIE_MODEL, tijdstip: new Date(deps.nu()).toISOString() },
         });
+        await bewaar(figuur);
         return { status: "go", figuur, nieuweStam: opdracht.nieuweStam, pogingen: p, log };
       }
       feedback = [...uitslag.redenen, uitslag.feedback].filter(Boolean);

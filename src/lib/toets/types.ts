@@ -180,6 +180,8 @@ export interface FiguurKeuring {
   redenen: string[];
   model: string;
   tijdstip: string;
+  /** Gezet als de figuur ongewijzigd uit de gedeelde figuurbank komt. */
+  bank?: { sleutel: string; figuurHash: string; datum: string };
 }
 
 /** Een figuur die door de go/no-go-keuring is gekomen. Bevroren en gehasht. */
@@ -213,6 +215,8 @@ export interface FiguurRapportItem {
   /** Wat er met de vraag gebeurde als de figuur is gedropt. */
   fallback?: "herschreven" | "vervangen" | "tabel" | "tekst" | "geen-figuur" | "verwijderd";
   figuurId?: string;
+  /** Figuur kwam direct uit de gedeelde figuurbank (geen nieuwe generatie/keuring nodig). */
+  uitBank?: boolean;
 }
 
 export interface FiguurRapport {
