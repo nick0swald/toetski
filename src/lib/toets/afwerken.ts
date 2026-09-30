@@ -52,6 +52,7 @@ function behoudGroep(oud: Vraag, nieuw: Vraag): Vraag {
     contextTitel: oud.contextTitel ?? nieuw.contextTitel,
     bronvermelding: oud.bronvermelding ?? nieuw.bronvermelding,
     vraagtype: nieuw.vraagtype ?? oud.vraagtype,
+    leerdoelId: nieuw.leerdoelId ?? oud.leerdoelId,
   };
 }
 

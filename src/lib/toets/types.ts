@@ -178,6 +178,8 @@ export interface Vraag {
   contextTitel?: string;
   /** Vraagtype uit de NaSk-taxonomie (bijv. G-ECHO, E-PUI, O-LICHT); OVERIG als niets past. */
   vraagtype?: string;
+  /** Officieel leerdoel (syllabus-eindterm zoals "K/8.4" of SLO-kerndoel zoals "SLO-30C"); zie toets.leerdoelen. */
+  leerdoelId?: string;
   /** Korte uitleg van het RTTI-label (regel: type → basis, bijgesteld op opdracht/stappen/context). */
   rttiUitleg?: string;
   /** Bronvermelding bij een bewerkte examenvraag, bijv. "naar: examen 2019 tijdvak 1". */
@@ -374,6 +376,31 @@ export interface GegenereerdeToets {
   plaatjes?: PlaatjesModus;
   /** Verplichte inhoudscontrole (berekend): wat gevonden, gerepareerd of vervangen is. */
   controle?: ControleLog;
+  /** Officiële leerdoelen van deze toets (vooraf gekoppeld, deterministisch) met richtpunten. */
+  leerdoelen?: LeerdoelPlan;
+}
+
+export interface PlanLeerdoel {
+  id: string;
+  tekst: string;
+  /** CE/SE (syllabus) of KD (kerndoel onderbouw). */
+  deel: "CE" | "SE" | "KD";
+  typen: string[];
+  /** Richtpunten voor dit doel (stabiel per hoofdstuk + klas + leerweg + toetslengte). */
+  doelPunten: number;
+  wettelijk?: string;
+}
+
+export interface LeerdoelPlan {
+  bron: "syllabus" | "kerndoelen";
+  bronTitel: string;
+  /** Waar de keuze vandaan komt, bijv. "Nova H13 Geluid" of "onderwerp Geluid". */
+  herkomst: string;
+  leerweg: string;
+  leerjaar: number;
+  doelen: PlanLeerdoel[];
+  /** Vraagnummers waarvan het leerdoelId lokaal is toegekend (onbekend/ontbrekend na generatie). */
+  hersteld?: number[];
 }
 
 export interface ControleBevinding {

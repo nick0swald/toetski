@@ -101,6 +101,11 @@ export const vraagSchema = z.object({
     .string()
     .nullish()
     .transform((s) => (s?.trim() ? s.trim().toUpperCase().slice(0, 20) : undefined)),
+  /** Officieel leerdoel-id (bijv. K/8.4 of SLO-30C). */
+  leerdoelId: z
+    .string()
+    .nullish()
+    .transform((s) => (s?.trim() ? s.trim().slice(0, 24) : undefined)),
   rttiUitleg: z
     .string()
     .nullish()

@@ -27,6 +27,7 @@ import { figuurIsGeldig } from "./figuren/bevriezing";
 import type { CijferNorm, GegenereerdeToets, GoedgekeurdeFiguur, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
 import { startGroep } from "./context-groepen";
+import { leerdoelDekking } from "./leerdoelen-plan";
 
 const GREEN = "004422";
 const INK = "000000";
@@ -476,9 +477,11 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
     ),
     p(formuleTekst(t.cijferNorm, max), { bold: true, after: 200 }),
   ];
+  const ldPerVraag = leerdoelDekking(t.vragen, t.leerdoelen).perVraag;
   for (const n of t.nakijkmodel) {
     const q = t.vragen.find((v) => v.nummer === n.nummer);
     const punten = q?.punten ?? "?";
+    const ld = ldPerVraag.get(n.nummer);
     const stam = (q?.stam || "").trim();
     out.push(
       new Paragraph({
@@ -498,8 +501,8 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
     if (q && figuurIsGeldig(q.figuur)) {
       out.push(p(figuurVerwijzing(q.figuur, nummers.get(q.figuur.id)), { size: SMALL_SIZE, italics: true, after: 40 }));
     }
-    if (q?.rttiUitleg || q?.vraagtype || q?.bronvermelding) {
-      const bits = [q.rttiUitleg ? `RTTI ${q.rttiUitleg}` : `RTTI ${q.rtti}`, q.vraagtype && q.vraagtype !== "OVERIG" ? `type ${q.vraagtype}` : "", q.bronvermelding ?? ""].filter(Boolean);
+    if (q && (q.rttiUitleg || q.vraagtype || q.bronvermelding || ld)) {
+      const bits = [ld ? `leerdoel ${ld}` : "", q.rttiUitleg ? `RTTI ${q.rttiUitleg}` : `RTTI ${q.rtti}`, q.vraagtype && q.vraagtype !== "OVERIG" ? `type ${q.vraagtype}` : "", q.bronvermelding ?? ""].filter(Boolean);
       out.push(p(bits.join(" · "), { size: SMALL_SIZE, italics: true, after: 40 }));
     }
     out.push(p(`Modelantwoord: ${n.modelantwoord}`, { after: 60 }));
@@ -658,6 +661,7 @@ function matrijsBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
     sub(
       RTTI_ORDER.map((k) => `${RTTI_META[k].kort} = ${RTTI_META[k].naam}`).join("  ·  "),
     ),
+    ...leerdoelBlocks(t),
   ];
   if (t.kwaliteit?.punten?.length) {
     out.push(heading("Feedback op de toets"));
@@ -667,6 +671,55 @@ function matrijsBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
     }
   }
   return out;
+}
+
+/** Leerdoel-dekking (alleen docentdocumenten): leerdoel → vragen/punten, niet-getoetste doelen, leerdoel per vraag. */
+export function leerdoelBlocks(t: GegenereerdeToets): (Paragraph | Table)[] {
+  const plan = t.leerdoelen;
+  if (!plan?.doelen.length) return [];
+  const { rijen, ongedekt, perVraag } = leerdoelDekking(t.vragen, plan);
+  const fill = "E8F0EA";
+  const w = [1150, 4260, 700, 1450, 900, 900];
+  const kop = new TableRow({
+    children: ["Leerdoel", "Omschrijving", "CE/SE", "Vragen", "Richt p", "Toets p"].map((k, i) => cell(k, { bold: true, fill, center: i >= 2, width: w[i] })),
+  });
+  const rows = rijen.map(
+    (r) =>
+      new TableRow({
+        children: [
+          cell(r.id, { bold: true, width: w[0] }),
+          cell(r.tekst, { width: w[1] }),
+          cell(r.deel === "KD" ? "kerndoel" : r.deel, { center: true, width: w[2] }),
+          cell(r.vragen.join(", ") || "—", { center: true, width: w[3] }),
+          cell(String(r.doelPunten), { center: true, width: w[4] }),
+          cell(String(r.punten), { center: true, bold: r.punten === 0, width: w[5] }),
+        ],
+      }),
+  );
+  const totaalRicht = rijen.reduce((s, r) => s + r.doelPunten, 0);
+  const totaalToets = rijen.reduce((s, r) => s + r.punten, 0);
+  rows.push(
+    new TableRow({
+      children: [
+        cell("Totaal", { bold: true, fill, width: w[0] }),
+        cell("", { fill, width: w[1] }),
+        cell("", { fill, width: w[2] }),
+        cell(String(t.vragen.length), { bold: true, fill, center: true, width: w[3] }),
+        cell(String(totaalRicht), { bold: true, fill, center: true, width: w[4] }),
+        cell(String(totaalToets), { bold: true, fill, center: true, width: w[5] }),
+      ],
+    }),
+  );
+  const perVraagTekst = [...perVraag.entries()].sort((a, b) => a[0] - b[0]).map(([nr, id]) => `${nr} ${id}`).join("  ·  ");
+  return [
+    p("", { after: 120 }),
+    heading("Leerdoelen · dekking"),
+    sub(`${plan.bronTitel}${plan.herkomst ? ` · ${plan.herkomst}` : ""} · ${plan.leerweg} klas ${plan.leerjaar}`),
+    new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: w, rows: [kop, ...rows] }),
+    p(ongedekt.length ? `Niet getoetst: ${ongedekt.map((r) => `${r.id} (${r.tekst})`).join("; ")}.` : "Alle leerdoelen van dit hoofdstuk zijn getoetst.", { bold: ongedekt.length > 0, before: 120, after: 60 }),
+    p(`Leerdoel per vraag: ${perVraagTekst}`, { size: SMALL_SIZE, after: 60 }),
+    p("Richtpunten liggen vast per hoofdstuk, klas, leerweg en toetslengte (zelfde keuze → zelfde verdeling).", { size: SMALL_SIZE, italics: true }),
+  ];
 }
 
 function kwaliteitParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
