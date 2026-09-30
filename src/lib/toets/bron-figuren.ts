@@ -1,4 +1,4 @@
-import { isVeiligheidsbord } from "./types.ts";
+import { isVeiligheidsbord, pictogramPastBijVraag } from "./types.ts";
 import type { GhsSymbool, MaatcilinderFiguur, NakijkItem, SchemaFiguur, Vraag, VraagGrafiek, VraagTabel, VakProfiel } from "./types";
 import { heeftEchtFiguur } from "./blad-volgorde.ts";
 
@@ -172,6 +172,12 @@ export function plaatsPictogrammen(vragen: Vraag[], nakijk: NakijkItem[] = []): 
     if (q.figuur || q.figuurId) return q; // bevroren figuur: niets toevoegen
     if (!isPictogramVraag(q) && !q.pictogram) return q;
     const n = nakijk.find((item) => item.nummer === q.nummer);
+    // Pictogramveld dat na een herschrijving niet meer bij de tekst hoort (bijv. een drukberekening): weg ermee.
+    const tekst = `${q.context ?? ""} ${q.stam} ${(q.opties ?? []).map((o) => o.tekst).join(" ")} ${n?.modelantwoord ?? ""}`;
+    if (q.pictogram && !pictogramPastBijVraag(q) && !inferGhs(tekst)) {
+      const { pictogram: _weg, ...kaal } = q;
+      return kaal as Vraag;
+    }
     const uitTekst =
       inferGhs(n?.modelantwoord ?? "") ??
       inferGhs(`${q.context ?? ""} ${q.stam} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`);

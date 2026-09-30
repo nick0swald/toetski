@@ -179,3 +179,18 @@ describe("ronde 2: strengere afwerking", () => {
     assert.notEqual(vraagZonderFiguur(q, spec, { legacy: true, verwijst: true, tegenspraak: true }).fallback, "tabel");
   });
 });
+
+describe("ronde 3: context en pictogram", () => {
+  it("context met gegevens wordt nooit als 'context-loos' weggegooid", () => {
+    const q = v(13, "Bereken hoe ver de dichtstbijzijnde wand van Bram af staat.", { type: "berekening", punten: 3, context: "Bram roept in een sporthal en hoort na 0,2 s de echo." });
+    const r = repareerItemsDeterministisch([q], [], "");
+    assert.equal(r.vragen[0]!.context, q.context);
+    const q2 = v(5, "Wat is de resulterende kracht op de slee?", { context: "Lotte trekt een slee met 120 N; de wrijving is 40 N." });
+    assert.ok(repareerItemsDeterministisch([q2], [], "").vragen[0]!.context);
+  });
+  it("pictogram bij een drukberekening valt weg", () => {
+    const q = v(11, "Bereken de druk onder de pan.", { type: "berekening", context: "Een pan van 240 N staat op 0,06 m².", pictogram: "ontvlambaar" as Vraag["pictogram"] });
+    const [uit] = plaatsPictogrammen([q], []);
+    assert.equal(uit!.pictogram, undefined);
+  });
+});

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { symboolSoort } from "./schakelsymbolen.ts";
-import { GHS_SYMBOLEN, PICTOGRAM_NAAM, isVeiligheidsbord, type FiguurSoort, type FiguurSpec, type GhsSymbool, type JsonWaarde, type Vraag } from "../types.ts";
+import { GHS_SYMBOLEN, PICTOGRAM_NAAM, isVeiligheidsbord, pictogramPastBijVraag, type FiguurSoort, type FiguurSpec, type GhsSymbool, type JsonWaarde, type Vraag } from "../types.ts";
 
 export const FIGUUR_SOORTEN: FiguurSoort[] = [
   "lijngrafiek",
@@ -357,7 +357,7 @@ function componentUitLabel(label: string): { soort: string; label?: string } {
  */
 export function legacySpecs(q: Vraag): FiguurSpec[] {
   const out: FiguurSpec[] = [];
-  if (q.pictogram) {
+  if (q.pictogram && pictogramPastBijVraag(q)) {
     out.push(
       isVeiligheidsbord(q.pictogram)
         ? basis("pictogram", "Veiligheidsbord dat de leerling moet herkennen.", { symbool: q.pictogram }, {

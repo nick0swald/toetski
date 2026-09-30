@@ -212,9 +212,15 @@ function contextNodig(q: Vraag): boolean {
   if (!c) return false;
   if (q.pictogram || q.grafiek || q.maatcilinder || q.schemaFiguur || q.tabel) return true;
   if (/\b(deze|dit|die|dat|de figuur|het symbool|de tabel|de grafiek|de maatcilinder)\b/i.test(q.stam)) return true;
-  const nums = c.match(/\d+(?:[.,]\d+)?/g) ?? [];
-  return nums.some((n) => n.length > 1 && q.stam.includes(n));
+  // Getallen in de context zijn gegevens: nooit weggooien (bijv. 'hoort na 0,6 s de echo').
+  if (/\d/.test(c)) return true;
+  // Personen/dingen uit de context die in de stam terugkomen ('Bram', 'de slee'): context is nodig.
+  const woorden = (t: string) => new Set((t.toLowerCase().match(/[a-zà-ÿ]{4,}/g) ?? []).filter((w) => !STOPWOORDEN.has(w)));
+  const stam = woorden(q.stam);
+  return [...woorden(c)].some((w) => stam.has(w));
 }
+
+const STOPWOORDEN = new Set(["deze", "die", "dat", "welke", "wordt", "worden", "hebben", "heeft", "zijn", "maar", "voor", "naar", "door", "over", "omdat", "waarom", "hoeveel", "leerling", "situatie", "noem", "bereken", "leg", "uit", "juist", "onjuist"]);
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
