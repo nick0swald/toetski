@@ -22,13 +22,22 @@ export function herstelZinsbreuk<T extends { context?: string | null; stam: stri
   return { ...q, context: `${ctx.replace(/\.$/, "")} ${m[1]}`, stam: m[2]!.trim() };
 }
 
+/** Zin die na een punt met een kleine letter begint (r9: "… 92 dB. mag je hier …") krijgt een hoofdletter. */
+export function hoofdletterNaPunt(t: string | undefined | null): string | undefined {
+  if (!t) return t ?? undefined;
+  return t.replace(/(^|[^.]\b(\S+)[.!?]\s+)([a-zà-ÿ])/g, (m, voor: string, woord: string | undefined, letter: string) =>
+    woord && /^(?:bijv|ca|o\.a|enz|d\.w\.z|m\.a\.w|resp|vgl|nr|max|min|gem|ong)\.?$/i.test(woord) ? m : `${voor}${letter.toUpperCase()}`,
+  ).replace(/^([a-zà-ÿ])/, (l) => l.toUpperCase());
+}
+
 export function eindControle(toets0: GegenereerdeToets): GegenereerdeToets {
   // Schoolnamen ook hier (figuurterugval kan tekst uit de ruwe vraag terugzetten).
   const nk = toets0.nakijkmodel.map((n) => ({ ...n, puntenverdeling: (n.puntenverdeling ?? []).map((p) => ({ ...p })) }));
   const vr = toets0.vragen.map((q) => {
     const kopie = { ...q, opties: q.opties?.map((o) => ({ ...o })) };
     repareerSchoolnamen(kopie, nk.find((n) => n.nummer === q.nummer));
-    return herstelZinsbreuk(kopie);
+    const h = herstelZinsbreuk(kopie);
+    return { ...h, context: hoofdletterNaPunt(h.context), stam: hoofdletterNaPunt(h.stam) ?? h.stam };
   });
   const toets = { ...toets0, vragen: vr, nakijkmodel: nk };
   const b = borgFiguurVerwijzingen(toets.vragen, toets.nakijkmodel);
