@@ -90,9 +90,39 @@ export function schoonIntro(intro: string): string {
  * contextTitel, of (als het model de titel in context/stam zette) aan de titel in de tekst; zet dan
  * contextTitel goed, haalt 'Examenvragen <titel>' uit de context en zorgt dat de eerste vraag de intro heeft.
  */
+/** Onderscheidende woorden (≥ 6 letters) uit een CSE-intro, om een bewerkte context terug te vinden. */
+function kernwoorden(t: string): Set<string> {
+  return new Set(kaal(t).split(/\s+/).filter((w) => w.length >= 6));
+}
+
+const EXAMEN_TITEL = /^\s*examen(?:vragen|opgaven)?\b/i;
+
 export function markeerExamenvragen(vragen: Vraag[], contexten: CseContext[]): Vraag[] {
-  if (!contexten.length) return vragen;
+  const gemarkeerd = contexten.length ? markeer(vragen, contexten) : vragen;
+  // Een groep die "Examenvragen" heet maar niet op een echte CSE-context terug te voeren is, mag niet
+  // doen alsof hij van het examen komt: titel neutraal, geen bronvermelding.
+  return gemarkeerd.map((q) =>
+    !q.bronvermelding && q.contextTitel && EXAMEN_TITEL.test(q.contextTitel)
+      ? { ...q, contextTitel: q.contextTitel.replace(EXAMEN_TITEL, "").replace(/^[\s:–-]+/, "").trim() || "Situatie" }
+      : q,
+  );
+}
+
+function markeer(vragen: Vraag[], contexten: CseContext[]): Vraag[] {
   const gezien = new Set<string>();
+  // Groep met titel "Examenvragen" zonder herkenbare titel: zoek de context op inhoud (kernwoorden).
+  const perGroep = new Map<string, CseContext>();
+  for (const q of vragen) {
+    if (!q.contextTitel || !EXAMEN_TITEL.test(q.contextTitel) || perGroep.has(q.contextTitel)) continue;
+    const tekst = kaal(vragen.filter((x) => x.contextTitel === q.contextTitel).map((x) => `${x.context ?? ""} ${x.stam}`).join(" "));
+    let best: CseContext | undefined;
+    let score = 0;
+    for (const c of contexten) {
+      const n = [...kernwoorden(`${c.titel} ${c.intro}`)].filter((w) => tekst.includes(w)).length;
+      if (n > score) [best, score] = [c, n];
+    }
+    if (best && score >= 3) perGroep.set(q.contextTitel, best);
+  }
   return vragen.map((q) => {
     const t = kaal(q.contextTitel ?? "");
     const tekst = kaal(`${q.context ?? ""} ${q.stam}`);
@@ -101,12 +131,19 @@ export function markeerExamenvragen(vragen: Vraag[], contexten: CseContext[]): V
       if (t) return k === t || (k.length >= 5 && (t.includes(k) || k.includes(t)));
       return k.length >= 6 && tekst.includes(k) && /examenvragen/i.test(`${q.context ?? ""}`) ;
     });
-    if (!c) return q;
+    const gevonden = c ?? (q.contextTitel ? perGroep.get(q.contextTitel) : undefined);
+    if (!gevonden) return q;
+    return zetBron(q, gevonden, gezien);
+  });
+}
+
+function zetBron(q: Vraag, c: CseContext, gezien: Set<string>): Vraag {
+  {
     let context = (q.context ?? "").replace(new RegExp(`^\\s*(?:examenvragen\\s*[:\\-–]?\\s*)?${c.titel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[:.\\-–]?\\s*`, "i"), "").trim();
     context = context.replace(/^examenvragen\s*[:\-–]?\s*/i, "").trim();
     const eerste = !gezien.has(c.id);
     gezien.add(c.id);
     if (eerste && context.split(/\s+/).length < 8) context = [schoonIntro(c.intro), context].filter(Boolean).join(" ");
     return { ...q, contextTitel: c.titel, bronvermelding: bronLabel(c), context: context || undefined };
-  });
+  }
 }

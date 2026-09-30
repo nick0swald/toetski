@@ -74,7 +74,10 @@ export function rttiVolgensRegels(
   const nieuw = Boolean(q.contextTitel?.trim()) || (q.context ?? "").split(/\s+/).length >= 25;
 
   const gesloten = q.type === "meerkeuze" || q.type === "juist-onjuist";
-  const getallen = /\d/.test([stam, ...(q.opties ?? []).map((o) => (typeof o === "string" ? o : (o?.tekst ?? "")))].join(" "));
+  // Getallen tellen alleen als er echt mee gerekend wordt: in de keuzes, of een hoeveel/hoe groot-vraag
+  // (r8: "92 dB … Wat is juist over de amplitude?" is geen rekenvraag).
+  const optieTekst = (q.opties ?? []).map((o) => (typeof o === "string" ? o : (o?.tekst ?? ""))).join(" ");
+  const getallen = /\d/.test(optieTekst) || (/\d/.test(stam) && /hoe\s+groot|hoeveel|hoe\s+lang|hoe\s+ver|bereken|bepaal/i.test(op));
 
   if (gesloten && punten <= 1 && !reken && !getallen) {
     // Gesloten 1-puntsvraag zonder rekenwerk: herkennen (R) of een geleerd verband toepassen (T1);

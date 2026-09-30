@@ -4,6 +4,9 @@ import { borgFiguurVerwijzingen, figuurVerwijzingenZonderFiguur } from "./contex
 import { omrekenenNodig, repareerPunten } from "./punten-rubric.ts";
 import { rttiVolgensRegels } from "./rtti-regels.ts";
 import type { NakijkItem, Vraag } from "./types.ts";
+import { herstelGroepen } from "./context-groepen.ts";
+import { markeerExamenvragen } from "./examenvragen.ts";
+import { herstelZinsbreuk } from "./eind-controle.ts";
 
 const v = (nummer: number, x: Partial<Vraag>): Vraag => ({ nummer, type: "open", stam: "", punten: 1, rtti: "T1", ...x }) as Vraag;
 
@@ -43,5 +46,27 @@ describe("ronde 7", () => {
     assert.deepEqual(uit.verwijderd, [1]);
     assert.equal(uit.vragen.length, 1);
     assert.match(uit.vragen[0]!.stam, /^Een auto rijdt/);
+  });
+
+  it("ronde 8: herhaalde situatiezinnen uit de stam, nep-examentitel neutraal, getal zonder rekenwerk", () => {
+    const [a, b] = herstelGroepen([
+      v(1, { contextTitel: "Oude radio", context: "Luuk repareert een oude radio.", stam: "Luuk ziet dat een toon 440 trillingen per seconde maakt. Bereken de trillingstijd." }),
+      v(2, { contextTitel: "Oude radio", stam: "Luuk ziet dat een toon 440 trillingen per seconde maakt. Leg uit of dit een hoge toon is." }),
+    ]);
+    assert.match(a!.stam, /^Luuk ziet/);
+    assert.equal(b!.stam, "Leg uit of dit een hoge toon is.");
+    const [c] = markeerExamenvragen([v(1, { contextTitel: "Examenvragen", stam: "Bij een fabriek meet een technicus 110 dB." })], []);
+    assert.equal(c!.contextTitel, "Situatie");
+    assert.equal(c!.bronvermelding, undefined);
+    assert.equal(rttiVolgensRegels({ type: "meerkeuze", stam: "Bram meet 92 dB bij een motor. Wat is juist over de amplitude?", opties: [{ letter: "A", tekst: "groot" }, { letter: "B", tekst: "klein" }], punten: 1, vraagtype: "G-DB" }).rtti, "T1");
+  });
+
+  it("ronde 8: zinsbreuk context/stam en vraag zonder opdracht", () => {
+    const q = herstelZinsbreuk({ context: "Bram luistert naar muziek.", stam: "op zijn telefoon. Noem twee geluidsbronnen." });
+    assert.equal(q.context, "Bram luistert naar muziek op zijn telefoon.");
+    assert.equal(q.stam, "Noem twee geluidsbronnen.");
+    const n: NakijkItem[] = [1, 2].map((nummer) => ({ nummer, modelantwoord: "x", puntenverdeling: [{ punt: 1, criterium: "x" }] }) as NakijkItem);
+    const uit = borgFiguurVerwijzingen([v(1, { stam: "Emma ziet een fles met een gevarensymbool van een doodshoofd." }), v(2, { stam: "Noteer wat giftig betekent." })], n);
+    assert.deepEqual(uit.verwijderd, [1]);
   });
 });
