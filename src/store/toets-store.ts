@@ -5,6 +5,7 @@ import { withDefaults } from "@/lib/toets/defaults";
 import { herbouwMatrijs, totaalPunten } from "@/lib/toets/rtti";
 import { maakVoorbeeldToets } from "@/lib/toets/sample";
 import { bewaakFiguren, diepBevriezen } from "@/lib/toets/figuren/bevriezing";
+import { verwijderFiguur as zonderFiguur } from "@/lib/toets/figuren/verwijder";
 import type { CijferNorm, GegenereerdeToets, NakijkItem, Vraag } from "@/lib/toets/types";
 
 const VOORBEELD_ID = "voorbeeld-fotosynthese";
@@ -45,6 +46,8 @@ export type ToetsStore = {
   upsert: (t: GegenereerdeToets) => void;
   update: (id: string, patch: Partial<GegenereerdeToets>) => void;
   updateVraag: (id: string, nummer: number, patch: Partial<Vraag>) => void;
+  /** Docent verwijdert de (goedgekeurde) figuur bij één vraag. Alleen verwijderen, nooit wijzigen. */
+  verwijderFiguur: (id: string, nummer: number) => void;
   updateNakijk: (id: string, nummer: number, patch: Partial<NakijkItem>) => void;
   updateCijferNorm: (id: string, norm: CijferNorm) => void;
   remove: (id: string) => void;
@@ -80,11 +83,16 @@ export const useToetsStore = create<ToetsStore>()(
           toetsen: s.toetsen.map((t) => {
             if (t.id !== id) return t;
             // figuur/figuurId zijn nooit via een patch te wijzigen.
-            const { figuur: _f, figuurId: _i, ...veilig } = patch;
+            const { figuur: _f, figuurId: _i, figuurVerwijderd: _v, ...veilig } = patch;
             const vragen = t.vragen.map((q) => (q.nummer === nummer ? { ...q, ...veilig } : q));
             return normalizeToets({ ...t, vragen });
           }),
         }));
+      },
+      verwijderFiguur: (id, nummer) => {
+        const t = get().toetsen.find((x) => x.id === id);
+        if (!t) return;
+        get().upsert(zonderFiguur(t, nummer));
       },
       updateNakijk: (id, nummer, patch) => {
         set((s) => ({

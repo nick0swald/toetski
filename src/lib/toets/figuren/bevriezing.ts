@@ -108,8 +108,10 @@ export interface BewaakResultaat {
 export function bewaakFiguren(oud: Vraag[], nieuw: Vraag[], opts: { pijplijn?: boolean } = {}): BewaakResultaat {
   const origineel = new Map<string, GoedgekeurdeFiguur>();
   const perStam = new Map<string, GoedgekeurdeFiguur>();
+  // Door de docent verwijderde figuren worden nooit teruggezet (verwijderen mag, wijzigen niet).
+  const verwijderd = new Set(nieuw.map((q) => q.figuurVerwijderd).filter((v): v is string => Boolean(v)));
   for (const q of oud) {
-    if (q.figuur && figuurIsGeldig(q.figuur)) {
+    if (q.figuur && figuurIsGeldig(q.figuur) && !verwijderd.has(q.figuur.id)) {
       origineel.set(q.figuur.id, q.figuur);
       perStam.set(normStam(q.stam), q.figuur);
     }
@@ -120,14 +122,16 @@ export function bewaakFiguren(oud: Vraag[], nieuw: Vraag[], opts: { pijplijn?: b
   const vragen = nieuw.map((q) => {
     let fig: GoedgekeurdeFiguur | undefined;
     const id = q.figuur?.id ?? q.figuurId;
-    if (id && origineel.has(id)) {
+    if (id && verwijderd.has(id)) {
+      fig = undefined;
+    } else if (id && origineel.has(id)) {
       fig = origineel.get(id)!;
       if (q.figuur && q.figuur !== fig && (q.figuur.hash !== fig.hash || !figuurIsGeldig(q.figuur))) hersteld.push(id);
     } else if (q.figuur) {
       const kandidaat: GoedgekeurdeFiguur = q.figuur;
       if (figuurIsGeldig(kandidaat)) fig = kandidaat;
       else geweigerd.push(String((q.figuur as { id?: string }).id ?? "?"));
-    } else if (!id) {
+    } else if (!id && !q.figuurVerwijderd) {
       const kandidaat = perStam.get(normStam(q.stam));
       if (kandidaat && !gebruikt.has(kandidaat.id)) fig = kandidaat;
     }

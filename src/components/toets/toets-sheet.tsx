@@ -7,10 +7,13 @@ export function ToetsSheet({
   toets,
   editing,
   onStam,
+  onVerwijderFiguur,
 }: {
   toets: GegenereerdeToets;
   editing?: boolean;
   onStam?: (nummer: number, stam: string) => void;
+  /** Alleen verwijderen (nooit wijzigen) van de figuur bij één vraag. */
+  onVerwijderFiguur?: (nummer: number) => void;
 }) {
   const m = toets.meta;
   const max = totaalPunten(toets.vragen);
@@ -71,7 +74,22 @@ export function ToetsSheet({
               <p className="mt-2 whitespace-pre-wrap leading-relaxed">{q.stam}</p>
             )}
             {blokken.includes("figuur") && q.figuur ? (
-              <GoedgekeurdeFiguurBeeld figuur={q.figuur} nummer={figuurNr.get(q.figuur.id)} />
+              <div>
+                <GoedgekeurdeFiguurBeeld figuur={q.figuur} nummer={figuurNr.get(q.figuur.id)} />
+                {editing && onVerwijderFiguur ? (
+                  <button
+                    type="button"
+                    className="mt-2 min-h-9 rounded-[var(--radius-md)] border border-warn/40 px-3 text-xs font-semibold text-warn hover:bg-warn/10 print:hidden"
+                    onClick={() => {
+                      if (window.confirm(`Figuur bij vraag ${q.nummer} verwijderen? De figuur zelf wordt niet aangepast; verwijst de vraag ernaar, dan krijgt de vraag de gegevens als tabel of tekst.`)) {
+                        onVerwijderFiguur(q.nummer);
+                      }
+                    }}
+                  >
+                    Figuur verwijderen
+                  </button>
+                ) : null}
+              </div>
             ) : null}
             {blokken.includes("tabel") && q.tabel ? <BronTabel tabel={q.tabel} /> : null}
             {q.opties?.length ? (
