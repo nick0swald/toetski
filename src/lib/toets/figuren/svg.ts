@@ -288,10 +288,12 @@ function symbool(c: Comp, x: number, y: number, vert = false): { vorm: string; t
       const hendel =
         soort === "schakelaar-open"
           ? lijn(cx1, y, cx1 + 32 * Math.cos(hoek), y - 32 * Math.sin(hoek), { w: 2.2, attr: 'data-hendel="1"' })
-          : lijn(cx1, y, cx2, y, { w: 3, attr: 'data-hendel="1"' });
+          : lijn(cx1, y, cx2, y, { w: 4.2, attr: 'data-hendel="1"' });
+      const contacten = `<circle data-contact="1" cx="${cx1}" cy="${y}" r="3.5" ${WIT}/><circle data-contact="1" cx="${cx2}" cy="${y}" r="3.5" ${WIT}/>`;
+      // Dicht: dikke hendel óver de contacten heen (anders lijkt het op twee losse rondjes met een spleet).
       return {
         vorm: g(
-          `${lijn(x - 22, y, cx1 - 3.5, y)}${lijn(cx2 + 3.5, y, x + 22, y)}${hendel}<circle data-contact="1" cx="${cx1}" cy="${y}" r="3.5" ${WIT}/><circle data-contact="1" cx="${cx2}" cy="${y}" r="3.5" ${WIT}/>`,
+          `${lijn(x - 22, y, cx1 - 3.5, y)}${lijn(cx2 + 3.5, y, x + 22, y)}${soort === "schakelaar-open" ? hendel + contacten : contacten + hendel}`,
         ),
         tekst: "",
       };
@@ -633,7 +635,7 @@ function pictogram(spec: FiguurSpec): { svg: string; W: number; H: number } {
 
 function maatcilinder(spec: FiguurSpec): { svg: string; W: number; H: number } {
   const d = parseSpecData("maatcilinder", spec.data);
-  const svg = maatcilinderSvg({ titel: spec.titel, maxMl: d.maxMl, standen: d.standen }, 300, 340).replace(/^<\?xml[^>]*>\s*/i, "");
+  const svg = maatcilinderSvg({ titel: spec.titel, maxMl: d.maxMl, standen: d.standen }, 300, 340, { eenheid: [...spec.eenheden, ...spec.labels, ...spec.getallen.map((g) => g.eenheid ?? "")].some((e) => /cm(³|3|\^3)/i.test(e)) ? "cm³" : "mL" }).replace(/^<\?xml[^>]*>\s*/i, "");
   return { svg, W: 300, H: 340 };
 }
 
