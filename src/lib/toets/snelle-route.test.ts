@@ -7,7 +7,7 @@ import { tekenCodeFiguur } from "./figuren/svg.ts";
 import { bevriesGoedgekeurd, figuurIsGeldig } from "./figuren/bevriezing.ts";
 import { koppelVroegeFiguren, vraagSleutel, zonderPlaatjes } from "./figuren/vroeg.ts";
 import { verwerkFiguren, type VerwerkDeps } from "./figuren/verwerk.ts";
-import { berekenVoortgang } from "./voortgang.ts";
+import { figuurDeadline, berekenVoortgang } from "./voortgang.ts";
 import type { FiguurSpec, GegenereerdeToets, Vraag } from "./types.ts";
 
 const kring = (data: Record<string, unknown>): FiguurSpec => parseFiguurSpec({ soort: "stroomkring", data }).spec!;
@@ -172,6 +172,17 @@ describe("voortgangsbalk", () => {
     assert.match(w.label, /1 van 3/);
     assert.ok(w.wachtOpPlaatjes);
     assert.ok(berekenVoortgang(v, t, 19_000).pct <= 96);
-    assert.equal(berekenVoortgang(v, t, 19_000).restS, 5);
+    assert.equal(berekenVoortgang(v, t, 19_000).restMs, 1_000);
+  });
+  it("afteller: typische eindtijd, nooit na de harde deadline", () => {
+    const v = { fase: "plaatjes" as const, metPlaatjes: true, figuurStart: 20_000, figuurDeadline: 80_000, figuren: { klaar: 0, totaal: 2, gepland: true } };
+    assert.equal(berekenVoortgang(v, t, 30_000).restMs, 20_000);
+    assert.equal(berekenVoortgang(v, t, 60_000).restMs, 4_000);
+    assert.equal(berekenVoortgang(v, t, 79_000).restMs, 1_000);
+  });
+  it("tijdsbudget: 60 s doel, figuren ≥ 60 s na de vragen, hard max 100 s", () => {
+    assert.equal(figuurDeadline(0, 20_000), 80_000);
+    assert.equal(figuurDeadline(0, 55_000), 100_000);
+    assert.equal(figuurDeadline(0, 0), 60_000);
   });
 });

@@ -16,7 +16,8 @@ import {
   presetVoorLeerjaar,
   rttiVoorMoeilijkheid,
 } from "@/lib/toets/constants";
-import { bewaarMetPlaatjes, leesMetPlaatjes, maakToets, type Voortgang } from "@/lib/toets/maak-toets";
+import { bewaarPlaatjesModus, leesPlaatjesModus, maakToets, type Voortgang } from "@/lib/toets/maak-toets";
+import type { PlaatjesModus } from "@/lib/toets/types";
 import { VoortgangsBalk } from "@/components/toets/voortgangs-balk";
 import {
   herkenBatch,
@@ -112,8 +113,9 @@ export function CreateForm() {
   const [busy, setBusy] = useState(false);
   const [voortgang, setVoortgang] = useState<Voortgang | null>(null);
   const [aantalVoorBalk, setAantalVoorBalk] = useState(10);
-  const [metPlaatjes, setMetPlaatjes] = useState(true);
-  useEffect(() => setMetPlaatjes(leesMetPlaatjes()), []);
+  const [plaatjes, setPlaatjes] = useState<PlaatjesModus>("auto");
+  useEffect(() => setPlaatjes(leesPlaatjesModus()), []);
+  const metPlaatjes = plaatjes !== "zonder";
   const [error, setError] = useState<string | null>(null);
 
   const velden = veldenUitStukken(stukken);
@@ -312,11 +314,12 @@ export function CreateForm() {
       ronde: 1,
       stuurdocument: stuurdocument.trim() || undefined,
       metPlaatjes,
+      plaatjes,
     };
     setAantalVoorBalk(aantalVragen);
     try {
       // Snelle route: vragen → afwerken ∥ figuren (go/no-go) → koppelen; ± 60 s totaal.
-      const result = await maakToets(input, { metPlaatjes, onVoortgang: setVoortgang });
+      const result = await maakToets(input, { plaatjes, onVoortgang: setVoortgang });
       if (!result.ok) {
         const msg = vriendelijkeFout(new Error(result.error));
         setError(msg);
@@ -500,20 +503,6 @@ export function CreateForm() {
         ) : null}
       </div>
 
-      <Choice
-        legend="Plaatjes"
-        hint={metPlaatjes ? "Figuren alleen waar ze echt iets toevoegen; elk plaatje wordt eerst gekeurd (go/no-go)." : "Geen figuren: gegevens staan in de tekst of een tabel. Sneller."}
-        value={metPlaatjes ? "met" : "zonder"}
-        onChange={(id) => {
-          const met = id === "met";
-          setMetPlaatjes(met);
-          bewaarMetPlaatjes(met);
-        }}
-        options={[
-          { id: "met", label: "Met plaatjes" },
-          { id: "zonder", label: "Zonder plaatjes" },
-        ]}
-      />
       {busy && voortgang ? <VoortgangsBalk voortgang={voortgang} aantalVragen={aantalVoorBalk} /> : null}
       {error ? <p className="text-sm text-warn">{error}</p> : null}
       <Button type="submit" disabled={!canSubmit} className="h-auto min-h-20 w-full justify-between rounded-[var(--radius-lg)] px-6 py-5 text-left sm:px-8 [&_svg]:size-6">
@@ -625,6 +614,28 @@ export function CreateForm() {
           MC/Open = aantal vragen (niet %). Leeg = auto. Punten-auto hangt af van minuten en moeilijkheid (nu ~{schatPunten(duur, moeilijkheid)}p).
         </p>
       </div>
+
+      <details className="group min-w-0 px-2">
+        <summary className="flex min-h-9 cursor-pointer list-none items-center justify-end gap-1 text-xs text-muted hover:text-brand [&::-webkit-details-marker]:hidden">
+          Meer opties
+          <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="ml-auto mt-1 max-w-sm text-xs">
+          <Choice<PlaatjesModus>
+            legend="Plaatjes"
+            value={plaatjes}
+            onChange={(m) => {
+              setPlaatjes(m);
+              bewaarPlaatjesModus(m);
+            }}
+            options={[
+              { id: "auto", label: "Automatisch" },
+              { id: "met", label: "Met plaatjes" },
+              { id: "zonder", label: "Zonder plaatjes" },
+            ]}
+          />
+        </div>
+      </details>
 
       <details className="group min-w-0 overflow-hidden rounded-[var(--radius-xl)] bg-surface">
         <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 text-base font-bold tracking-tight text-brand hover:opacity-80 sm:px-8 [&::-webkit-details-marker]:hidden">

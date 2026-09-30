@@ -60,12 +60,16 @@ Regels:
 ${SPEC_UITLEG}
 Antwoord ALLEEN met JSON: { "figuren": [ { "nummer": number, "vraagVerwijstAlNaarFiguur": boolean, "nieuweStam"?: string, "spec": figuurspec } ] }`;
 
-export function plannerUser(input: { vak: string; vragen: Vraag[]; nakijk: NakijkItem[]; overslaan: number[] }): string {
+export function plannerUser(input: { vak: string; vragen: Vraag[]; nakijk: NakijkItem[]; overslaan: number[]; minFiguren?: number; afgekeurd?: number[] }): string {
   const blok = input.vragen
     .filter((v) => !input.overslaan.includes(v.nummer))
     .map((v) => `${vraagTekst(v)}\n${sleutelTekst(input.nakijk.find((n) => n.nummer === v.nummer))}`)
     .join("\n\n");
-  return `Vak: ${input.vak || "NaSk"}\nVragen die al een figuur hebben (niet opnieuw plannen): ${input.overslaan.join(", ") || "geen"}\n\n${blok}`;
+  const min = input.minFiguren ?? 0;
+  const verplicht = min > 0
+    ? `\nVERPLICHT (de docent koos "Met plaatjes"): plan MINIMAAL ${min} figuren — dit gaat vóór de terughoudendheidsregel. Kies de vragen die er het best bij passen (aflezen, schakeling, krachten, hefboom, maatcilinder, pictogram, grafiek bij gegevens uit de stam). Kies bij voorkeur code-figuren met eenvoudige, overzichtelijke specs (die worden het vaakst goedgekeurd); alleen een sfeerplaat als er niets beters is.${input.afgekeurd?.length ? ` Bij vraag ${input.afgekeurd.join(", ")} werd een figuur afgekeurd: kies liever andere vragen, of maak daar een duidelijk eenvoudiger spec.` : ""}\n`
+    : "";
+  return `Vak: ${input.vak || "NaSk"}\nVragen die al een figuur hebben (niet opnieuw plannen): ${input.overslaan.join(", ") || "geen"}${verplicht}\n\n${blok}`;
 }
 
 export const KEURING_SYSTEM = `Je bent de strenge beeldkeurder (go/no-go) van een Nederlandse VMBO-toetsmaker. Je krijgt één figuur, de vraag, de figuurspec en het antwoordmodel.

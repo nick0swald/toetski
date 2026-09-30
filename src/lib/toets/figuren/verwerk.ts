@@ -31,6 +31,10 @@ export interface VerwerkDeps {
     alGepland: number;
     alSfeer: number;
     timeoutMs?: number;
+    /** "Met plaatjes": minimaal zoveel figuren plannen. */
+    minFiguren?: number;
+    /** Vragen waarvan een figuur eerder is afgekeurd. */
+    afgekeurd?: number[];
   }) => Promise<PlanAntwoord>;
   /** budgetMs: resterende tijd voor deze figuur; niet op tijd goedgekeurd = gedropt. */
   maak: (opdracht: FiguurOpdracht, budgetMs?: number) => Promise<FiguurUitkomst>;
@@ -91,6 +95,9 @@ export async function verwerkFiguren(
     deadline?: number;
     /** Alleen bestaande figuurvelden keuren, geen extra figuren plannen. */
     zonderPlanner?: boolean;
+    /** "Met plaatjes": de planner moet minimaal zoveel figuren kiezen. */
+    minFiguren?: number;
+    afgekeurd?: number[];
   } = {},
 ): Promise<GegenereerdeToets> {
   const nu = deps.nu ?? (() => Date.now());
@@ -142,6 +149,8 @@ export async function verwerkFiguren(
             alGepland: totaal,
             alSfeer: sfeer,
             timeoutMs: Math.round(Math.max(5_000, plannerTijd)),
+            ...(opts.minFiguren ? { minFiguren: opts.minFiguren } : {}),
+            ...(opts.afgekeurd?.length ? { afgekeurd: opts.afgekeurd } : {}),
           }),
           Math.max(5_000, plannerTijd) + 3_000,
           (): PlanAntwoord => ({ ok: false, error: "planner te traag" }),

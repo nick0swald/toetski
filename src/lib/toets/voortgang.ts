@@ -1,5 +1,22 @@
 import type { Voortgang } from "./maak-toets";
 
+/** Doel: totale wachttijd ± 60 s; figuren mogen uitlopen tot het harde maximum. */
+export const DOEL_TOTAAL_MS = 60_000;
+/** Hard maximum voor de hele toets inclusief figuren (Nick: max 100 s). */
+export const MAX_TOTAAL_MS = 100_000;
+/**
+ * Figuren krijgen minstens zoveel tijd na het verschijnen van de vragen (binnen MAX_TOTAAL_MS).
+ * Figuren die eerder klaar zijn, laten de toets ook eerder klaar zijn; alleen trage figuren benutten dit.
+ */
+export const MIN_FIGUURVENSTER_MS = 60_000;
+
+export function figuurDeadline(t0: number, tVragen: number): number {
+  return Math.min(t0 + MAX_TOTAAL_MS, Math.max(t0 + DOEL_TOTAAL_MS, tVragen + MIN_FIGUURVENSTER_MS));
+}
+
+/** Typische duur van de figuren na de vragen (voor de afteller; gemeten 20–35 s). */
+export const TYPISCH_FIGUREN_MS = 30_000;
+
 /**
  * Voortgangsbalk: tijdgestuurde easing binnen een fase, sprongen bij echte gebeurtenissen.
  * Pure functie (testbaar); het component houdt de weergave monotoon (nooit terug).
@@ -16,8 +33,8 @@ export interface VoortgangWeergave {
   /** 0–100 */
   pct: number;
   label: string;
-  /** Grove resttijd in seconden (afgerond op 5), of null als onbekend. */
-  restS: number | null;
+  /** Geschatte resttijd in ms (voor de afteller), of null als onbekend. */
+  restMs: number | null;
   wachtOpPlaatjes: boolean;
 }
 
@@ -39,21 +56,27 @@ function ease(verstreken: number, verwacht: number): number {
   return 1 - Math.exp((-2 * Math.max(0, verstreken)) / Math.max(1_000, verwacht));
 }
 
-function rond5(ms: number): number {
-  return Math.max(5, Math.round(ms / 5_000) * 5);
+/** Figuren: typische eindtijd, maar nooit later dan de harde deadline. */
+function figuurRestMs(v: Voortgang, nu: number): number | null {
+  if (v.figuurDeadline == null) return null;
+  const hard = Math.max(0, v.figuurDeadline - nu);
+  const typisch = v.figuurStart != null ? v.figuurStart + TYPISCH_FIGUREN_MS - nu : hard;
+  const fig = v.figuren;
+  if (fig?.gepland && fig.totaal === 0) return Math.min(hard, 4_000);
+  return Math.min(hard, Math.max(4_000, typisch));
 }
 
 export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): VoortgangWeergave {
   const inFase = nu - t.faseStart;
-  const figuurRest = v.figuurDeadline != null ? Math.max(0, v.figuurDeadline - nu) : null;
+  const figuurRest = figuurRestMs(v, nu);
   const fig = v.figuren;
   const figTekst = fig?.gepland && fig.totaal > 0 ? ` (${fig.klaar} van ${fig.totaal})` : "";
   switch (v.fase) {
     case "vragen": {
       const [a, b] = RANGE.vragen;
       const pct = a + (b - a) * 0.97 * ease(inFase, t.verwachtVragenMs);
-      const rest = Math.max(5_000, t.verwachtVragenMs - inFase) + (v.metPlaatjes ? 40_000 : 12_000);
-      return { pct, label: "Vragen maken…", restS: rond5(rest), wachtOpPlaatjes: false };
+      const rest = Math.max(5_000, t.verwachtVragenMs - inFase) + (v.metPlaatjes ? TYPISCH_FIGUREN_MS : 3_000);
+      return { pct, label: "Vragen maken…", restMs: rest, wachtOpPlaatjes: false };
     }
     case "afwerken": {
       const [a, b] = RANGE.afwerken;
@@ -65,8 +88,8 @@ export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): 
             : "Afwerken en controleren · geen plaatjes nodig…"
           : "Afwerken en controleren · plaatjes plannen…"
         : "Afwerken en controleren…";
-      const rest = v.metPlaatjes && figuurRest != null ? figuurRest : Math.max(5_000, 14_000 - inFase);
-      return { pct, label, restS: rond5(rest), wachtOpPlaatjes: false };
+      const rest = v.metPlaatjes && figuurRest != null ? figuurRest : Math.max(2_000, 3_000 - inFase);
+      return { pct, label, restMs: rest, wachtOpPlaatjes: false };
     }
     case "plaatjes": {
       const [a, b] = RANGE.plaatjes;
@@ -76,11 +99,11 @@ export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): 
       const tijd = Math.min(0.97, inFase / totaalVenster);
       const pct = a + (b - a) * Math.max(echt * 0.95, tijd);
       const label = fig?.gepland ? (fig.totaal ? `Wachten op plaatjes: maken en keuren${figTekst}…` : "Laatste controle…") : "Wachten op plaatjes: plannen…";
-      return { pct, label, restS: figuurRest != null ? rond5(figuurRest) : null, wachtOpPlaatjes: true };
+      return { pct, label, restMs: figuurRest, wachtOpPlaatjes: true };
     }
     case "word":
-      return { pct: RANGE.word[0] + 3 * ease(inFase, 3_000), label: "Word-bestand maken…", restS: 5, wachtOpPlaatjes: false };
+      return { pct: RANGE.word[0] + 3 * ease(inFase, 3_000), label: "Word-bestand maken…", restMs: 2_000, wachtOpPlaatjes: false };
     default:
-      return { pct: 100, label: "Klaar", restS: 0, wachtOpPlaatjes: false };
+      return { pct: 100, label: "Klaar", restMs: 0, wachtOpPlaatjes: false };
   }
 }

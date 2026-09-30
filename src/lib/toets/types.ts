@@ -140,6 +140,8 @@ export interface Vraag {
   figuur?: GoedgekeurdeFiguur;
   /** Verwijzing naar een bevroren figuur (voor rondes via het model, zonder beelddata). */
   figuurId?: string;
+  /** Id van een figuur die de docent bij deze vraag heeft verwijderd (wordt nooit teruggezet). */
+  figuurVerwijderd?: string;
 }
 
 /** Soorten figuren in de beeldpijplijn. Alles behalve "sfeerplaat" tekent de code zelf (SVG → PNG). */
@@ -160,6 +162,8 @@ export type FiguurSoort =
 export type JsonWaarde = string | number | boolean | null | JsonWaarde[] | { [k: string]: JsonWaarde };
 
 /** Gestructureerde figuurspecificatie die het model eerst schrijft (vóór er iets getekend wordt). */
+export type PlaatjesModus = "auto" | "met" | "zonder";
+
 export interface FiguurSpec {
   soort: FiguurSoort;
   titel?: string;
@@ -217,6 +221,8 @@ export interface FiguurRapportItem {
   figuurId?: string;
   /** Figuur kwam direct uit de gedeelde figuurbank (geen nieuwe generatie/keuring nodig). */
   uitBank?: boolean;
+  /** ISO-tijd waarop de docent deze (goedgekeurde) figuur heeft verwijderd. */
+  docentVerwijderd?: string;
 }
 
 export interface FiguurRapport {
@@ -297,6 +303,8 @@ export interface GegenereerdeToets {
   figuurRapport?: FiguurRapport;
   /** false = docent koos "Zonder plaatjes" (geen figuren, ook niet in latere rondes). */
   metPlaatjes?: boolean;
+  /** Plaatjeskeuze: automatisch (standaard), met (verplicht figuren) of zonder. */
+  plaatjes?: PlaatjesModus;
 }
 
 export interface GenerateInput {
@@ -326,6 +334,8 @@ export interface GenerateInput {
   stuurdocument?: string;
   /** "Met plaatjes" (standaard) of "Zonder plaatjes". */
   metPlaatjes?: boolean;
+  /** Plaatjeskeuze: automatisch (standaard), met (verplicht figuren) of zonder. */
+  plaatjes?: PlaatjesModus;
 }
 
 export interface GenerateMatrijsInput {
