@@ -34,7 +34,11 @@ export const TYPE_RTTI: Record<string, Rtti> = {
 
 const INZICHT = /\b(leg\s+uit|verklaar|waarom|beredeneer|voorspel|wat\s+gebeurt\s+er\s+(?:als|met)|geef\s+(?:een\s+)?advies|onderbouw|trek\s+een\s+conclusie|welke\s+conclusie)\b/i;
 /** Redeneren over een effect of keuze (niet alleen een geleerd verband navertellen). */
-const REDENEER = /\bleg\s+uit\s+(?:of|welke|hoe|wat)\b|voorspel|advies|conclusie|beredeneer|wat\s+gebeurt\s+er|welke\s+invloed|wat\s+is\s+het\s+gevolg/i;
+const REDENEER = /\bleg\s+uit\s+of\b|voorspel|advies|conclusie|beredeneer|wat\s+gebeurt\s+er|welke\s+invloed|wat\s+is\s+het\s+gevolg/i;
+/** "Leg uit hoe/welke": alleen inzicht als het type zelf al een nieuwe toepassing is (anders een geleerde keten navertellen). */
+const REDENEER_ZWAK = /\bleg\s+uit\s+(?:welke|hoe)\b/i;
+/** Begrippen uitleggen (verschil, betekenis) is toepassen van geleerde kennis, geen inzicht. */
+const BEGRIP_UITLEG = /verschil\s+tussen|wat\s+(?:betekent|het\s+verschil)|wat\s+(?:is|zijn)\s+(?:een|de)\b/i;
 const REPRO = /^(?:noteer\s+de\s+naam|noem|noteer|hoe\s+heet|wat\s+is\s+de\s+naam|welke\s+naam|wat\s+betekent)\b/i;
 const FORMULE_GEGEVEN = /gebruik\s+(?:de\s+)?formule|formule\s*:|met\s+de\s+formule/i;
 const BEREKEN = /\b(bereken|bepaal)\b/i;
@@ -56,7 +60,9 @@ export interface RttiOordeel {
 }
 
 /** RTTI volgens de regels, met korte reden. */
-export function rttiVolgensRegels(q: Pick<Vraag, "type" | "stam" | "context" | "contextTitel" | "punten" | "vraagtype">): RttiOordeel {
+export function rttiVolgensRegels(
+  q: Pick<Vraag, "type" | "stam" | "context" | "contextTitel" | "punten" | "vraagtype"> & { opties?: Array<string | { letter?: string; tekst?: string }> | null },
+): RttiOordeel {
   const type = (q.vraagtype ?? "OVERIG").toUpperCase();
   const basis = TYPE_RTTI[type] ?? "T1";
   let r = basis;
@@ -67,8 +73,31 @@ export function rttiVolgensRegels(q: Pick<Vraag, "type" | "stam" | "context" | "
   const reken = q.type === "berekening" || BEREKEN.test(op);
   const nieuw = Boolean(q.contextTitel?.trim()) || (q.context ?? "").split(/\s+/).length >= 25;
 
-  if (INZICHT.test(op)) {
-    r = RTTI_VOLGORDE.indexOf(basis) >= 2 || REDENEER.test(op) ? "I" : "T2";
+  const gesloten = q.type === "meerkeuze" || q.type === "juist-onjuist";
+  const getallen = /\d/.test([stam, ...(q.opties ?? []).map((o) => (typeof o === "string" ? o : (o?.tekst ?? "")))].join(" "));
+
+  if (gesloten && punten <= 1 && !reken && !getallen) {
+    // Gesloten 1-puntsvraag zonder rekenwerk: herkennen (R) of een geleerd verband toepassen (T1);
+    // inzicht (I) of een nieuwe toepassing (T2) toetst een keuzevraag van 1 punt zonder getallen zelden.
+    if (q.type === "juist-onjuist" || basis === "R" || REPRO.test(op)) {
+      r = "R";
+      redenen.push("gesloten stelling/keuze over een feit of begrip");
+    } else {
+      r = "T1";
+      redenen.push(INZICHT.test(op) ? "gesloten keuze: geleerd verband herkennen" : "gesloten keuze: geleerd verband toepassen");
+    }
+  } else if (gesloten && punten <= 1 && getallen && basis === "R") {
+    r = "T1";
+    redenen.push("keuzevraag met getallen: kort toepassen");
+  } else if (punten <= 1 && !reken && REPRO.test(op.split(/(?<=[.?!])\s+/).pop() ?? op)) {
+    r = "R";
+    redenen.push("noem/noteer een feit of begrip");
+  } else if (INZICHT.test(op) && BEGRIP_UITLEG.test(op) && !REDENEER.test(op)) {
+    r = "T1";
+    redenen.push("begrip of verschil uitleggen (geleerde kennis)");
+  } else if (INZICHT.test(op)) {
+    const hoog = RTTI_VOLGORDE.indexOf(basis) >= 2;
+    r = REDENEER.test(op) || (hoog && (REDENEER_ZWAK.test(op) || /waarom|verklaar/i.test(op))) ? "I" : "T2";
     redenen.push(r === "I" ? "redeneren/verklaren" : "geleerd verband uitleggen in deze situatie");
   } else if (reken) {
     if (FORMULE_GEGEVEN.test(stam) && punten <= 2) {
@@ -87,7 +116,7 @@ export function rttiVolgensRegels(q: Pick<Vraag, "type" | "stam" | "context" | "
     }
   } else if (punten <= 1 && (REPRO.test(opdracht(stam).split(/(?<=[.?!])\s+/).pop() ?? "") || q.type === "juist-onjuist" || basis === "R") && RTTI_VOLGORDE.indexOf(basis) <= 1) {
     r = basis === "R" || REPRO.test(op) ? "R" : basis;
-    redenen.push("feit of begrip reproduceren");
+    redenen.push(r === "R" ? "feit of begrip reproduceren" : "kort toepassen van een geleerd verband");
   } else if (punten >= 2 && r === "R") {
     r = "T1";
     redenen.push("meer dan één punt: toepassen");

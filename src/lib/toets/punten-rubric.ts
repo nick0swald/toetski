@@ -30,6 +30,20 @@ export function rekenRubriek(punten = 3): PuntenCriterium[] {
   return [omrekenen, formule, { punt: 1, criterium: "juiste tussenstap (tweede formule of tussenuitkomst)" }, rest];
 }
 
+/**
+ * Is er in deze rekenvraag echt iets om te rekenen/af te lezen vóór de formule?
+ * (andere eenheid dan de standaard, echo heen-en-terug, of aflezen uit tabel/figuur/grafiek)
+ */
+export function omrekenenNodig(q: Pick<Vraag, "stam" | "context" | "tabel" | "figuur">): boolean {
+  const t = `${q.context ?? ""} ${q.stam ?? ""}`;
+  if (q.tabel || q.figuur) return true;
+  if (/echo|heen\s+en\s+terug|sonar|kaatst?\s+terug|terugkaats/i.test(t)) return true;
+  if (/tabel|grafiek|diagram|figuur|lees\s+af|aflezen/i.test(t)) return true;
+  return /\d\s*(?:mm²?|cm[²³]?|dm³?|km\/h|km|g\b|gram|mg|ms|min\b|minuten|minuut|uur|h\b|kJ|MJ|kWh|Wh|mA|mL|ml|L\b|liter|ton|kN|kPa|hPa|bar)/i.test(t);
+}
+
+const INVULLEN = "juiste waarden ingevuld (formule zo nodig omgeschreven)";
+
 /** Criterium dat alleen overschrijven beloont (examenstijl kent dat punt niet). */
 export function isGegevensCriterium(c: string): boolean {
   return /\bgegevens\b|\bgevraagde?\b|\bnoteren\s+van\s+de\s+gegevens\b/i.test(c) && !/formule|omreken|aflez|bereken/i.test(c);
@@ -131,6 +145,12 @@ export function repareerPunten(
       const verdeling = netjes && !gegevensPunt
         ? eigen.map((c) => ({ ...c }))
         : rekenRubriek(netjes ? Math.max(2, som - 1) : heel(q.punten || 3) <= 2 ? 2 : 3);
+      // Nick: 1 punt per echte stap. Een omreken-/afleespunt zonder iets om te rekenen wordt het invulpunt.
+      if (!omrekenenNodig(q)) {
+        for (const c of verdeling) {
+          if (/omreken|aflez/i.test(c.criterium) && !/formule/i.test(c.criterium)) c.criterium = INVULLEN;
+        }
+      }
       q.punten = verdeling.reduce((s, c) => s + c.punt, 0);
       n.puntenverdeling = verdeling;
       n.nietToekennen = rekenAftrek(n.nietToekennen);
