@@ -6,8 +6,8 @@ import { KwaliteitPanel } from "@/components/toets/kwaliteit-panel";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { generateToets } from "@/lib/toets/generate";
-import { verwerkFigurenVeilig } from "@/lib/toets/figuren/veilig";
+import { maakToets, type Voortgang } from "@/lib/toets/maak-toets";
+import { VoortgangsBalk } from "@/components/toets/voortgangs-balk";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { totaalPunten } from "@/lib/toets/rtti";
 import { kwaliteitAlsTekst, samenstellenFeedback, vorigeSamenvatting } from "@/lib/toets/text";
@@ -25,6 +25,7 @@ export function FeedbackForm({ startId }: { startId?: string }) {
   const [bestandsnaam, setBestandsnaam] = useState<string | null>(null);
   const [gebruikSite, setGebruikSite] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [voortgang, setVoortgang] = useState<Voortgang | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,8 +73,9 @@ export function FeedbackForm({ startId }: { startId?: string }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await generateToets({
-        data: {
+      const metPlaatjes = toets.metPlaatjes !== false;
+      const result = await maakToets(
+        {
           titel: toets.meta.titel,
           vak: toets.meta.vak,
           leerweg: toets.meta.leerweg,
@@ -92,15 +94,16 @@ export function FeedbackForm({ startId }: { startId?: string }) {
           feedback,
           vorigeSamenvatting: vorigeSamenvatting(toets),
           stuurdocument: stuurdocument.trim() || undefined,
+          metPlaatjes,
         },
-      });
+        { metPlaatjes, onVoortgang: setVoortgang },
+      );
       if (!result.ok) {
         setError(result.error);
         toast.error(result.error);
         return;
       }
-      toast.message("Figuren maken en keuren (go/no-go)…");
-      const nieuweToets = await verwerkFigurenVeilig(result.toets);
+      const nieuweToets = result.toets;
       const toetsId = await persistToetsBeforeNavigate(nieuweToets);
       try {
         const { downloadPakketDocx } = await import("@/lib/toets/docx-export");
@@ -116,6 +119,7 @@ export function FeedbackForm({ startId }: { startId?: string }) {
       toast.error(msg);
     } finally {
       setBusy(false);
+      setVoortgang(null);
     }
   }
 
@@ -218,6 +222,7 @@ export function FeedbackForm({ startId }: { startId?: string }) {
               <input type="file" accept={BRON_ACCEPT} className="sr-only" onChange={(e) => onFile(e.target.files)} />
             </label>
           </div>
+          {busy && voortgang ? <VoortgangsBalk voortgang={voortgang} aantalVragen={toets.vragen.length} /> : null}
           {error ? <p className="text-sm text-warn">{error}</p> : null}
           <Button
             type="button"

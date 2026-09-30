@@ -1,4 +1,6 @@
-import { detectVakProfiel, verzekerBronFiguren } from "./bron-figuren.ts";
+import { detectVakProfiel, plaatsMaatcilinders, plaatsPictogrammen, verzekerBronFiguren } from "./bron-figuren.ts";
+import { vraagZonderFiguur } from "./figuren/fallback.ts";
+import { legacySpecs } from "./figuren/spec.ts";
 import { detecteerItemIssues, repareerItemsDeterministisch, type ItemIssue } from "./item-kwaliteit.ts";
 import { groepeerDomeinen } from "./leerdoelen.ts";
 import { finalizeVragen } from "./mc-balance.ts";
@@ -64,6 +66,12 @@ export async function werkVragenAf(input: {
   vak: string;
   skipOrder?: boolean;
   repair?: (prompt: string) => Promise<string | null>;
+  /**
+   * "nodig" (standaard): alleen figuurvelden waar de vraag erom vraagt (pictogram-/maatcilindervraag);
+   * geen verplichte minimumfiguur meer. "geen": Zonder plaatjes — alle figuurvelden eruit.
+   * "minimaal": oud gedrag (minstens één figuur bij NaSk).
+   */
+  figuren?: "nodig" | "geen" | "minimaal";
 }): Promise<{ vragen: Vraag[]; nakijkmodel: NakijkItem[]; issues: ItemIssue[] }> {
   const bron = input.bron ?? "";
   let stap = repareerItemsDeterministisch(input.vragen, input.nakijkmodel, bron);
@@ -90,7 +98,16 @@ export async function werkVragenAf(input: {
   }
 
   const punten = repareerPunten(vragen, nakijk);
-  vragen = verzekerBronFiguren(punten.vragen, bron, detectVakProfiel(input.vak, bron), punten.nakijkmodel);
+  const figMode = input.figuren ?? "nodig";
+  vragen =
+    figMode === "geen"
+      ? punten.vragen.map((q) => {
+          const spec = legacySpecs(q)[0];
+          return spec ? vraagZonderFiguur(q, spec, { legacy: true, verwijst: true }).vraag : zonderLegacyFiguren(q);
+        })
+      : figMode === "minimaal"
+        ? verzekerBronFiguren(punten.vragen, bron, detectVakProfiel(input.vak, bron), punten.nakijkmodel)
+        : plaatsMaatcilinders(plaatsPictogrammen(punten.vragen, punten.nakijkmodel));
   nakijk = punten.nakijkmodel;
   vragen = groepeerDomeinen(vragen, bron);
   const klaar = finalizeVragen(vragen, nakijk, { skipOrder: input.skipOrder });

@@ -360,9 +360,44 @@ function spreid(a: number, b: number, n: number): number[] {
   return Array.from({ length: n }, (_, i) => a + ((b - a) * (i + 1)) / (n + 1));
 }
 
+/** Spanningsmeter parallel over een horizontaal onderdeel op (cx,y), boven (op) of onder de draad. */
+function voltmeterHorizontaal(cx: number, y: number, op: boolean, label?: string): string[] {
+  const yy = op ? y - 46 : y + 46;
+  const s = symbool({ soort: "voltmeter" }, cx, yy);
+  return [
+    lijn(cx - 34, y, cx - 34, yy),
+    lijn(cx + 34, y, cx + 34, yy),
+    lijn(cx - 34, yy, cx - 22, yy),
+    lijn(cx + 22, yy, cx + 34, yy),
+    `<circle cx="${cx - 34}" cy="${y}" r="3" fill="${INK}"/><circle cx="${cx + 34}" cy="${y}" r="3" fill="${INK}"/>`,
+    s.vorm,
+    s.tekst,
+    label ? tekst(cx + 40, yy + 5, label, { anchor: "start", size: 13 }) : "",
+  ];
+}
+
+/** Spanningsmeter parallel over een verticaal onderdeel (in een tak) op (x,cy), rechts ervan. */
+function voltmeterVerticaal(x: number, cy: number, label?: string): string[] {
+  const xx = x + 52;
+  const s = symbool({ soort: "voltmeter" }, xx, cy, true);
+  return [
+    lijn(x, cy - 32, xx, cy - 32),
+    lijn(x, cy + 32, xx, cy + 32),
+    lijn(xx, cy - 32, xx, cy - 22),
+    lijn(xx, cy + 22, xx, cy + 32),
+    `<circle cx="${x}" cy="${cy - 32}" r="3" fill="${INK}"/><circle cx="${x}" cy="${cy + 32}" r="3" fill="${INK}"/>`,
+    s.vorm,
+    s.tekst,
+    label ? tekst(xx + 20, cy + 5, label, { anchor: "start", size: 13 }) : "",
+  ];
+}
+
+/**
+ * Schakelschema zoals in Nova: bron links (verticaal), stroommeter in serie, spanningsmeter
+ * parallel over een lampje/weerstand — nooit over de bron.
+ */
 function stroomkring(spec: FiguurSpec): { svg: string; W: number; H: number } {
   const d = parseSpecData("stroomkring", spec.data);
-  const W = 560;
   const H = 340;
   const top = spec.titel ? 96 : 84;
   const bot = H - 60;
@@ -372,71 +407,73 @@ function stroomkring(spec: FiguurSpec): { svg: string; W: number; H: number } {
   const bronLabel = d.bron.label;
   out.push(lijn(L, top, L, bronY - 26), lijn(L, bronY + 26, L, bot));
   out.push(bron(L, bronY, d.bron.soort));
-  const vmBron = d.voltmeters.find((v) => v.over === "bron");
-  if (bronLabel) out.push(tekst(vmBron ? L + 40 : L - 26, bronY + 5, bronLabel, { anchor: vmBron ? "start" : "end", size: 13 }));
-  if (vmBron) {
-    // Spanningsmeter parallel over de bron (links van de bron).
-    const x = L - 48;
-    out.push(lijn(L, bronY - 40, x, bronY - 40), lijn(x, bronY - 40, x, bronY - 22), lijn(x, bronY + 22, x, bronY + 40), lijn(x, bronY + 40, L, bronY + 40));
-    out.push(`<circle cx="${L}" cy="${bronY - 40}" r="3" fill="${INK}"/><circle cx="${L}" cy="${bronY + 40}" r="3" fill="${INK}"/>`);
-    const s = symbool({ soort: "voltmeter" }, x, bronY, true);
-    out.push(s.vorm, s.tekst);
-    if (vmBron.label) out.push(tekst(x - 20, bronY + 5, vmBron.label, { anchor: "end", size: 13 }));
-  }
+  if (bronLabel) out.push(tekst(L - 26, bronY + 5, bronLabel, { anchor: "end", size: 13 }));
+  const vmOp = (o: number | { tak: number; index: number }) => d.voltmeters.find((v) => (typeof v.over === "number" ? v.over === o : typeof o === "object" && typeof v.over === "object" && v.over.tak === o.tak && v.over.index === o.index));
 
   if (d.schakeling === "parallel" && d.takken.length) {
     const hoofd = d.componenten.slice(0, 3);
-    const takX = spreid(260, W - 40, d.takken.length).map((x, i, arr) => (arr.length === 1 ? W - 110 : x));
-    const R = Math.max(...takX);
-    const hoofdX = spreid(L, 250, hoofd.length);
+    const hoofdVm = hoofd.some((_, i) => vmOp(i));
+    const hoofdEind = Math.max(250, L + 40 + hoofd.length * 90);
+    // Takken naast elkaar; een tak met spanningsmeter krijgt extra ruimte rechts.
+    const takX: number[] = [];
+    let x = hoofdEind + 50;
+    d.takken.forEach((tak, ti) => {
+      takX.push(x);
+      const metVm = tak.some((_, i) => vmOp({ tak: ti, index: i }));
+      x += (tak.some((c) => c.label) ? 110 : 90) + (metVm ? 80 : 0);
+    });
+    const R = takX[takX.length - 1]!;
+    const W = Math.max(560, x - 20);
+    const hoofdX = spreid(L, hoofdEind, hoofd.length);
     out.push(draadMetGaten(L, R, top, hoofdX));
     out.push(lijn(L, bot, R, bot));
     hoofd.forEach((c, i) => {
       const s = symbool(c, hoofdX[i]!, top);
       out.push(s.vorm, s.tekst);
-      if (c.label) out.push(tekst(hoofdX[i]!, top - 24, c.label, { size: 13 }));
+      if (c.label) out.push(tekst(hoofdX[i]!, hoofdVm ? top + 34 : top - 24, c.label, { size: 13 }));
+      const vm = vmOp(i);
+      if (vm) out.push(...voltmeterHorizontaal(hoofdX[i]!, top, true, vm.label));
     });
     d.takken.forEach((tak, ti) => {
-      const x = takX[ti]!;
+      const tx = takX[ti]!;
       const ys = spreid(top, bot, tak.length);
-      out.push(draadVertMetGaten(x, top, bot, ys));
-      out.push(`<circle cx="${x}" cy="${top}" r="3.5" fill="${INK}"/><circle cx="${x}" cy="${bot}" r="3.5" fill="${INK}"/>`);
+      out.push(draadVertMetGaten(tx, top, bot, ys));
+      out.push(`<circle cx="${tx}" cy="${top}" r="3.5" fill="${INK}"/><circle cx="${tx}" cy="${bot}" r="3.5" fill="${INK}"/>`);
       tak.forEach((c, i) => {
-        const s = symbool(c, x, ys[i]!, true);
+        const s = symbool(c, tx, ys[i]!, true);
         out.push(s.vorm, s.tekst);
-        if (c.label) out.push(tekst(x + 22, ys[i]! + 5, c.label, { anchor: "start", size: 13 }));
+        const vm = vmOp({ tak: ti, index: i });
+        // Label links van het onderdeel als er rechts een spanningsmeter staat.
+        if (c.label) out.push(vm ? tekst(tx - 22, ys[i]! + 5, c.label, { anchor: "end", size: 13 }) : tekst(tx + 22, ys[i]! + 5, c.label, { anchor: "start", size: 13 }));
+        if (vm) out.push(...voltmeterVerticaal(tx, ys[i]!, vm.label));
       });
     });
-  } else {
-    const comps = d.componenten.length ? d.componenten : [{ soort: "lampje" }];
-    const boven = comps.slice(0, 3);
-    const onder = comps.slice(3, 6);
-    const R = W - 80;
-    const bx = spreid(L, R, boven.length);
-    const ox = spreid(L, R, onder.length);
-    out.push(draadMetGaten(L, R, top, bx), draadMetGaten(L, R, bot, ox), lijn(R, top, R, bot));
-    const plaats = (c: Comp, x: number, y: number, labelOnder: boolean) => {
-      const s = symbool(c, x, y);
-      out.push(s.vorm, s.tekst);
-      if (c.label) out.push(tekst(x, labelOnder ? y + 34 : y - 24, c.label, { size: 13 }));
-    };
-    boven.forEach((c, i) => plaats(c, bx[i]!, top, d.voltmeters.length > 0));
-    onder.forEach((c, i) => plaats(c, ox[i]!, bot, true));
-    for (const vm of d.voltmeters) {
-      if (vm.over === "bron") continue;
-      const idx = vm.over;
-      const inBoven = idx < boven.length;
-      const cx = inBoven ? bx[idx] : ox[idx - boven.length];
-      if (cx == null) continue;
-      const y = inBoven ? top : bot;
-      const yy = inBoven ? y - 46 : y + 46;
-      out.push(lijn(cx - 34, y, cx - 34, yy), lijn(cx + 34, y, cx + 34, yy), lijn(cx - 34, yy, cx - 22, yy), lijn(cx + 22, yy, cx + 34, yy));
-      out.push(`<circle cx="${cx - 34}" cy="${y}" r="3" fill="${INK}"/><circle cx="${cx + 34}" cy="${y}" r="3" fill="${INK}"/>`);
-      const s = symbool({ soort: "voltmeter" }, cx, yy);
-      out.push(s.vorm, s.tekst);
-      if (vm.label) out.push(tekst(cx + 40, yy + 5, vm.label, { anchor: "start", size: 13 }));
-    }
+    return { svg: wrap(W, H, out.join(""), spec.titel), W, H };
   }
+  const W = 560;
+  const comps = d.componenten.length ? d.componenten : [{ soort: "lampje" }];
+  const boven = comps.slice(0, 3);
+  const onder = comps.slice(3, 6);
+  const R = W - 80;
+  const bx = spreid(L, R, boven.length);
+  const ox = spreid(L, R, onder.length);
+  out.push(draadMetGaten(L, R, top, bx), draadMetGaten(L, R, bot, ox), lijn(R, top, R, bot));
+  const bovenVm = boven.some((_, i) => vmOp(i));
+  const plaats = (c: Comp, x: number, y: number, labelOnder: boolean) => {
+    const s = symbool(c, x, y);
+    out.push(s.vorm, s.tekst);
+    if (c.label) out.push(tekst(x, labelOnder ? y + 34 : y - 24, c.label, { size: 13 }));
+  };
+  boven.forEach((c, i) => plaats(c, bx[i]!, top, bovenVm));
+  onder.forEach((c, i) => plaats(c, ox[i]!, bot, true));
+  onder.forEach((_, i) => {
+    const vm = vmOp(boven.length + i);
+    if (vm) out.push(...voltmeterHorizontaal(ox[i]!, bot, false, vm.label));
+  });
+  boven.forEach((_, i) => {
+    const vm = vmOp(i);
+    if (vm) out.push(...voltmeterHorizontaal(bx[i]!, top, true, vm.label));
+  });
   return { svg: wrap(W, H, out.join(""), spec.titel), W, H };
 }
 

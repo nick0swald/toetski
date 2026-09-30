@@ -62,18 +62,20 @@ export type FiguurUitkomst =
     };
 
 export const PIJPLIJN_TIJDEN = {
-  /** Totale budget binnen de Vercel-functie (maxDuration 180 s). */
+  /** Standaardbudget binnen de Vercel-functie (maxDuration 180 s); de client geeft meestal een krapper budget mee. */
   budgetMs: 165_000,
-  visieMs: 40_000,
-  beeldMs: 55_000,
-  revisieMs: 25_000,
-  herschrijfMs: 30_000,
+  visieMs: 30_000,
+  beeldMs: 40_000,
+  revisieMs: 12_000,
+  herschrijfMs: 20_000,
   /** Minimale resttijd om nog een poging te starten. */
-  nodigCodeMs: 30_000,
-  nodigAiMs: 60_000,
+  nodigCodeMs: 7_000,
+  nodigAiMs: 22_000,
 };
 
+/** Maximaal aantal pogingen: code-figuren zijn snel (3), AI-sfeerplaten traag (2). */
 export const MAX_POGINGEN = 3;
+export const MAX_POGINGEN_AI = 2;
 
 export function naarBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64");
@@ -161,8 +163,9 @@ export async function maakFiguurMetKeuring(
   const start = opts.start ?? deps.nu();
   const deadline = start + (opts.budgetMs ?? T.budgetMs);
   const rest = () => deadline - deps.nu();
-  const max = Math.max(1, Math.min(MAX_POGINGEN, opts.maxPogingen ?? MAX_POGINGEN));
   const code = isCodeFiguur(opdracht.spec.soort);
+  const plafond = code ? MAX_POGINGEN : MAX_POGINGEN_AI;
+  const max = Math.max(1, Math.min(plafond, opts.maxPogingen ?? plafond));
   const vraagVoorKeuring = opdracht.nieuweStam ? { ...opdracht.vraag, stam: opdracht.nieuweStam } : opdracht.vraag;
   const log: PogingLog[] = [];
   let spec = opdracht.spec;
@@ -236,12 +239,12 @@ export async function maakFiguurMetKeuring(
       feedback = [voorcheck ? (err as Error).message : `fout: ${fout(err)}`];
       log.push({ poging: p, besluit: voorcheck ? "no_go" : "fout", redenen: feedback });
     }
-    if (p < max && rest() > T.revisieMs + (code ? T.nodigCodeMs : T.nodigAiMs)) {
+    if (p < max && rest() > 5_000 + (code ? T.nodigCodeMs : T.nodigAiMs)) {
       try {
         const raw = await deps.vraagJson(
           REVISIE_SYSTEM,
           revisieUser({ vraag: vraagVoorKeuring, nakijk: opdracht.nakijk, spec, feedback }),
-          T.revisieMs,
+          Math.min(T.revisieMs, rest() - (code ? T.nodigCodeMs : T.nodigAiMs)),
         );
         spec = reviseerSpec(spec, raw);
       } catch {

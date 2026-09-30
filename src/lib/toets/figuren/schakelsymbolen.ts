@@ -165,6 +165,8 @@ function controleerVorm(soort: SymboolSoort, inhoud: string): string | null {
  */
 export function controleerStroomkringSymbolen(spec: FiguurSpec, svg: string): string[] {
   const fouten: string[] = [];
+  const vms = ((spec.data as { voltmeters?: { over?: unknown }[] })?.voltmeters ?? []);
+  if (vms.some((v) => v.over === "bron")) fouten.push("spanningsmeter over de bron/batterij past niet bij Nova (meet over een lampje of weerstand)");
   const groepen = [...svg.matchAll(/<g data-symbool="([^"]+)"[^>]*>([\s\S]*?)<\/g>/g)].map((m) => ({ soort: m[1] as SymboolSoort, inhoud: m[2]! }));
   const verwacht = verwachteSymbolen(spec);
   const tel = (lijst: { soort: string }[]) => lijst.reduce<Record<string, number>>((acc, x) => ((acc[x.soort] = (acc[x.soort] ?? 0) + 1), acc), {});

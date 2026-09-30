@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight, ChevronDown, FileUp, Loader2, X } from "lucide-react";
-import { useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useState, type DragEvent, type FormEvent } from "react";
 import { toast } from "sonner";
 import { CijferNormControls } from "@/components/toets/cijfer-norm-controls";
 import { RttiPicker } from "@/components/toets/rtti-picker";
@@ -16,8 +16,8 @@ import {
   presetVoorLeerjaar,
   rttiVoorMoeilijkheid,
 } from "@/lib/toets/constants";
-import { generateToets } from "@/lib/toets/generate";
-import { verwerkFigurenVeilig } from "@/lib/toets/figuren/veilig";
+import { bewaarMetPlaatjes, leesMetPlaatjes, maakToets, type Voortgang } from "@/lib/toets/maak-toets";
+import { VoortgangsBalk } from "@/components/toets/voortgangs-balk";
 import {
   herkenBatch,
   herkenBron,
@@ -39,14 +39,7 @@ import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { PageIntro } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 
-const STAPPEN = [
-  "Lesstof lezen",
-  "Toetsmatrijs met RTTI",
-  "Vragen in Cito-stijl",
-  "Figuren maken en keuren (go/no-go)",
-  "Nakijkmodel en Word-bestand",
-];
-const STAP_FIGUREN = 3;
+
 
 type Stuk = {
   id: string;
@@ -117,8 +110,10 @@ export function CreateForm() {
   const [overDrop, setOverDrop] = useState(false);
   const [lezend, setLezend] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [stap, setStap] = useState(0);
-  const [figuurStatus, setFiguurStatus] = useState<string | null>(null);
+  const [voortgang, setVoortgang] = useState<Voortgang | null>(null);
+  const [aantalVoorBalk, setAantalVoorBalk] = useState(10);
+  const [metPlaatjes, setMetPlaatjes] = useState(true);
+  useEffect(() => setMetPlaatjes(leesMetPlaatjes()), []);
   const [error, setError] = useState<string | null>(null);
 
   const velden = veldenUitStukken(stukken);
@@ -274,9 +269,7 @@ export function CreateForm() {
     }
     setBusy(true);
     setError(null);
-    setStap(0);
-    // Tot de vragen er zijn, loopt de indicator niet verder dan "Vragen in Cito-stijl".
-    const timer = window.setInterval(() => setStap((s) => (s < STAP_FIGUREN - 1 ? s + 1 : s)), 2200);
+    setVoortgang({ fase: "vragen", metPlaatjes });
     const parseOpt = (s: string) => {
       const t = s.trim();
       if (!t) return undefined;
@@ -318,20 +311,19 @@ export function CreateForm() {
       cijferNorm,
       ronde: 1,
       stuurdocument: stuurdocument.trim() || undefined,
+      metPlaatjes,
     };
+    setAantalVoorBalk(aantalVragen);
     try {
-      const result = await generateToets({ data: input });
+      // Snelle route: vragen → afwerken ∥ figuren (go/no-go) → koppelen; ± 60 s totaal.
+      const result = await maakToets(input, { metPlaatjes, onVoortgang: setVoortgang });
       if (!result.ok) {
         const msg = vriendelijkeFout(new Error(result.error));
         setError(msg);
         toast.error(msg);
         return;
       }
-      window.clearInterval(timer);
-      setStap(STAP_FIGUREN);
-      // Beeldpijplijn: figuren parallel maken + go/no-go-keuring. Breekt de toets nooit.
-      const toets = await verwerkFigurenVeilig(result.toets, setFiguurStatus);
-      setStap(STAP_FIGUREN + 1);
+      const toets = result.toets;
       const toetsId = await persistToetsBeforeNavigate(toets);
       try {
         const { downloadPakketDocx } = await import("@/lib/toets/docx-export");
@@ -346,8 +338,8 @@ export function CreateForm() {
       setError(msg);
       toast.error(msg);
     } finally {
-      window.clearInterval(timer);
       setBusy(false);
+      setVoortgang(null);
     }
   }
 
@@ -508,23 +500,21 @@ export function CreateForm() {
         ) : null}
       </div>
 
-      {busy ? (
-        <div role="status" aria-live="polite" className="rounded-[var(--radius-xl)] bg-surface p-6 sm:p-8">
-          <p className="flex items-center gap-2 font-semibold text-brand">
-            <Loader2 className="size-4 animate-spin" />
-            Toets wordt opgebouwd…
-          </p>
-          <ol className="mt-3 grid gap-1 text-sm">
-            {STAPPEN.map((s, i) => (
-              <li key={s} className={cn(i <= stap ? "text-fg" : "text-muted")}>
-                {i < stap ? "Klaar — " : i === stap ? "Bezig — " : ""}
-                {s}
-                {i === STAP_FIGUREN && i === stap && figuurStatus ? ` · ${figuurStatus}` : ""}
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
+      <Choice
+        legend="Plaatjes"
+        hint={metPlaatjes ? "Figuren alleen waar ze echt iets toevoegen; elk plaatje wordt eerst gekeurd (go/no-go)." : "Geen figuren: gegevens staan in de tekst of een tabel. Sneller."}
+        value={metPlaatjes ? "met" : "zonder"}
+        onChange={(id) => {
+          const met = id === "met";
+          setMetPlaatjes(met);
+          bewaarMetPlaatjes(met);
+        }}
+        options={[
+          { id: "met", label: "Met plaatjes" },
+          { id: "zonder", label: "Zonder plaatjes" },
+        ]}
+      />
+      {busy && voortgang ? <VoortgangsBalk voortgang={voortgang} aantalVragen={aantalVoorBalk} /> : null}
       {error ? <p className="text-sm text-warn">{error}</p> : null}
       <Button type="submit" disabled={!canSubmit} className="h-auto min-h-20 w-full justify-between rounded-[var(--radius-lg)] px-6 py-5 text-left sm:px-8 [&_svg]:size-6">
         <span className="min-w-0">

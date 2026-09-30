@@ -114,8 +114,22 @@ const dataSchemas = {
       .max(3)
       .default([]),
     /** Voltmeter over een onderdeel (index in componenten) of over de bron. */
+    /**
+     * Spanningsmeter parallel over een onderdeel: index in componenten (serie / hoofdstroom),
+     * of { tak, index } voor een onderdeel in een parallelle tak. "bron" wordt door de
+     * Nova-normalisatie verplaatst of geschrapt (Nova meet niet over de bron).
+     */
     voltmeters: z
-      .array(z.object({ over: z.union([z.literal("bron"), z.coerce.number().int().min(0)]), label: tekst(20).optional() }))
+      .array(
+        z.object({
+          over: z.union([
+            z.literal("bron"),
+            z.coerce.number().int().min(0),
+            z.object({ tak: z.coerce.number().int().min(0), index: z.coerce.number().int().min(0) }),
+          ]),
+          label: tekst(20).optional(),
+        }),
+      )
       .max(2)
       .default([]),
   }),
@@ -172,7 +186,7 @@ export function parseSpecData<S extends FiguurSoort>(soort: S, data: unknown): S
 }
 
 /** Spec uit modeloutput → gevalideerde spec, of null als hij onbruikbaar is. */
-export function parseFiguurSpec(raw: unknown): { spec: FiguurSpec | null; fout?: string } {
+export function parseFiguurSpec(raw: unknown): { spec: FiguurSpec | null; fout?: string; aanpassingen?: string[] } {
   const parsed = figuurSpecSchema.safeParse(raw);
   if (!parsed.success) return { spec: null, fout: parsed.error.issues[0]?.message ?? "spec ongeldig" };
   const s = parsed.data;
@@ -180,7 +194,9 @@ export function parseFiguurSpec(raw: unknown): { spec: FiguurSpec | null; fout?:
   if (!data.success) {
     return { spec: null, fout: `data voor ${s.soort} ongeldig: ${data.error.issues[0]?.path.join(".")} ${data.error.issues[0]?.message}` };
   }
+  const nova = s.soort === "stroomkring" ? novaStroomkring(data.data as SpecData<"stroomkring">) : { data: data.data, aanpassingen: [] as string[] };
   return {
+    aanpassingen: nova.aanpassingen,
     spec: {
       soort: s.soort,
       titel: s.titel || undefined,
@@ -190,9 +206,56 @@ export function parseFiguurSpec(raw: unknown): { spec: FiguurSpec | null; fout?:
       getallen: s.getallen,
       eenheden: s.eenheden,
       nietTonen: s.nietTonen,
-      data: JSON.parse(JSON.stringify(data.data)) as { [k: string]: JsonWaarde },
+      data: JSON.parse(JSON.stringify(nova.data)) as { [k: string]: JsonWaarde },
     },
   };
+}
+
+const METEN_OVER = /lamp|weerstand|motor|led|zoemer|ldr|ntc/i;
+
+/**
+ * Curriculummatch (Nova NaSk, VMBO): een spanningsmeter staat parallel over een lampje/weerstand/…,
+ * NOOIT over de spanningsbron of batterij. Zo'n meter wordt verplaatst naar het eerste lampje of de
+ * eerste weerstand zonder meter, of geschrapt. Ongeldige indexen worden ook geschrapt.
+ */
+export function novaStroomkring(d: SpecData<"stroomkring">): { data: SpecData<"stroomkring">; aanpassingen: string[] } {
+  const aanpassingen: string[] = [];
+  const parallel = d.schakeling === "parallel" && d.takken.length > 0;
+  const bezet = new Set<string>();
+  const sleutel = (o: number | { tak: number; index: number }) => (typeof o === "number" ? `c${o}` : `t${o.tak}.${o.index}`);
+  const geldig = (o: number | { tak: number; index: number }) =>
+    typeof o === "number"
+      ? o < (parallel ? Math.min(3, d.componenten.length) : d.componenten.length) && METEN_OVER.test(d.componenten[o]?.soort ?? "")
+      : parallel && METEN_OVER.test(d.takken[o.tak]?.[o.index]?.soort ?? "");
+  const vrij = (): number | { tak: number; index: number } | null => {
+    const kandidaten: (number | { tak: number; index: number })[] = [];
+    (parallel ? d.componenten.slice(0, 3) : d.componenten).forEach((_, i) => kandidaten.push(i));
+    if (parallel) d.takken.forEach((tak, t) => tak.forEach((_, i) => kandidaten.push({ tak: t, index: i })));
+    const voorkeur = (o: number | { tak: number; index: number }) => {
+      const c = typeof o === "number" ? d.componenten[o] : d.takken[o.tak]?.[o.index];
+      return /lamp/i.test(c?.soort ?? "") ? 0 : /weerstand/i.test(c?.soort ?? "") ? 1 : 2;
+    };
+    return kandidaten.filter((o) => geldig(o) && !bezet.has(sleutel(o))).sort((a, b) => voorkeur(a) - voorkeur(b))[0] ?? null;
+  };
+  const voltmeters: SpecData<"stroomkring">["voltmeters"] = [];
+  for (const vm of d.voltmeters) {
+    if (vm.over !== "bron" && geldig(vm.over) && !bezet.has(sleutel(vm.over))) {
+      bezet.add(sleutel(vm.over));
+      voltmeters.push(vm);
+    }
+  }
+  for (const vm of d.voltmeters) {
+    if (vm.over !== "bron" && voltmeters.includes(vm)) continue;
+    const nieuw = vrij();
+    if (vm.over === "bron") {
+      if (nieuw != null) {
+        bezet.add(sleutel(nieuw));
+        voltmeters.push({ ...vm, over: nieuw });
+        aanpassingen.push("spanningsmeter over de bron verplaatst naar een lampje/weerstand (Nova)");
+      } else aanpassingen.push("spanningsmeter over de bron geschrapt (Nova meet niet over de bron)");
+    } else aanpassingen.push("spanningsmeter over een onbekend of niet-meetbaar onderdeel geschrapt");
+  }
+  return { data: { ...d, voltmeters }, aanpassingen };
 }
 
 function basis(soort: FiguurSoort, doel: string, data: Record<string, unknown>, extra?: Partial<FiguurSpec>): FiguurSpec {

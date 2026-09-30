@@ -220,6 +220,10 @@ export interface FiguurRapport {
   items: FiguurRapportItem[];
   /** Algemene meldingen (bijv. planner niet bereikbaar). */
   meldingen: string[];
+  /** Docent koos "Zonder plaatjes": de pijplijn is overgeslagen. */
+  zonderPlaatjes?: boolean;
+  /** Gemeten doorlooptijden (ms) van de laatste generatie. */
+  tijden?: { vragenMs?: number; afwerkenMs?: number; figurenMs?: number; totaalMs?: number };
 }
 
 export interface PuntenCriterium {
@@ -287,6 +291,8 @@ export interface GegenereerdeToets {
    */
   figuurPijplijn?: 1;
   figuurRapport?: FiguurRapport;
+  /** false = docent koos "Zonder plaatjes" (geen figuren, ook niet in latere rondes). */
+  metPlaatjes?: boolean;
 }
 
 export interface GenerateInput {
@@ -314,6 +320,8 @@ export interface GenerateInput {
   feedback?: string;
   vorigeSamenvatting?: string;
   stuurdocument?: string;
+  /** "Met plaatjes" (standaard) of "Zonder plaatjes". */
+  metPlaatjes?: boolean;
 }
 
 export interface GenerateMatrijsInput {
