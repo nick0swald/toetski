@@ -13,7 +13,18 @@ export interface ExamenProfielData {
   duur: number; vragen: number; punten: number; puntenPerVraag: number; minPerItem: number; pct1p: number;
   vormPct: Record<string, number>; rekenMax: number; introWoorden: number[]; vragenPerContext: number[]; categorieen: string[];
 }
-export interface VraagtypeData { id: string; naam: string; domein: string; freq: number; niveaus: Record<string, number>; punten: number; onderbouw?: boolean }
+export interface VraagtypeData {
+  id: string;
+  naam: string;
+  domein: string;
+  freq: number;
+  niveaus: Record<string, number>;
+  punten: number;
+  onderbouw?: boolean;
+  /** Schooltoetstype (klas 3–4) dat op het CSE binnen een breder type valt; alleen als de lesstof het noemt (re). */
+  school?: boolean;
+  re?: string;
+}
 export interface NovaHoofdstukData { n: number; titel: string; paragrafen: { n: number; titel: string }[] }
 
 export const SCHOOL_PROFIELEN: Record<string, SchoolProfielData> = {
@@ -1297,6 +1308,26 @@ export const VRAAGTYPEN: VraagtypeData[] = [
   "niveaus": {},
   "punten": 1,
   "onderbouw": true
+ },
+ {
+  "id": "K-FZ",
+  "naam": "Zwaartekracht berekenen met Fz = m × g (g volgens de lesstof)",
+  "domein": "krachten",
+  "freq": 0,
+  "niveaus": {},
+  "punten": 2,
+  "school": true,
+  "re": "zwaartekracht|fz\\s*=|m\\s*[×x·]\\s*g"
+ },
+ {
+  "id": "K-VEER",
+  "naam": "Veer: uitrekking en veerconstante (F = C × u), F-u-tabel of -diagram",
+  "domein": "krachten",
+  "freq": 0,
+  "niveaus": {},
+  "punten": 2,
+  "school": true,
+  "re": "veerconstante|uitrekking|\\bveer\\b|\\bveren\\b"
  },
  {
   "id": "O-HEELAL",

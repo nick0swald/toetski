@@ -29,20 +29,19 @@ export function herstelGroepen(vragen: Vraag[], vorige: Vraag[] = []): Vraag[] {
     if (k && q.context?.trim() && !intros.has(k)) intros.set(k, q.context.trim());
   }
   const gezien = new Set<string>();
-  const eerderInGroep = new Map<string, Set<string>>();
+  const eerderInGroep = new Map<string, string[]>();
   return vragen.map((q0) => {
     const k = titelSleutel(q0.contextTitel);
-    if (!k) return q0;
+    // Losse vraag: een zin uit de eigen context niet (bijna) letterlijk herhalen in de stam.
+    if (!k) return q0.context?.trim() ? { ...q0, stam: zonderHerhaling([q0.context], q0.stam) } : q0;
     // Zinnen die al in de situatie of een eerdere vraag van deze groep stonden niet herhalen in de stam
     // (r8: "Luuk ziet op de oscilloscoop dat een toon 440 trillingen…" opnieuw vóór een andere vraag).
-    const al = eerderInGroep.get(k) ?? new Set<string>();
+    const al = eerderInGroep.get(k) ?? [];
     const intro0 = intros.get(k);
-    if (intro0) for (const z of zinDelen(intro0)) al.add(zinSleutel(z));
-    const delen = zinDelen(q0.stam);
-    const blijf = delen.filter((z, i) => i === delen.length - 1 || !al.has(zinSleutel(z)));
-    const q = blijf.length < delen.length ? { ...q0, stam: blijf.join(" ") } : q0;
-    for (const z of [...zinDelen(q0.context ?? ""), ...delen]) al.add(zinSleutel(z));
-    eerderInGroep.set(k, al);
+    const eigen = q0.context?.trim() ? [q0.context] : [];
+    const stam = zonderHerhaling([...(intro0 ? [intro0] : []), ...eigen, ...al], q0.stam);
+    const q = stam !== q0.stam ? { ...q0, stam } : q0;
+    eerderInGroep.set(k, [...al, ...zinDelen(q0.context ?? ""), ...zinDelen(q0.stam)]);
     const intro = intros.get(k);
     if (!gezien.has(k)) {
       gezien.add(k);
@@ -50,6 +49,33 @@ export function herstelGroepen(vragen: Vraag[], vorige: Vraag[] = []): Vraag[] {
     }
     return intro && q.context?.trim() === intro ? { ...q, context: "" } : q;
   });
+}
+
+const HERHAAL_STOP = new Set(["de", "het", "een", "en", "in", "op", "met", "van", "zijn", "haar", "hij", "zij", "ze", "die", "dat", "dit", "deze"]);
+function woordenVan(z: string): string[] {
+  return zinSleutel(z).split(" ").filter((w) => w && !HERHAAL_STOP.has(w));
+}
+
+/** Zit (bijna) de hele zin al in een van de eerdere zinnen? (≥ 80 % van de woorden, minstens 3 woorden) */
+export function isHerhaling(zin: string, eerder: string[]): boolean {
+  const w = woordenVan(zin);
+  if (w.length < 3) return false;
+  return eerder.some((e) => {
+    const set = new Set(woordenVan(e));
+    return w.filter((x) => set.has(x)).length / w.length >= 0.8;
+  });
+}
+
+/**
+ * Situatiezinnen die (bijna) letterlijk al in de context stonden uit de stam halen; de laatste zin
+ * (de vraag/opdracht) blijft altijd staan.
+ */
+export function zonderHerhaling(eerder: string[], stam: string): string {
+  const zinnen = eerder.flatMap(zinDelen);
+  const delen = zinDelen(stam);
+  if (delen.length < 2) return stam;
+  const blijf = delen.filter((z, i) => i === delen.length - 1 || /\?\s*$/.test(z) || !isHerhaling(z, zinnen));
+  return blijf.length < delen.length ? blijf.join(" ") : stam;
 }
 
 function zinDelen(t: string): string[] {

@@ -2,6 +2,7 @@ import { RTTI_META } from "@/lib/toets/constants";
 import type { GegenereerdeToets } from "@/lib/toets/types";
 import { figuurIsGeldig } from "@/lib/toets/figuren/bevriezing";
 import { leerdoelDekking } from "@/lib/toets/leerdoelen-plan";
+import { DOORREKENEN } from "@/lib/toets/punten-rubric";
 
 export function NakijkSheet({
   toets,
@@ -19,6 +20,7 @@ export function NakijkSheet({
     <article className="rounded-[var(--radius-xl)] bg-paper p-6 sm:p-10">
       <h2 className="text-2xl font-bold text-brand">Nakijkmodel · {toets.meta.titel}</h2>
       <p className="mt-2 text-sm text-muted">Niet voor leerlingen. {toets.cesuur.formule}</p>
+      {toets.vragen.some((q) => !q.opties?.length) ? <p className="mt-2 text-sm text-muted">{DOORREKENEN}</p> : null}
       <ol className="mt-6 grid gap-6">
         {toets.nakijkmodel.map((n) => {
           const q = toets.vragen.find((v) => v.nummer === n.nummer);

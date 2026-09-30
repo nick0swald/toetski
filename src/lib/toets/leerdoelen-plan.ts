@@ -59,6 +59,66 @@ export interface PlanInput {
   leerweg: Leerweg;
   doelPunten: number;
   aantalVragen: number;
+  /** Zonder plaatjes: tekendoelen alleen via een tekenvak (leeg antwoordkader). */
+  zonderPlaatjes?: boolean;
+}
+
+/** Vraagtypen die een tekening vragen (vector, krachtenschaal, parallellogram, arm tekenen). */
+export const TEKEN_TYPEN = new Set(["K-VECT", "K-RES", "K-SCHAAL", "K-ARM"]);
+export function isTekenDoel(typen: string[]): boolean {
+  const t = typen.filter((x) => x !== "OVERIG");
+  return t.length > 0 && t.every((x) => TEKEN_TYPEN.has(x));
+}
+
+/** Lesstof opdelen in paragrafen (kop + tekst) op de koppen die extractParagrafen herkent. */
+export function paragraafTeksten(bron: string, antwoorden?: string): { code: string; titel: string; tekst: string }[] {
+  const pars = extractParagrafen(bron);
+  if (pars.length < 2) return [];
+  const regels = bron.split(/\r?\n/);
+  const uit = pars.map((p) => ({ ...p, tekst: "" }));
+  let huidig: (typeof uit)[number] | undefined;
+  for (const r of regels) {
+    const line = r.replace(/\s+/g, " ").trim();
+    const m = line.match(/^(?:paragraaf\s+|§\s*)?(\d{1,2})\.(\d{1,2})\.?\s+/);
+    const kop = m ? uit.find((p) => p.code === `${Number(m[1])}.${Number(m[2])}` && line.length < 80) : undefined;
+    if (kop) {
+      huidig = kop;
+      continue;
+    }
+    if (huidig) huidig.tekst += ` ${line}`;
+  }
+  void antwoorden;
+  return uit;
+}
+
+/**
+ * Doelen per paragraaf uit de eigen lesstof: score = 3 × treffers in de kop + treffers in de tekst.
+ * Per paragraaf de beste twee doelen (score ≥ 2). Geen doelen van buiten de lesstof (r236: katrol in H3 zonder katrol).
+ */
+export function doelenUitLesstof(pool: LeerdoelData[], bron: string, antwoorden?: string): { id: string; gewicht: number; par: string }[] {
+  const pars = paragraafTeksten(bron, antwoorden);
+  // Alleen koppen zonder tekst (inhoudsopgave): dan geeft de Nova-koppeling een beter beeld.
+  if (pars.filter((p) => p.tekst.trim().length >= 120).length < Math.max(2, pars.length / 2)) return [];
+  const uit: { id: string; gewicht: number; par: string }[] = [];
+  for (const p of pars) {
+    const kop = kaal(p.titel);
+    const tekst = kaal(p.tekst);
+    const scores = pool
+      .map((d) => {
+        const re = new RegExp(d.kw, "i");
+        return [d, 3 * telTreffers(re, kop) + telTreffers(re, tekst)] as const;
+      })
+      .filter(([, s]) => s >= 1)
+      .sort((a, b) => b[1] - a[1]);
+    // Beste doel (score ≥ 2) + hooguit twee die ook echt in de tekst genoemd worden.
+    const beste = scores[0];
+    if (!beste || beste[1] < 2) continue;
+    // Bijdoelen alleen uit hetzelfde domein (K-…): 'constante snelheid' in §Krachten samenstellen is geen snelheidsdoel.
+    const dom = new Set(beste[0].typen.map((t) => t.split("-")[0]));
+    const bij = scores.slice(1).filter(([d, sc]) => sc >= 2 || d.typen.some((t) => dom.has(t.split("-")[0])));
+    [beste, ...bij.slice(0, 2)].forEach(([d], i) => uit.push({ id: d.id, gewicht: [1, 0.6, 0.4][i]!, par: p.code }));
+  }
+  return uit;
 }
 
 /**
@@ -78,7 +138,15 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
   };
   let herkomst = "";
   const titel = input.titel ?? "";
-  const hit = vindNovaHoofdstuk(titel, input.bron, input.leerjaar, input.leerweg);
+  // 1. Eigen paragrafen in de lesstof → doelen uit de tekst van die paragrafen (leidend).
+  const eigen = doelenUitLesstof(pool, input.bron, input.antwoorden);
+  if (eigen.length) {
+    // Een doel dat in veel paragrafen terugkomt (krachten herkennen) krijgt niet alle punten.
+    for (const e of eigen) gewicht.set(e.id, Math.min(1.6, (gewicht.get(e.id) ?? 0) + e.gewicht));
+    const codes = [...new Set(eigen.map((e) => e.par))];
+    herkomst = `lesstof § ${codes[0]}–${codes[codes.length - 1]}`;
+  }
+  const hit = gewicht.size ? null : vindNovaHoofdstuk(titel, input.bron, input.leerjaar, input.leerweg);
   const koppeling = hit ? NOVA_LEERDOEL_KOPPELING[`${hit.serie}:${hit.hoofdstuk.n}`] : undefined;
   if (hit && koppeling) {
     const inBron = extractParagrafen(input.bron, input.antwoorden)
@@ -97,7 +165,7 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
     }
   }
   // Lesstof-aanvulling: paragraafkoppen in de lesstof die een doel noemen dat nog ontbreekt (bijv. "3.6 Druk").
-  if (gewicht.size) {
+  if (gewicht.size && !eigen.length) {
     let extra = 0;
     for (const p of extractParagrafen(input.bron, input.antwoorden)) {
       const kop = kaal(p.titel);
@@ -134,7 +202,7 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
   );
   const doelen: PlanLeerdoel[] = gekozen.map(([id], i) => {
     const dd = perId.get(id)!;
-    return { id, tekst: dd.tekst, deel: dd.deel, typen: dd.typen, doelPunten: punten[i]!, ...(dd.wettelijk ? { wettelijk: dd.wettelijk } : {}) };
+    return { id, tekst: dd.tekst, deel: dd.deel, typen: dd.typen, doelPunten: punten[i]!, ...(dd.wettelijk ? { wettelijk: dd.wettelijk } : {}), ...(isTekenDoel(dd.typen) ? { tekenen: true } : {}) };
   });
   const onderbouw = input.leerjaar <= 2;
   return {
@@ -144,6 +212,7 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
     leerweg: input.leerweg,
     leerjaar: input.leerjaar,
     doelen,
+    ...(input.zonderPlaatjes ? { zonderPlaatjes: true } : {}),
   };
 }
 
@@ -151,7 +220,12 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
 export function leerdoelenPrompt(plan: LeerdoelPlan | null, deel = false): string {
   if (!plan?.doelen.length) return "";
   const bron = plan.bron === "kerndoelen" ? "SLO-kerndoelen onderbouw (concept 2025), losjes gekoppeld" : `syllabus NaSk1 centraal examen · ${plan.leerweg}`;
-  const regels = plan.doelen.map((d) => `- ${d.id} (${d.deel === "KD" ? "kerndoel" : d.deel}) ${d.tekst} — ~${d.doelPunten} p; past bij ${d.typen.filter((t) => t !== "OVERIG").join(", ") || "eigen vraagvorm"}`);
+  const regels = plan.doelen.map(
+    (d) =>
+      `- ${d.id} (${d.deel === "KD" ? "kerndoel" : d.deel}) ${d.tekst} — ~${d.doelPunten} p; past bij ${d.typen.filter((t) => t !== "OVERIG").join(", ") || "eigen vraagvorm"}${
+        d.tekenen && plan.zonderPlaatjes ? " — zonder plaatjes: toets dit met een TEKENVRAAG (veld tekenvak: leeg raster, schaal in de stam, rubriek per element)" : ""
+      }`,
+  );
   return [
     `LEERDOELEN (achtergrond voor toetsopbouw en nakijkmodel, ${bron}; verplicht): elke vraag krijgt veld leerdoelId = precies één id uit deze lijst (bijv. "${plan.doelen[0]!.id}"). ${
       deel ? "Dit deel levert zijn aandeel: label elke vraag en spreid over de doelen." : "Toets elk leerdoel met minstens één vraag en verdeel de punten ongeveer zo (± 2 per doel)."
@@ -246,28 +320,67 @@ export interface LeerdoelDekkingRij {
 }
 
 /** Dekking per leerdoel (vragen + punten) en de doelen zonder vraag. */
-export function leerdoelDekking(vragen: Vraag[], plan: LeerdoelPlan | null | undefined): { rijen: LeerdoelDekkingRij[]; ongedekt: LeerdoelDekkingRij[]; perVraag: Map<number, string> } {
-  if (!plan?.doelen.length) return { rijen: [], ongedekt: [], perVraag: new Map() };
+export function leerdoelDekking(
+  vragen: Vraag[],
+  plan: LeerdoelPlan | null | undefined,
+): { rijen: LeerdoelDekkingRij[]; ongedekt: LeerdoelDekkingRij[]; alleenTekening: LeerdoelDekkingRij[]; perVraag: Map<number, string> } {
+  if (!plan?.doelen.length) return { rijen: [], ongedekt: [], alleenTekening: [], perVraag: new Map() };
   const { vragen: vv } = herstelLeerdoelen(vragen, plan);
   const perVraag = new Map(vv.map((q) => [q.nummer, q.leerdoelId ?? ""]));
   const rijen = plan.doelen.map((d) => {
     const qs = vv.filter((q) => q.leerdoelId === d.id);
     return { id: d.id, tekst: d.tekst, deel: d.deel, doelPunten: d.doelPunten, vragen: qs.map((q) => q.nummer), punten: qs.reduce((s, q) => s + (q.punten ?? 1), 0) };
   });
-  return { rijen, ongedekt: rijen.filter((r) => !r.vragen.length), perVraag };
+  const tekenOnly = new Set(plan.zonderPlaatjes ? plan.doelen.filter((d) => d.tekenen).map((d) => d.id) : []);
+  return { rijen, ongedekt: rijen.filter((r) => !r.vragen.length && !tekenOnly.has(r.id)), alleenTekening: rijen.filter((r) => !r.vragen.length && tekenOnly.has(r.id)), perVraag };
 }
 
 /** Feedbackpunt "Leerdoelen" (dekking + herstelde labels). */
 export function annoteerLeerdoelen(kwaliteit: Kwaliteitscheck, vragen: Vraag[], plan: LeerdoelPlan | null | undefined): Kwaliteitscheck {
   if (!plan?.doelen.length) return kwaliteit;
-  const { rijen, ongedekt } = leerdoelDekking(vragen, plan);
+  const { rijen, ongedekt, alleenTekening } = leerdoelDekking(vragen, plan);
   const scheef = rijen.filter((r) => r.vragen.length && Math.abs(r.punten - r.doelPunten) > Math.max(3, r.doelPunten * 0.6));
+  const getoetst = rijen.length - ongedekt.length - alleenTekening.length;
   const punt = {
     criterium: "Leerdoelen",
     oordeel: (ongedekt.length ? "aandacht" : "voldoet") as "aandacht" | "voldoet",
-    toelichting: `${rijen.length - ongedekt.length} van ${rijen.length} leerdoelen getoetst (${plan.bron === "kerndoelen" ? "SLO-kerndoelen" : "syllabus NaSk1"}${plan.herkomst ? `, ${plan.herkomst}` : ""}).${
+    toelichting: `${getoetst} van ${rijen.length - alleenTekening.length} leerdoelen getoetst (${plan.bron === "kerndoelen" ? "SLO-kerndoelen" : "syllabus NaSk1"}${plan.herkomst ? `, ${plan.herkomst}` : ""}).${
       ongedekt.length ? ` Niet getoetst: ${ongedekt.map((r) => r.id).join(", ")}.` : ""
-    }${scheef.length ? ` Punten wijken af van de richtverdeling bij ${scheef.map((r) => `${r.id} (${r.punten}/${r.doelPunten} p)`).join(", ")}.` : ""}${plan.hersteld?.length ? ` Leerdoel lokaal toegekend bij vraag ${plan.hersteld.join(", ")}.` : ""}`,
+    }${alleenTekening.length ? ` Alleen met een tekening toetsbaar (toets zonder plaatjes): ${alleenTekening.map((r) => r.id).join(", ")}.` : ""}${scheef.length ? ` Punten wijken af van de richtverdeling bij ${scheef.map((r) => `${r.id} (${r.punten}/${r.doelPunten} p)`).join(", ")}.` : ""}${plan.hersteld?.length ? ` Leerdoel lokaal toegekend bij vraag ${plan.hersteld.join(", ")}.` : ""}`,
   };
   return { samenvatting: kwaliteit.samenvatting, punten: [...(kwaliteit.punten ?? []).filter((p) => p.criterium !== punt.criterium), punt] };
+}
+
+/**
+ * Dekking afdwingen: een doel uit de lesstof zonder vraag → een vraag van het ruimst gedekte doel
+ * vervangen door een vraag over het ontbrekende doel (zelfde punten). Tekendoelen zonder plaatjes:
+ * als tekenvraag (tekenvak), anders geen gat.
+ */
+export function leerdoelIssues(vragen: Vraag[], plan: LeerdoelPlan | null | undefined, vermijd: Set<number> = new Set(), max = 2): { nummer: number; code: string; uitleg: string }[] {
+  if (!plan?.doelen.length) return [];
+  const { vragen: vv } = herstelLeerdoelen(vragen, plan);
+  const perDoel = new Map(plan.doelen.map((d) => [d.id, vv.filter((q) => q.leerdoelId === d.id)]));
+  const leeg = plan.doelen.filter((d) => !perDoel.get(d.id)!.length);
+  const out: { nummer: number; code: string; uitleg: string }[] = [];
+  const gebruikt = new Set(vermijd);
+  for (const d of leeg) {
+    if (out.length >= max) break;
+    const donorDoel = plan.doelen
+      .map((x) => ({ x, qs: perDoel.get(x.id)!, over: perDoel.get(x.id)!.reduce((s, q) => s + (q.punten ?? 1), 0) - x.doelPunten }))
+      .filter((r) => r.qs.length >= 2)
+      .sort((a, b) => b.over - a.over || b.qs.length - a.qs.length)[0];
+    const donor = donorDoel?.qs.filter((q) => !gebruikt.has(q.nummer) && !q.figuur && !q.figuurId && !q.pictogram).sort((a, b) => Math.abs((a.punten ?? 1) - d.doelPunten) - Math.abs((b.punten ?? 1) - d.doelPunten))[0];
+    if (!donor || !donorDoel) break;
+    gebruikt.add(donor.nummer);
+    perDoel.set(donorDoel.x.id, donorDoel.qs.filter((q) => q.nummer !== donor.nummer));
+    const teken = d.tekenen && plan.zonderPlaatjes;
+    out.push({
+      nummer: donor.nummer,
+      code: "dekking",
+      uitleg: `Leerdoel ${d.id} (${d.tekst}) uit de lesstof heeft nog geen vraag; ${donorDoel.x.id} heeft er ${donorDoel.qs.length}. Vervang deze vraag door een nieuwe vraag over ${d.id} (leerdoelId "${d.id}", ${donor.punten ?? 1} punt${(donor.punten ?? 1) === 1 ? "" : "en"}, in de woorden van de lesstof)${
+        teken ? ": een TEKENVRAAG met veld tekenvak (leeg raster), de schaal in de stam (bijv. 1 cm ≙ 10 N) en een rubriek per getekend element" : ""
+      }. Kies een situatie die nog niet in de toets staat.`,
+    });
+  }
+  return out;
 }
