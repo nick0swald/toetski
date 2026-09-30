@@ -9,7 +9,7 @@ import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
 import { extractParagrafen } from "./leerdoelen";
-import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan } from "./leerdoelen-plan";
+import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan, zonderDoelJargon } from "./leerdoelen-plan";
 import { bouwKwaliteit } from "./kwaliteit-check";
 import { CONTROLE_MODEL as CONTROLE_MODEL_NAAM, TEKST_MODEL } from "./figuren/modellen";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
@@ -495,7 +495,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       ).catch(() => null),
   });
   const leerdoelPlan = leerdoelPlanVoor(data, kal, bron);
-  const gelabeld = kal ? herstelLeerdoelen(markeerExamenvragen(normaliseerVraagtypen(af.vragen), examenCtx), leerdoelPlan) : { vragen: af.vragen, hersteld: [] };
+  const gelabeld = kal ? herstelLeerdoelen(zonderDoelJargon(markeerExamenvragen(normaliseerVraagtypen(af.vragen), examenCtx)), leerdoelPlan) : { vragen: af.vragen, hersteld: [] };
   const vragen = gelabeld.vragen;
   if (leerdoelPlan && gelabeld.hersteld.length) leerdoelPlan.hersteld = gelabeld.hersteld;
   const nakijkmodel = af.nakijkmodel;

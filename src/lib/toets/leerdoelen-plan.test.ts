@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { EINDTERMEN, KERNDOELEN, NOVA_LEERDOEL_KOPPELING, ONDERWERP_KOPPELING } from "./leerdoelen-data.ts";
-import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelDekking, leerdoelenPool, leerdoelenPrompt, maakLeerdoelPlan, normaliseerLeerdoelId, verdeelPunten } from "./leerdoelen-plan.ts";
+import { zonderDoelJargon, annoteerLeerdoelen, herstelLeerdoelen, leerdoelDekking, leerdoelenPool, leerdoelenPrompt, maakLeerdoelPlan, normaliseerLeerdoelId, verdeelPunten } from "./leerdoelen-plan.ts";
 import { VRAAGTYPEN } from "./kalibratie-data.ts";
 import type { Vraag } from "./types.ts";
 
@@ -53,6 +53,11 @@ describe("maakLeerdoelPlan", () => {
     const p = maakLeerdoelPlan({ ...geluid, bron: "13.3 Geluidssterkte\nx\n13.4 Geluidshinder\ny" })!;
     assert.deepEqual(p.doelen.map((d) => d.id), ["K/8.5", "K/8.6"]);
   });
+  it("lesstofkop met een ontbrekend doel vult aan (3.6 Druk → K/9.10)", () => {
+    const p = maakLeerdoelPlan({ titel: "H3 Krachten", bron: "3.1 Soorten krachten\n3.2 Krachten tekenen\n3.3 Krachten samenstellen\n3.4 Veren\n3.5 Hefbomen\n3.6 Druk", leerjaar: 3, leerweg: "GT", doelPunten: 30, aantalVragen: 20 })!;
+    assert.ok(p.doelen.some((d) => d.id === "K/9.10"), p.doelen.map((d) => d.id).join(" "));
+    assert.match(p.herkomst, /lesstofkoppen/);
+  });
   it("KB krijgt geen GT-only doelen (V/…)", () => {
     const p = maakLeerdoelPlan({ titel: "H14 Werktuigen", bron: "14.1 Werken met hefbomen\n14.2 Hefbomen en zwaartekracht\n14.3 Katrollen en takels\n14.4 Druk", leerjaar: 4, leerweg: "KB", doelPunten: 30, aantalVragen: 20 })!;
     assert.ok(p.doelen.length >= 3);
@@ -99,5 +104,22 @@ describe("leerdoelId controle", () => {
     assert.ok(dek.ongedekt.some((x) => x.id === "K/8.5"));
     const kw = annoteerLeerdoelen({ samenvatting: "", punten: [] }, r.vragen, { ...plan, hersteld: r.hersteld });
     assert.match(kw.punten.at(-1)!.toelichting, /Niet getoetst: .*K\/8\.5/);
+  });
+});
+
+describe("leerlingblad blijft herkenbaar", () => {
+  it("prompt houdt doelen op de achtergrond (geen codes/jargon, lesstoftaal, niveau van de lesstof)", () => {
+    const p = leerdoelenPrompt(maakLeerdoelPlan({ titel: "H13 Geluid", bron: "", leerjaar: 4, leerweg: "GT", doelPunten: 28, aantalVragen: 17 }));
+    assert.match(p, /ziet de doelen NOOIT/);
+    assert.match(p, /niet moeilijker of abstracter/);
+  });
+  it("doelcodes en syllabustaal verdwijnen uit leerlingtekst, rest blijft gelijk", () => {
+    const [a, b] = zonderDoelJargon([
+      q(1, { stam: "Bereken de frequentie (K/8.4).", opties: [{ letter: "A", tekst: "Eindterm SLO-30C 12 Hz" }] }),
+      q(2, { stam: "Leg uit waarom de toon hoger wordt." }),
+    ]);
+    assert.equal(a!.stam, "Bereken de frequentie.");
+    assert.equal(a!.opties![0]!.tekst, "12 Hz");
+    assert.equal(b!.stam, "Leg uit waarom de toon hoger wordt.");
   });
 });

@@ -96,6 +96,19 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
       herkomst = `onderwerp ${onderwerp.naam}`;
     }
   }
+  // Lesstof-aanvulling: paragraafkoppen in de lesstof die een doel noemen dat nog ontbreekt (bijv. "3.6 Druk").
+  if (gewicht.size) {
+    let extra = 0;
+    for (const p of extractParagrafen(input.bron, input.antwoorden)) {
+      const kop = kaal(p.titel);
+      const nieuw = pool.find((d) => !gewicht.has(d.id) && d.deel !== "KD" && new RegExp(`(^|\\s)(${d.kw})`, "i").test(kop));
+      if (nieuw) {
+        plus(nieuw.id, 0.8);
+        extra++;
+      }
+    }
+    if (extra) herkomst += " + lesstofkoppen";
+  }
   if (!gewicht.size) {
     const tekst = kaal(`${titel} ${titel} ${titel}\n${input.bron.slice(0, 30000)}`);
     const scores = pool
@@ -140,9 +153,9 @@ export function leerdoelenPrompt(plan: LeerdoelPlan | null, deel = false): strin
   const bron = plan.bron === "kerndoelen" ? "SLO-kerndoelen onderbouw (concept 2025), losjes gekoppeld" : `syllabus NaSk1 centraal examen · ${plan.leerweg}`;
   const regels = plan.doelen.map((d) => `- ${d.id} (${d.deel === "KD" ? "kerndoel" : d.deel}) ${d.tekst} — ~${d.doelPunten} p; past bij ${d.typen.filter((t) => t !== "OVERIG").join(", ") || "eigen vraagvorm"}`);
   return [
-    `LEERDOELEN (officieel, ${bron}; verplicht): elke vraag krijgt veld leerdoelId = precies één id uit deze lijst (bijv. "${plan.doelen[0]!.id}"). ${
+    `LEERDOELEN (achtergrond voor toetsopbouw en nakijkmodel, ${bron}; verplicht): elke vraag krijgt veld leerdoelId = precies één id uit deze lijst (bijv. "${plan.doelen[0]!.id}"). ${
       deel ? "Dit deel levert zijn aandeel: label elke vraag en spreid over de doelen." : "Toets elk leerdoel met minstens één vraag en verdeel de punten ongeveer zo (± 2 per doel)."
-    } Stem vraag en niveau af op het werkwoord van het doel (herkennen/noemen ≠ uitleggen/berekenen). Een vraag die bij geen van deze doelen past, hoort niet in de toets. Zet het id nooit in de vraagtekst.`,
+    } De leerling ziet de doelen NOOIT: geen codes, geen syllabus- of kerndoeltaal ("eindterm", "de kandidaat kan", "CE") in context, stam, opties of modelantwoord. Formuleer elke vraag in de woorden, begrippen en voorbeelden van de lesstof/het Nova-hoofdstuk, in de vertrouwde schooltoetsstijl. Niveau = de lesstof van deze klas: niet moeilijker of abstracter dan het boek; een doel dat verder gaat dan de lesstof toets je alleen op het niveau van de lesstof. Een vraag die bij geen van deze doelen past, hoort niet in de toets.`,
     ...regels,
   ].join("\n");
 }
@@ -199,6 +212,28 @@ export function herstelLeerdoelen(vragen: Vraag[], plan: LeerdoelPlan | null | u
     return { ...q, leerdoelId: beste.id };
   });
   return { vragen: uit, hersteld };
+}
+
+const JARGON = String.raw`\b(?:NASK1\/)?[KV]\/\d{1,2}(?:\.\d{1,2})?\b|\bSLO-\d{2}[A-E]\b|\beindterm(?:en)?\b|\bde kandidaat kan\b|\bkerndoel(?:en)?\b|\bsyllabus\b`;
+
+function schoonTekst(t: string): string {
+  if (!new RegExp(JARGON, "i").test(t)) return t;
+  return t
+    .replace(new RegExp(JARGON, "gi"), "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;:?])/g, "$1")
+    .trim();
+}
+
+/** Haalt doelcodes/syllabustaal uit leerlingtekst (context, stam, opties); verder blijft de vraag gelijk. */
+export function zonderDoelJargon(vragen: Vraag[]): Vraag[] {
+  return vragen.map((q) => ({
+    ...q,
+    ...(q.context ? { context: schoonTekst(q.context) } : {}),
+    stam: schoonTekst(q.stam),
+    ...(q.opties ? { opties: q.opties.map((o) => ({ ...o, tekst: schoonTekst(o.tekst) })) } : {}),
+  }));
 }
 
 export interface LeerdoelDekkingRij {
