@@ -615,14 +615,18 @@ export function CreateForm() {
         </p>
       </div>
 
-      <details className="group min-w-0 px-2">
-        <summary className="flex min-h-9 cursor-pointer list-none items-center justify-end gap-1 text-xs text-muted hover:text-brand [&::-webkit-details-marker]:hidden">
-          Meer opties
-          <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+      <details className="group min-w-0 overflow-hidden rounded-[var(--radius-xl)] bg-surface">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 text-base font-bold tracking-tight text-brand hover:opacity-80 sm:px-8 [&::-webkit-details-marker]:hidden">
+          <span>
+            Plaatjes
+            <span className="ml-2 font-medium text-muted">
+              · {plaatjes === "met" ? "Met plaatjes" : plaatjes === "zonder" ? "Zonder plaatjes" : "Automatisch"}
+            </span>
+          </span>
+          <ChevronDown className="size-5 shrink-0 text-muted transition-transform duration-[var(--motion-quick)] ease-[var(--ease-out)] group-open:rotate-180" />
         </summary>
-        <div className="ml-auto mt-1 max-w-sm text-xs">
+        <div className="grid gap-6 px-6 pb-8 pt-1 sm:px-8">
           <Choice<PlaatjesModus>
-            legend="Plaatjes"
             value={plaatjes}
             onChange={(m) => {
               setPlaatjes(m);
