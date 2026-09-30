@@ -112,6 +112,30 @@ interface Assen {
   yOf: (v: number) => number;
 }
 
+/**
+ * Ondergrens van een as: normaal 0, maar als de data ver van 0 ligt (bijv. 80–95 dB) begint de as
+ * vlak onder de kleinste waarde, zodat de data het assenstelsel vult en afleesbaar is.
+ * Een expliciete ondergrens die de data in minder dan 35% van de as propt, wordt genegeerd.
+ */
+export function asOndergrens(waarden: number[], expliciet?: number): number {
+  const lo = Math.min(...waarden);
+  const hi = Math.max(...waarden);
+  const span = hi - lo;
+  const auto = lo < 0 ? lo : span > 0 && lo > span * 1.2 ? lo - span * 0.08 : 0;
+  if (expliciet == null) return auto;
+  if (expliciet > lo) return auto;
+  const bereik = Math.max(hi, expliciet) - expliciet;
+  return span > 0 && bereik > 0 && span / bereik < 0.35 ? auto : expliciet;
+}
+
+function asBovengrens(waarden: number[], expliciet?: number): number {
+  const hi = Math.max(...waarden);
+  if (expliciet == null || expliciet < hi) return hi;
+  const lo = Math.min(...waarden);
+  const span = hi - lo;
+  return span > 0 && span / (expliciet - lo) < 0.35 ? hi : expliciet;
+}
+
 function maakAssen(
   W: number,
   H: number,
@@ -120,10 +144,10 @@ function maakAssen(
   opts: { xMin?: number; xMax?: number; yMin?: number; yMax?: number; titel?: boolean },
 ): Assen {
   const pad = { l: 72, r: 24, t: opts.titel ? 40 : 18, b: 58 };
-  const x = niceAs(opts.xMin ?? Math.min(0, ...xs), opts.xMax ?? Math.max(...xs));
+  const x = niceAs(asOndergrens(xs, opts.xMin), asBovengrens(xs, opts.xMax));
   // Kleine marge boven het hoogste punt, zodat een punt nooit tegen de rand van het assenstelsel valt.
   const yHoog = Math.max(...ys);
-  const yLaag = opts.yMin ?? Math.min(0, ...ys);
+  const yLaag = asOndergrens(ys, opts.yMin);
   const y = niceAs(yLaag, opts.yMax ?? yHoog + Math.max(1e-9, (yHoog - yLaag) * 0.04));
   const xOf = (v: number) => pad.l + ((v - x.min) / (x.max - x.min)) * (W - pad.l - pad.r);
   const yOf = (v: number) => pad.t + (1 - (v - y.min) / (y.max - y.min)) * (H - pad.t - pad.b);
@@ -627,6 +651,7 @@ function blokschema(spec: FiguurSpec): { svg: string; W: number; H: number } {
 function pictogram(spec: FiguurSpec): { svg: string; W: number; H: number } {
   const d = parseSpecData("pictogram", spec.data);
   // GHS: rode ruit, zwart symbool op wit.
+  // GHS: rode ruit, zwart symbool op wit. Veiligheidsborden hebben hun eigen kleuren.
   const svg = ghsPictogramSvg(d.symbool, 240, 240)
     .replace(/^<\?xml[^>]*>\s*/i, "")
     .replace('fill="#ffffff" stroke="#000000" stroke-width="3"/>', 'fill="#ffffff" stroke="#e30613" stroke-width="12" stroke-linejoin="round"/>');

@@ -25,6 +25,21 @@ function rekenRubriek(): PuntenCriterium[] {
   ];
 }
 
+export const DOORREKENEN = "Rekenfout of vergeten stap: alleen het punt voor die stap aftrekken; verder rekenen met de eigen (foute) waarde wordt goed gerekend.";
+
+/**
+ * Rekenvragen krijgen deelpunten: een fout (bijv. niet delen door 2) kost 1 punt, niet de hele vraag.
+ * "Niet toekennen"-regels worden aftrekregels; de doorrekenregel staat er altijd bij.
+ */
+export function rekenAftrek(regels: string[] | undefined): string[] {
+  const uit = (regels ?? [])
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .filter((r) => !/^rekenfout of vergeten stap/i.test(r))
+    .map((r) => (/aftrek|punt minder|-\s*1\s*p/i.test(r) ? r : `${r.replace(/[.;]+$/, "")}: 1 punt aftrek (niet de hele vraag fout)`));
+  return [...uit, DOORREKENEN];
+}
+
 function overlapt(a: string, b: string): boolean {
   const x = a.toLowerCase();
   const y = b.toLowerCase();
@@ -94,9 +109,15 @@ export function repareerPunten(
       return;
     }
     if (isBerekening(q)) {
-      const verdeling = rekenRubriek();
+      const eigen = (n.puntenverdeling ?? []).filter((c) => c.criterium?.trim());
+      const som = eigen.reduce((s, c) => s + c.punt, 0);
+      // Specifieke stappen van het model blijven staan als ze netjes zijn (2–4 hele punten in 2–4 stappen);
+      // anders de standaard driedeling.
+      const netjes = eigen.length >= 2 && eigen.length <= 4 && eigen.every((c) => c.punt >= 1 && !fractioneel(c.punt)) && som >= 2 && som <= 4;
+      const verdeling = netjes ? eigen.map((c) => ({ ...c })) : rekenRubriek();
       q.punten = verdeling.reduce((s, c) => s + c.punt, 0);
       n.puntenverdeling = verdeling;
+      n.nietToekennen = rekenAftrek(n.nietToekennen);
       return;
     }
     rubriekOpen(q, n);

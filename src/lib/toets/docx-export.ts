@@ -701,7 +701,7 @@ function kwaliteitParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [
     heading(`Feedback · ${t.meta.titel}`),
     sub(`${t.meta.vak} · ${t.meta.leerweg} klas ${t.meta.leerjaar}`),
-    p("Kwaliteitscheck van Ares058 Toetsmaker.", { italics: true }),
+    p("Kwaliteitscheck van Aeres Toetsmaker.", { italics: true }),
     p(t.kwaliteit.samenvatting || "Geen samenvatting."),
   ];
   for (const k of t.kwaliteit.punten) {

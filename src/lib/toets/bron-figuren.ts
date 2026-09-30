@@ -1,3 +1,4 @@
+import { isVeiligheidsbord } from "./types.ts";
 import type { GhsSymbool, MaatcilinderFiguur, NakijkItem, SchemaFiguur, Vraag, VraagGrafiek, VraagTabel, VakProfiel } from "./types";
 import { heeftEchtFiguur } from "./blad-volgorde.ts";
 
@@ -124,6 +125,17 @@ export function suggestSchemaFiguur(bron: string): SchemaFiguur | null {
 
 function inferGhs(tekst: string): GhsSymbool | null {
   const t = tekst.toLowerCase();
+  // Veiligheidsborden eerst: 'gehoorbescherming dragen' is een gebodsbord, geen GHS-symbool.
+  if (/gehoorbescherming|oorkappen|oordoppen|oorbeschermer/.test(t)) return "gebod-gehoorbescherming";
+  if (/veiligheidsbril|oogbescherming|spatbril/.test(t)) return "gebod-oogbescherming";
+  if (/stofmasker|mondkapje|adembescherming/.test(t)) return "gebod-stofmasker";
+  if (/veiligheidshelm|bouwhelm|\bhelm\b/.test(t)) return "gebod-helm";
+  if (/werkhandschoen|handschoenen/.test(t)) return "gebod-handschoenen";
+  if (/veiligheidsschoen|werkschoen/.test(t)) return "gebod-veiligheidsschoenen";
+  if (/roken verboden|niet roken/.test(t)) return "verbod-roken";
+  if (/open vuur verboden|geen open vuur/.test(t)) return "verbod-open-vuur";
+  if (/elektrische spanning|hoogspanning|gevaarlijke spanning/.test(t) && /bord|waarschuwing/.test(t)) return "waarschuwing-elektriciteit";
+  if (/heet oppervlak|hete oppervlak/.test(t)) return "waarschuwing-heet";
   if (/ontvlambaar|brandbaar|\bvlam/.test(t)) return "ontvlambaar";
   if (/giftig|doodshoofd|schedel|toxisch/.test(t)) return "giftig";
   if (/bijtend|corros/.test(t)) return "bijtend";
@@ -137,7 +149,7 @@ function inferGhs(tekst: string): GhsSymbool | null {
 }
 
 export function isPictogramVraag(q: Vraag): boolean {
-  return /pictogram|gevarensymbool|gevaarsymbool|gevarenteken/i.test(
+  return /pictogram|gevarensymbool|gevaarsymbool|gevarenteken|veiligheidsbord|gebodsbord|waarschuwingsbord|verbodsbord/i.test(
     `${q.stam} ${q.context ?? ""} ${q.leerdoel}`,
   );
 }
@@ -165,11 +177,20 @@ export function plaatsPictogrammen(vragen: Vraag[], nakijk: NakijkItem[] = []): 
       inferGhs(n?.modelantwoord ?? "") ??
       inferGhs(`${q.context ?? ""} ${q.stam} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`);
     if (!soort) return q;
+    const bord = isVeiligheidsbord(soort);
+    // Een gebods-/waarschuwingsbord heet geen gevarensymbool (en omgekeerd): tekst en rubriek consistent.
+    const woord = (t: string) => (bord ? t.replace(/\bgevarensymbool\b/gi, "veiligheidsbord").replace(/\bGHS-?(?:gevaren)?symbool\b/gi, "veiligheidsbord") : t.replace(/\b(?:gebods|waarschuwings|veiligheids)bord\b/gi, "gevarensymbool"));
+    if (n) {
+      n.puntenverdeling = (n.puntenverdeling ?? []).map((p) => ({
+        ...p,
+        criterium: bord ? p.criterium.replace(/\b(?:GHS-?)?(?:gezondheidsgevaar|gevaren?)[- ]?(?:pictogram|symbool)\b/gi, "veiligheidsbord") : p.criterium,
+      }));
+    }
     return {
       ...q,
       pictogram: soort,
-      context: q.context ? schrapSymboolbeschrijving(q.context) : q.context,
-      stam: schrapSymboolbeschrijving(q.stam),
+      context: q.context ? woord(schrapSymboolbeschrijving(q.context)) : q.context,
+      stam: woord(schrapSymboolbeschrijving(q.stam)),
     };
   });
 }

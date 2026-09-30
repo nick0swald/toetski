@@ -1,3 +1,4 @@
+import { toetsLengte } from "@/lib/toets/lengte";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight, ChevronDown, FileUp, Loader2, X } from "lucide-react";
 import { useEffect, useState, type DragEvent, type FormEvent } from "react";
@@ -286,7 +287,7 @@ export function CreateForm() {
         ? Math.max(4, Math.min(80, mcN + openN))
         : mcN != null || openN != null
           ? Math.max(4, Math.min(80, (mcN ?? 0) + (openN ?? 0) + 4))
-          : 10;
+          : toetsLengte(duur, leerweg, moeilijkheid).vragen;
         const input: GenerateInput = {
       titel: titel.trim(),
       vak: vak.trim(),
@@ -360,10 +361,7 @@ export function CreateForm() {
     cijferNorm.exponent === DEFAULT_CIJFER.exponent;
 
   function schatPunten(minuten: number, m: Moeilijkheid): number {
-    let p = Math.round((Math.max(10, minuten) / 45) * 40);
-    if (m === "makkelijk") p = Math.round(p * 0.9);
-    if (m === "moeilijk") p = Math.round(p * 1.15);
-    return Math.max(10, Math.min(100, p));
+    return toetsLengte(minuten, leerweg, m).punten;
   }
 
   const selectCls =

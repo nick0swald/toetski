@@ -3,7 +3,7 @@ import { bouwMatrijs } from "./rtti";
 import type { GegenereerdeToets } from "./types";
 
 export const VOORBEELD_LESSTOF = `Lesstof klas 2 KB Biologie — Fotosynthese en ademhaling
-Ares058 VMBO Leeuwarden, praktijkkas.
+Aeres VMBO Leeuwarden, praktijkkas.
 
 Fotosynthese is het proces waarbij groene planten glucose en zuurstof maken. Daarvoor hebben ze water, koolstofdioxide (CO₂) en licht nodig. De woordvergelijking is:
 
@@ -23,7 +23,7 @@ Leerdoelen
 `;
 
 export const VOORBEELD_TOETS_TEKST = `Toets Biologie klas 2 KB — Fotosynthese
-Ares058 VMBO Leeuwarden · 50 minuten · 20 punten
+Aeres VMBO Leeuwarden · 50 minuten · 20 punten
 
 1. Wat is fotosynthese? Geef een omschrijving in één of twee zinnen. (2p)
 
@@ -96,7 +96,7 @@ const vragen: GegenereerdeToets["vragen"] = [
     domein: "Gaswisseling",
     leerdoel: "De leerling koppelt huidmondjes aan transpiratie.",
     punten: 1,
-    stam: "Een tomaat in de kas van Ares058 heeft op een warme dag veel water nodig. Via welke openingen in het blad verliest de plant waterdamp?",
+    stam: "Een tomatenplant in de kas van Kwekerij De Rode Bol heeft op een warme dag veel water nodig. Via welke openingen in het blad verliest de plant waterdamp?",
     opties: [
       { letter: "A", tekst: "houtvaten" },
       { letter: "B", tekst: "huidmondjes" },
@@ -207,7 +207,7 @@ export function maakVoorbeeldToets(): GegenereerdeToets {
   return {
     id: "voorbeeld-fotosynthese",
     createdAt: new Date().toISOString(),
-    bronmateriaal: "Lesstof klas 2 KB biologie: fotosynthese, dissimilatie, huidmondjes. Praktijkkas Ares058.",
+    bronmateriaal: "Lesstof klas 2 KB biologie: fotosynthese, dissimilatie, huidmondjes..",
     extraEisen: "Voorbeeldtoets — geen AI-aanroep.",
     ronde: 1,
     cijferNorm: { model: "lineair", cesuurPct: 55, exponent: 1 },
@@ -239,7 +239,7 @@ export function maakVoorbeeldToets(): GegenereerdeToets {
     matrijs: bouwMatrijs(vragen, doelverdeling),
     kwaliteit: {
       samenvatting:
-        "Evenwichtige onderbouwtoets met groene Ares058-context. Geschikt als sectievoorbeeld; altijd zelf vakinhoudelijk nalopen.",
+        "Evenwichtige onderbouwtoets met herkenbare contexten. Geschikt als sectievoorbeeld; altijd zelf vakinhoudelijk nalopen.",
       punten: [
         { criterium: "Validiteit", oordeel: "voldoet", toelichting: "Dekking van fotosynthese, gaswisseling en dissimilatie." },
         { criterium: "Betrouwbaarheid / nakijkmodel", oordeel: "voldoet", toelichting: "Puntenverdeelsleutel per vraag." },

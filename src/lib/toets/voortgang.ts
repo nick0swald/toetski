@@ -16,6 +16,8 @@ export function figuurDeadline(t0: number, tVragen: number): number {
 
 /** Typische duur van de figuren na de vragen (voor de afteller; gemeten 20–35 s). */
 export const TYPISCH_FIGUREN_MS = 30_000;
+/** Typische duur van afwerken incl. verplichte inhoudscontrole + reparatie (gemeten 25–45 s). */
+export const TYPISCH_AFWERKEN_MS = 35_000;
 
 /**
  * Voortgangsbalk: tijdgestuurde easing binnen een fase, sprongen bij echte gebeurtenissen.
@@ -75,12 +77,12 @@ export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): 
     case "vragen": {
       const [a, b] = RANGE.vragen;
       const pct = a + (b - a) * 0.97 * ease(inFase, t.verwachtVragenMs);
-      const rest = Math.max(5_000, t.verwachtVragenMs - inFase) + (v.metPlaatjes ? TYPISCH_FIGUREN_MS : 3_000);
+      const rest = Math.max(5_000, t.verwachtVragenMs - inFase) + Math.max(TYPISCH_AFWERKEN_MS, v.metPlaatjes ? TYPISCH_FIGUREN_MS : 0);
       return { pct, label: "Vragen maken…", restMs: rest, wachtOpPlaatjes: false };
     }
     case "afwerken": {
       const [a, b] = RANGE.afwerken;
-      const pct = a + (b - a) * 0.95 * ease(inFase, 14_000);
+      const pct = a + (b - a) * 0.95 * ease(inFase, TYPISCH_AFWERKEN_MS);
       const label = v.metPlaatjes
         ? fig?.gepland
           ? fig.totaal
@@ -88,7 +90,8 @@ export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): 
             : "Afwerken en controleren · geen plaatjes nodig…"
           : "Afwerken en controleren · plaatjes plannen…"
         : "Afwerken en controleren…";
-      const rest = v.metPlaatjes && figuurRest != null ? figuurRest : Math.max(2_000, 3_000 - inFase);
+      const afwerkRest = Math.max(3_000, TYPISCH_AFWERKEN_MS - inFase);
+      const rest = v.metPlaatjes && figuurRest != null ? Math.max(figuurRest, afwerkRest) : afwerkRest;
       return { pct, label, restMs: rest, wachtOpPlaatjes: false };
     }
     case "plaatjes": {

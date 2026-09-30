@@ -1,5 +1,6 @@
 import { findCorrectOptionIndex } from "./mc-balance.ts";
 import type { NakijkItem, Vraag, VraagOptie } from "./types";
+import { bevatSchoolnaam, figuurVerwijzingenZonderFiguur, onopgeloste, repareerSchoolnamen } from "./context-regels.ts";
 
 export type ItemIssue = { nummer: number; code: string; uitleg: string };
 
@@ -420,6 +421,19 @@ function verzamel(vragen: Vraag[], nakijk: NakijkItem[], bron: string): ItemIssu
   vragen.forEach((q, i) => {
     const n = nakijkVan(nakijk, q, i);
     const blob = `${q.stam} ${q.context ?? ""}`;
+    if (bevatSchoolnaam(`${blob} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`)) {
+      issues.push({ nummer: q.nummer, code: "schoolnaam", uitleg: "Noemt een school of leerbedrijf van school; gebruik een verzonnen bedrijf of alledaagse situatie." });
+    }
+    const los = onopgeloste(q.stam, q.context ?? "");
+    const losCtx = q.context ? onopgeloste(q.context) : [];
+    const onduidelijk = [...losCtx, ...los].filter((x) => !(/opstelling|schakeling/i.test(x) && (q.figuur || q.grafiek || q.schemaFiguur)));
+    if (onduidelijk.length) {
+      issues.push({ nummer: q.nummer, code: "vage-verwijzing", uitleg: `Verwijst naar '${onduidelijk[0]}' zonder dat die eerder is genoemd; noem concreet welk ding/apparaat het is.` });
+    }
+    const figRef = figuurVerwijzingenZonderFiguur(q, n);
+    if (figRef.length) {
+      issues.push({ nummer: q.nummer, code: "figuur-ontbreekt", uitleg: `Verwijst naar '${figRef[0]}' maar er staat geen figuur/tabel bij; maak de vraag zelfstandig (gegevens in de tekst).` });
+    }
     if (/volgens de lesstof|uit de lesstof|zoals in het boek/i.test(blob)) {
       issues.push({ nummer: q.nummer, code: "lesstof-frase", uitleg: "Formulering 'volgens de lesstof' of 'zoals in het boek'." });
     }
@@ -494,6 +508,7 @@ export function repareerItemsDeterministisch(
   pasTaalToe(nextV);
   nextV.forEach((q, i) => {
     const n = nakijkVan(nextN, q, i);
+    if (repareerSchoolnamen(q, n)) gezien.push({ nummer: q.nummer, code: "schoolnaam", uitleg: "Schoolnaam vervangen door een verzonnen bedrijf." });
     repareerOnveilig(q, n, gezien);
     repareerStofTegenstelling(q, n, gezien);
     repareerHierarchie(q, n, gezien);

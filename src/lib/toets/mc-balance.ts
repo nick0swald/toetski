@@ -60,6 +60,29 @@ function parseLeadingNumber(tekst: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const WAAR_PAREN: [RegExp, RegExp][] = [
+  [/^juist$/, /^onjuist$/],
+  [/^waar$/, /^(niet waar|onwaar)$/],
+  [/^ja$/, /^nee$/],
+  [/^goed$/, /^fout$/],
+  [/^correct$/, /^incorrect$/],
+];
+
+/**
+ * Juist/onjuist-achtige opties (juist/onjuist, waar/niet waar, ja/nee, goed/fout): vaste volgorde
+ * (eerst Juist, dan Onjuist), nooit husselen en niet meetellen in de letterbalans.
+ * Geeft de index van de "positieve" en "negatieve" optie terug, of null.
+ */
+export function waarOnwaarIndex(opties: VraagOptie[] | undefined): { pos: number; neg: number } | null {
+  if (!opties || opties.length !== 2) return null;
+  const t = opties.map((o) => normText(o.tekst));
+  for (const [p, n] of WAAR_PAREN) {
+    if (p.test(t[0]!) && n.test(t[1]!)) return { pos: 0, neg: 1 };
+    if (p.test(t[1]!) && n.test(t[0]!)) return { pos: 1, neg: 0 };
+  }
+  return null;
+}
+
 /** Zuiver numerieke opties (2 / 5 kg / 12 N): volgorde laten staan. */
 export function isNumericOptionSet(opties: VraagOptie[]): boolean {
   if (opties.length < 2) return false;
@@ -443,6 +466,18 @@ export function shuffleMcAnswers(
     const nakijk = nakijkVoor(nextNakijk, q, i);
     const correctIdx = findCorrectFromNakijk(opties, nakijk);
     if (correctIdx < 0) return;
+    const wo = waarOnwaarIndex(opties);
+    if (wo) {
+      // Vaste volgorde: A = Juist, B = Onjuist. Geen hussel, niet in de letterbalans.
+      const vast = [
+        { letter: "A", tekst: opties[wo.pos]!.tekst },
+        { letter: "B", tekst: opties[wo.neg]!.tekst },
+      ];
+      q.opties = vast;
+      const goed = correctIdx === wo.pos ? 0 : 1;
+      if (nakijk) zetMcRubriek(q, nakijk, vast[goed]!.letter, vast[goed]!.tekst);
+      return;
+    }
     const info = analyzeJob(opties, correctIdx);
     jobs.push({ vraagIndex: i, correctIdx, ...info });
   });

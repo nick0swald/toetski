@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { symboolSoort } from "./schakelsymbolen.ts";
-import { GHS_SYMBOLEN, type FiguurSoort, type FiguurSpec, type GhsSymbool, type JsonWaarde, type Vraag } from "../types.ts";
+import { GHS_SYMBOLEN, PICTOGRAM_NAAM, isVeiligheidsbord, type FiguurSoort, type FiguurSpec, type GhsSymbool, type JsonWaarde, type Vraag } from "../types.ts";
 
 export const FIGUUR_SOORTEN: FiguurSoort[] = [
   "lijngrafiek",
@@ -23,7 +23,7 @@ export function isCodeFiguur(soort: FiguurSoort): boolean {
 
 /** Maximaal aantal figuren per toets / sfeerplaten per toets (Vercel-tijd en leesbaarheid). */
 export const MAX_FIGUREN_PER_TOETS = 6;
-export const MAX_SFEERPLATEN_PER_TOETS = 2;
+export const MAX_SFEERPLATEN_PER_TOETS = 1;
 
 const num = z.coerce.number().refine((n) => Number.isFinite(n), "geen getal");
 const tekst = (max = 120) => z.string().trim().max(max);
@@ -359,10 +359,15 @@ export function legacySpecs(q: Vraag): FiguurSpec[] {
   const out: FiguurSpec[] = [];
   if (q.pictogram) {
     out.push(
-      basis("pictogram", "GHS-gevarensymbool dat de leerling moet herkennen.", { symbool: q.pictogram }, {
-        verplichteElementen: ["rode ruit", `GHS-symbool ${q.pictogram}`],
-        nietTonen: [q.pictogram, "naam van het symbool"],
-      }),
+      isVeiligheidsbord(q.pictogram)
+        ? basis("pictogram", "Veiligheidsbord dat de leerling moet herkennen.", { symbool: q.pictogram }, {
+            verplichteElementen: [PICTOGRAM_NAAM[q.pictogram]],
+            nietTonen: ["tekst of naam van het bord"],
+          })
+        : basis("pictogram", "GHS-gevarensymbool dat de leerling moet herkennen.", { symbool: q.pictogram }, {
+            verplichteElementen: ["rode ruit", PICTOGRAM_NAAM[q.pictogram]],
+            nietTonen: [q.pictogram, "naam van het symbool"],
+          }),
     );
   }
   if (q.maatcilinder) {

@@ -8,6 +8,7 @@ export const KEURING_CHECKS = [
   "leesbaar",
   "juiste_stijl",
   "veilig_en_vakinhoudelijk_juist",
+  "geen_tegenspraak_met_vraag",
 ] as const;
 
 export type KeuringCheck = (typeof KEURING_CHECKS)[number];
@@ -27,6 +28,7 @@ const CHECK_TEKST: Record<KeuringCheck, string> = {
   leesbaar: "figuur is niet goed leesbaar",
   juiste_stijl: "stijl klopt niet",
   veilig_en_vakinhoudelijk_juist: "onveilig of vakinhoudelijk onjuist",
+  geen_tegenspraak_met_vraag: "beeld spreekt de vraag tegen (afstand, positie, handeling of aantal)",
 };
 
 /**

@@ -30,7 +30,19 @@ export type GhsSymbool =
   | "explosief"
   | "oxiderend"
   | "gas-onder-druk"
-  | "gezondheidsgevaar";
+  | "gezondheidsgevaar"
+  // Veiligheidsborden (NEN-EN-ISO 7010), ook zelf getekend.
+  | "gebod-gehoorbescherming"
+  | "gebod-oogbescherming"
+  | "gebod-handschoenen"
+  | "gebod-veiligheidsschoenen"
+  | "gebod-stofmasker"
+  | "gebod-helm"
+  | "waarschuwing-algemeen"
+  | "waarschuwing-elektriciteit"
+  | "waarschuwing-heet"
+  | "verbod-roken"
+  | "verbod-open-vuur";
 
 export const GHS_SYMBOLEN: GhsSymbool[] = [
   "ontvlambaar",
@@ -42,7 +54,46 @@ export const GHS_SYMBOLEN: GhsSymbool[] = [
   "oxiderend",
   "gas-onder-druk",
   "gezondheidsgevaar",
+  "gebod-gehoorbescherming",
+  "gebod-oogbescherming",
+  "gebod-handschoenen",
+  "gebod-veiligheidsschoenen",
+  "gebod-stofmasker",
+  "gebod-helm",
+  "waarschuwing-algemeen",
+  "waarschuwing-elektriciteit",
+  "waarschuwing-heet",
+  "verbod-roken",
+  "verbod-open-vuur",
 ];
+
+/** Veiligheidsbord (gebod/waarschuwing/verbod) in plaats van een GHS-gevarensymbool. */
+export function isVeiligheidsbord(s: GhsSymbool | string | undefined): boolean {
+  return /^(gebod|waarschuwing|verbod)-/.test(s ?? "");
+}
+
+export const PICTOGRAM_NAAM: Record<GhsSymbool, string> = {
+  ontvlambaar: "GHS02 ontvlambaar (vlam)",
+  giftig: "GHS06 giftig (doodshoofd met gekruiste botten)",
+  bijtend: "GHS05 bijtend (vloeistof uit twee buisjes op een hand en een plaat)",
+  milieu: "GHS09 milieugevaarlijk (dode boom en dode vis)",
+  schadelijk: "GHS07 schadelijk/irriterend (uitroepteken)",
+  explosief: "GHS01 explosief (ontploffende bom)",
+  oxiderend: "GHS03 oxiderend (vlam boven een cirkel)",
+  "gas-onder-druk": "GHS04 gas onder druk (gasfles)",
+  gezondheidsgevaar: "GHS08 gezondheidsgevaar (silhouet van een persoon met een sterretje op de borst)",
+  "gebod-gehoorbescherming": "gebodsbord gehoorbescherming verplicht (blauwe cirkel, hoofd met oorkappen)",
+  "gebod-oogbescherming": "gebodsbord oogbescherming verplicht (blauwe cirkel, hoofd met veiligheidsbril)",
+  "gebod-handschoenen": "gebodsbord handschoenen verplicht (blauwe cirkel, handschoen)",
+  "gebod-veiligheidsschoenen": "gebodsbord veiligheidsschoenen verplicht (blauwe cirkel, schoen)",
+  "gebod-stofmasker": "gebodsbord stofmasker verplicht (blauwe cirkel, hoofd met mondkapje)",
+  "gebod-helm": "gebodsbord veiligheidshelm verplicht (blauwe cirkel, hoofd met helm)",
+  "waarschuwing-algemeen": "waarschuwingsbord algemeen gevaar (gele driehoek, uitroepteken)",
+  "waarschuwing-elektriciteit": "waarschuwingsbord elektrische spanning (gele driehoek, bliksempijl)",
+  "waarschuwing-heet": "waarschuwingsbord heet oppervlak (gele driehoek, warmtegolfjes boven een oppervlak)",
+  "verbod-roken": "verbodsbord roken verboden (rode cirkel met streep, sigaret)",
+  "verbod-open-vuur": "verbodsbord open vuur verboden (rode cirkel met streep, lucifer met vlam)",
+};
 
 export interface RttiVerdeling {
   R: number;
@@ -305,6 +356,28 @@ export interface GegenereerdeToets {
   metPlaatjes?: boolean;
   /** Plaatjeskeuze: automatisch (standaard), met (verplicht figuren) of zonder. */
   plaatjes?: PlaatjesModus;
+  /** Verplichte inhoudscontrole (berekend): wat gevonden, gerepareerd of vervangen is. */
+  controle?: ControleLog;
+}
+
+export interface ControleBevinding {
+  nummer: number;
+  code: string;
+  uitleg: string;
+}
+
+export interface ControleLog {
+  /** Aantal vragen dat onafhankelijk is nagerekend (0 = controle niet gelukt). */
+  gecontroleerd: number;
+  gevonden: ControleBevinding[];
+  /** Vragen die na reparatie of vervanging schoon zijn. */
+  opgelost: number[];
+  vervangen: number[];
+  /** Nog open na reparatie (docent moet kijken). */
+  blijft: ControleBevinding[];
+  paragrafen?: { code: string; titel: string; vragen: number[] }[];
+  duurMs?: number;
+  fout?: string;
 }
 
 export interface GenerateInput {

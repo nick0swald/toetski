@@ -28,7 +28,7 @@ export function kwaliteitAlsTekst(toets: GegenereerdeToets): string {
     "let op": "LET OP",
   };
   const regels = [
-    `Kwaliteitscheck van Ares058 Toetsmaker bij «${toets.meta.titel}»`,
+    `Kwaliteitscheck van Aeres Toetsmaker bij «${toets.meta.titel}»`,
     k.samenvatting ? `Samenvatting: ${k.samenvatting}` : "",
     "",
     "Pas de toets aan op punten met LET OP, AANDACHT of ONTBREEKT. Wat VOLDOET, laat staan.",
