@@ -87,19 +87,28 @@ export const vraagSchema = z.object({
   leerdoel: z.string().default(""),
   punten: z.coerce.number().min(0).default(1),
   /** Situatieschets/inleiding vóór de stam (Cito-volgorde). */
-  context: z.string().optional().default(""),
+  context: z
+    .string()
+    .nullish()
+    .transform((s) => s ?? ""),
   /** Titel van een doorlopende context (zelfde titel bij alle vragen van die context). */
   contextTitel: z
     .string()
-    .optional()
+    .nullish()
     .transform((s) => (s?.trim() ? s.trim().slice(0, 60) : undefined)),
   /** Vraagtype uit de NaSk-taxonomie (id), anders OVERIG. */
   vraagtype: z
     .string()
-    .optional()
+    .nullish()
     .transform((s) => (s?.trim() ? s.trim().toUpperCase().slice(0, 20) : undefined)),
-  rttiUitleg: z.string().optional(),
-  bronvermelding: z.string().optional(),
+  rttiUitleg: z
+    .string()
+    .nullish()
+    .transform((s) => s || undefined),
+  bronvermelding: z
+    .string()
+    .nullish()
+    .transform((s) => s || undefined),
   /** Vraagtekst; bij lege context: eerst inleiding, daarna vraagzin. */
   stam: z.string().default(""),
   opties: z
@@ -186,7 +195,7 @@ export const generatedPayloadSchema = z.object({
   vragen: z.array(vraagSchema).min(3),
   nakijkmodel: z.array(nakijkSchema).min(3),
   /** Ids van de echte examencontexten die voor het blok 'Examenvragen' zijn meegegeven (klas 4). */
-  examenContexten: z.array(z.string()).optional(),
+  examenContexten: z.array(z.string()).nullish().transform((x) => x ?? undefined),
   cesuur: z.object({
     nTerm: z.coerce.number().default(1),
     cesuurPunten: z.coerce.number(),

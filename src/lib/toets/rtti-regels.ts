@@ -68,8 +68,8 @@ export function rttiVolgensRegels(q: Pick<Vraag, "type" | "stam" | "context" | "
   const nieuw = Boolean(q.contextTitel?.trim()) || (q.context ?? "").split(/\s+/).length >= 25;
 
   if (INZICHT.test(op)) {
-    r = RTTI_VOLGORDE.indexOf(basis) >= 2 || REDENEER.test(op) || punten >= 2 ? "I" : "T2";
-    redenen.push(r === "I" ? (punten >= 2 && !REDENEER.test(op) ? "redeneerketen van meer stappen" : "redeneren/verklaren") : "uitleggen van een geoefend verband");
+    r = RTTI_VOLGORDE.indexOf(basis) >= 2 || REDENEER.test(op) ? "I" : "T2";
+    redenen.push(r === "I" ? "redeneren/verklaren" : "geleerd verband uitleggen in deze situatie");
   } else if (reken) {
     if (FORMULE_GEGEVEN.test(stam) && punten <= 2) {
       r = "T1";

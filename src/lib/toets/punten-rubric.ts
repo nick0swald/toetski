@@ -126,9 +126,11 @@ export function repareerPunten(
       // anders de standaard driedeling.
       const netjes = eigen.length >= 2 && eigen.length <= 4 && eigen.every((c) => c.punt >= 1 && !fractioneel(c.punt)) && som >= 2 && som <= 4;
       // Een punt voor "gegevens en gevraagde" bestaat niet: dan de standaardrubriek met hetzelfde totaal.
-      const verdeling = netjes && !eigen.some((c) => isGegevensCriterium(c.criterium))
+      const gegevensPunt = eigen.some((c) => isGegevensCriterium(c.criterium));
+      // Het gegevens-punt vervalt (niet omzetten naar een ander punt): 3p met gegevens → 2p formule + rest.
+      const verdeling = netjes && !gegevensPunt
         ? eigen.map((c) => ({ ...c }))
-        : rekenRubriek(netjes ? som : heel(q.punten || 3) <= 2 ? 2 : 3);
+        : rekenRubriek(netjes ? Math.max(2, som - 1) : heel(q.punten || 3) <= 2 ? 2 : 3);
       q.punten = verdeling.reduce((s, c) => s + c.punt, 0);
       n.puntenverdeling = verdeling;
       n.nietToekennen = rekenAftrek(n.nietToekennen);

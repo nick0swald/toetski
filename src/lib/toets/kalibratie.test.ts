@@ -202,11 +202,11 @@ describe("nakijken in de stijl van de docent + examenregel", () => {
     assert.ok(isGegevensCriterium("gegevens en gevraagde noteren"));
     assert.ok(!isGegevensCriterium("gebruik van de formule"));
   });
-  it("rubriek met een gegevens-punt wordt vervangen, totaal blijft", () => {
+  it("rubriek met een gegevens-punt: dat punt vervalt (3p → 2p formule + rest)", () => {
     const q = v(1, { type: "berekening", stam: "Bereken de druk.", punten: 3 });
     const n: NakijkItem = { nummer: 1, modelantwoord: "p = 20 N/cm²", puntenverdeling: [{ punt: 1, criterium: "gegevens en gevraagde" }, { punt: 1, criterium: "formule p = F : A" }, { punt: 1, criterium: "antwoord met eenheid" }], nietToekennen: [] };
     const out = repareerPunten([q], [n]);
-    assert.equal(out.vragen[0]!.punten, 3);
+    assert.equal(out.vragen[0]!.punten, 2);
     assert.ok(!out.nakijkmodel[0]!.puntenverdeling.some((c) => /gegevens/.test(c.criterium)));
     assert.ok(out.nakijkmodel[0]!.nietToekennen!.includes(DOORREKENEN));
     assert.match(DOORREKENEN, /samen hooguit 1 punt/);
@@ -242,5 +242,48 @@ describe("lange toetsen in twee delen", () => {
     assert.deepEqual(s.vragen.map((q) => q.nummer), [1, 2, 3, 4]);
     assert.equal(s.meta, "b");
     assert.deepEqual(voegDelenSamen(null, b).vragen.length, 2);
+  });
+});
+
+import { maatcilinderPastBijVraag } from "./types.ts";
+import { plaatsMaatcilinders } from "./bron-figuren.ts";
+describe("maatcilinder alleen bij volumevragen", () => {
+  it("veer-vraag verliest een losse maatcilinder", () => {
+    const q = v(1, { stam: "Hoeveel rekt de veer uit bij 9 N?", maatcilinder: { maxMl: 50, standen: [{ label: "A", ml: 2 }] } });
+    assert.ok(!maatcilinderPastBijVraag(q));
+    assert.equal(plaatsMaatcilinders([q])[0]!.maatcilinder, undefined);
+    assert.ok(maatcilinderPastBijVraag(v(2, { stam: "Lees het volume af in mL." })));
+  });
+});
+
+import { schoonIntro } from "./examenvragen.ts";
+import { deelKalibratie, trimOverschot } from "./delen.ts";
+describe("ronde 6: examencontext en overschot", () => {
+  it("titel in context → contextTitel + intro zonder figuurverwijzing", () => {
+    const c = CSE_CONTEXTEN.find((x) => x.leerweg === "GT" && x.domeinen.includes("geluid"))!;
+    const out = markeerExamenvragen([v(1, { context: `Examenvragen ${c.titel}`, stam: "Bereken de tijd." }), v(2, { context: `Examenvragen ${c.titel}` })], [c]);
+    assert.equal(out[0]!.contextTitel, c.titel);
+    assert.doesNotMatch(out[0]!.context ?? "", /Examenvragen/);
+    assert.ok((out[0]!.context ?? "").length > 20);
+    assert.ok(!/afbeelding|uitwerkbijlage/i.test(out[0]!.context ?? ""));
+    assert.equal(out[1]!.bronvermelding, bronLabel(c));
+    assert.equal(schoonIntro("Anna fietst. Je ziet een afbeelding van de fiets. Ze remt."), "Anna fietst. Ze remt.");
+  });
+  it("deelkalibratie: gesloten 100% 1p, open zonder MC", () => {
+    const k = kalibratie(2, "KB", 45);
+    const plan = deelPlan(k, k.items, k.punten)!;
+    const g = deelKalibratie(k, plan[0]!, k.items);
+    const o = deelKalibratie(k, plan[1]!, k.items);
+    assert.equal(g.items, plan[0]!.aantal);
+    assert.equal(o.vorm.mc + o.vorm.jn, 0);
+    assert.ok(o.pct1p < k.pct1p);
+    assert.match(kalibratiePrompt(o), new RegExp(`Omvang: ${plan[1]!.aantal} vragen`));
+  });
+  it("trimOverschot haalt overtollige open vragen uit de drukste paragraaf", () => {
+    const vr = Array.from({ length: 30 }, (_, i) => v(i + 1, { domein: i < 20 ? "6.1" : "6.2", punten: 2 }));
+    const t = trimOverschot(vr, vr.map((q) => nk(q.nummer)), 20, 30, 0);
+    assert.ok(t.vragen.length <= 22);
+    assert.equal(t.nakijkmodel.length, t.vragen.length);
+    assert.ok(t.vragen.some((q) => q.domein === "6.2"));
   });
 });

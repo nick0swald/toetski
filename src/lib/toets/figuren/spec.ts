@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { symboolSoort } from "./schakelsymbolen.ts";
-import { GHS_SYMBOLEN, PICTOGRAM_NAAM, isVeiligheidsbord, pictogramPastBijVraag, type FiguurSoort, type FiguurSpec, type GhsSymbool, type JsonWaarde, type Vraag } from "../types.ts";
+import { GHS_SYMBOLEN, PICTOGRAM_NAAM, isVeiligheidsbord, maatcilinderPastBijVraag, pictogramPastBijVraag, type FiguurSoort, type FiguurSpec, type GhsSymbool, type JsonWaarde, type Vraag } from "../types.ts";
 
 export const FIGUUR_SOORTEN: FiguurSoort[] = [
   "lijngrafiek",
@@ -370,7 +370,7 @@ export function legacySpecs(q: Vraag): FiguurSpec[] {
           }),
     );
   }
-  if (q.maatcilinder) {
+  if (q.maatcilinder && maatcilinderPastBijVraag(q)) {
     const m = q.maatcilinder;
     out.push(
       basis("maatcilinder", "Maatcilinder waarop de leerling vloeistofstanden afleest.", { maxMl: m.maxMl, standen: m.standen }, {

@@ -26,7 +26,8 @@ import {
   type Kalibratie,
 } from "./kalibratie";
 import { CSE_CONTEXTEN } from "./cse-contexten";
-import { deelOpdracht, deelPlan, voegDelenSamen } from "./delen";
+import { herstelGroepen } from "./context-groepen";
+import { deelKalibratie, deelOpdracht, deelPlan, trimOverschot, voegDelenSamen } from "./delen";
 import {
   aantalExamenContexten,
   examenvragenPrompt,
@@ -167,7 +168,7 @@ async function callControle(system: string, user: string): Promise<string> {
   return body.choices?.[0]?.message?.content ?? "";
 }
 
-async function callGrok(messages: { role: string; content: string }[], maxTokens = 4000): Promise<string> {
+async function callGrok(messages: { role: string; content: string }[], maxTokens = 4000, timeoutMs = 180000): Promise<string> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
   const res = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -176,7 +177,7 @@ async function callGrok(messages: { role: string; content: string }[], maxTokens
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    signal: AbortSignal.timeout(180000),
+    signal: AbortSignal.timeout(Math.max(5000, timeoutMs)),
     body: JSON.stringify({
       model: GROK_TEKST_MODEL,
       temperature: 0.4,
@@ -369,32 +370,49 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
   const plan = k && !data.feedback?.trim() ? deelPlan(k, data.aantalVragen, data.doelPunten) : null;
   let payload: GeneratedPayload;
   if (plan) {
+    const deadline = Date.now() + 80_000;
     const [a, b] = await Promise.all(
-      plan.map((d, i) =>
-        vraagPayload(system, `${deelOpdracht(d, plan[1 - i]!)}\n\n${basisPrompt}\n\n${deelOpdracht(d, plan[1 - i]!)}`, d.aantal).catch(() => null),
-      ),
+      plan.map((d, i) => {
+        // Elk deel krijgt zijn eigen aantallen en vormmix, zodat het model niet de hele toets maakt.
+        const kd = deelKalibratie(k!, d, data.aantalVragen);
+        const deelData = { ...data, aantalVragen: d.aantal, doelPunten: d.punten, antwoordenmateriaal: antwoorden };
+        const deelKal = { k: kd, extra: d.soort === "gesloten" ? vraagtypenPrompt(bron, kd.leerjaar, kd.leerweg) : kal!.extra };
+        const opdracht = deelOpdracht(d, plan[1 - i]!);
+        return vraagPayload(system, `${opdracht}\n\n${userPrompt(deelData, bron, deelKal)}\n\n${opdracht}`, d.aantal, deadline).catch((e) => {
+          console.warn(`[generate] deel ${d.soort} mislukt:`, e instanceof Error ? e.message.slice(0, 200) : e);
+          return null;
+        });
+      }),
     );
     if (!b && (a?.vragen.length ?? 0) < 8) throw new Error("De AI-respons was onvolledig. Probeer opnieuw.");
     payload = voegDelenSamen(a, b);
   } else {
     payload = await vraagPayload(system, basisPrompt, data.aantalVragen);
   }
+  // Ruim meer vragen dan het doel (model negeerde het aantal): overschot eraf vóór het afwerken.
+  if (k && data.lengteAuto && payload.vragen.length > data.aantalVragen + 3) {
+    const t = trimOverschot(payload.vragen, payload.nakijkmodel, data.aantalVragen, data.doelPunten, Math.round(k.gesloten * data.aantalVragen));
+    payload = { ...payload, vragen: t.vragen, nakijkmodel: t.nakijkmodel };
+  }
   if (examen.length) payload.examenContexten = examen.map((c) => c.id);
   return { bron, payload };
 }
 
 /** Eén generatie-aanroep met één herkansing voor kapotte JSON. */
-async function vraagPayload(system: string, prompt: string, aantal: number): Promise<GeneratedPayload> {
+async function vraagPayload(system: string, prompt: string, aantal: number, deadline?: number): Promise<GeneratedPayload> {
   const messages = [
     { role: "system", content: system },
     { role: "user", content: prompt },
   ];
   const maxTok = tokensVoorAantalVragen(aantal);
-  let raw = await callGrok(messages, maxTok);
+  const over = () => (deadline ? deadline - Date.now() : 180000);
+  let raw = await callGrok(messages, maxTok, over());
   let parsed: unknown;
   try {
     parsed = parseAiJson(raw);
-  } catch {
+  } catch (err) {
+    // Herkansing alleen als er nog tijd is (100 s-budget).
+    if (over() < 25000) throw err;
     raw = await callGrok(
       [
         ...messages,
@@ -402,6 +420,7 @@ async function vraagPayload(system: string, prompt: string, aantal: number): Pro
         { role: "user", content: "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object, zonder markdown. Kap niet af." },
       ],
       maxTok,
+      over(),
     );
     parsed = parseAiJson(raw);
   }
@@ -427,7 +446,8 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
   data = metKalibratieLengte(data, kal);
   const examenCtx = CSE_CONTEXTEN.filter((c) => payload.examenContexten?.includes(c.id));
   const rttiDoel = normaliseer(data.rttiDoel);
-  const vragenRaw = ruweVragen(payload);
+  // Examencontexten vóór de controle herkennen (groep + intro), zodat controle en volgorde ze als blok zien.
+  const vragenRaw = herstelGroepen(markeerExamenvragen(ruweVragen(payload), examenCtx));
   const vakNaam = data.vak?.trim() || payload.meta.vak || "";
   const skipMcEerst = wilGemengdeOfOpenEerst(`${data.extraEisen ?? ""}\n${data.feedback ?? ""}`);
   const af = await werkVragenAf({
