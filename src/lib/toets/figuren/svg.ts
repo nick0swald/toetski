@@ -587,8 +587,12 @@ function hefboom(spec: FiguurSpec): { svg: string; W: number; H: number } {
       const arm = Math.abs(k.positie - d.draaipunt);
       out.push(lijn(dx, y - 6, dx, y + 6, { w: 1.4 }), lijn(x, y - 6, x, y + 6, { w: 1.4 }));
       out.push(pijl((dx + x) / 2, y, x, y, INK, 1.4), pijl((dx + x) / 2, y, dx, y, INK, 1.4));
-      out.push(`<rect x="${(dx + x) / 2 - 30}" y="${y - 10}" width="60" height="16" fill="#ffffff"/>`);
-      out.push(tekst((dx + x) / 2, y + 4.5, `${nl(arm)} ${d.eenheid}`, { size: 12 }));
+      // Arm met naam (r1, r2 …) zodat de maat bij de juiste kracht hoort.
+      const armNaam = `r${k.label.match(/\d/)?.[0] ?? i + 1}`;
+      const maat = `${armNaam} = ${nl(arm)} ${d.eenheid}`;
+      const bw = Math.max(60, maat.length * 7.2);
+      out.push(`<rect x="${(dx + x) / 2 - bw / 2}" y="${y - 10}" width="${bw}" height="16" fill="#ffffff"/>`);
+      out.push(tekst((dx + x) / 2, y + 4.5, maat, { size: 12 }));
     });
   }
   return { svg: wrap(W, H, out.join(""), spec.titel), W, H };
