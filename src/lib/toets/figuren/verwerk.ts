@@ -196,7 +196,7 @@ export async function verwerkFiguren(
         const nieuw: Vraag = zonderLegacyFiguren({ ...q, stam: veiligeNieuweStam(q.stam, u.nieuweStam) ?? q.stam, figuur });
         delete nieuw.figuurId;
         vragen = vragen.map((v) => (v.nummer === job.nummer ? nieuw : v));
-        items.push({ nummer: job.nummer, soort: figuur.soort, bron, status: "go", pogingen: u.pogingen, redenen: figuur.keuring.redenen.slice(0, 3), figuurId: figuur.id });
+        items.push({ nummer: job.nummer, soort: figuur.soort, bron, status: "go", pogingen: u.pogingen, redenen: figuur.keuring.redenen.slice(0, 3), figuurId: figuur.id, ...(u.uitBank ? { uitBank: true } : {}) });
         return;
       }
       const redenen = u.status === "gedropt" ? u.redenen : ["goedgekeurde figuur kwam beschadigd aan (hash klopt niet)"];

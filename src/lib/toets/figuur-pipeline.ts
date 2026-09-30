@@ -86,11 +86,12 @@ export const maakFiguur = createServerFn({ method: "POST" })
     try {
       const { spec, fout } = parseFiguurSpec(data.spec);
       if (!spec) return { status: "gedropt", pogingen: 0, redenen: [`spec ongeldig: ${fout}`], log: [] };
-      const [{ maakFiguurMetKeuring }, png, jpeg, xai] = await Promise.all([
+      const [{ maakFiguurMetKeuring }, png, jpeg, xai, bank] = await Promise.all([
         import("./figuren/pijplijn"),
         import("./figuren/png.server"),
         import("./figuren/jpeg.server"),
         import("./figuren/xai.server"),
+        import("./figuren/bank.server"),
       ]);
       return await maakFiguurMetKeuring(
         {
@@ -109,6 +110,7 @@ export const maakFiguur = createServerFn({ method: "POST" })
           vraagJson: (system, user, timeoutMs) => xai.vraagJson(system, user, { timeoutMs, maxTokens: 3000 }),
           nu: () => Date.now(),
           nieuwId: () => crypto.randomUUID(),
+          bank: bank.maakServerBank(),
         },
         { budgetMs: data.budgetMs },
       );
@@ -121,3 +123,9 @@ export const maakFiguur = createServerFn({ method: "POST" })
       };
     }
   });
+
+/** Status van de gedeelde figuurbank (welke opslag, aantal goedgekeurde figuren). */
+export const figuurBankStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const { bankStatus } = await import("./figuren/bank.server");
+  return bankStatus();
+});
