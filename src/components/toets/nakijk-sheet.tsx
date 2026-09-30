@@ -1,6 +1,7 @@
 import { RTTI_META } from "@/lib/toets/constants";
 import type { GegenereerdeToets } from "@/lib/toets/types";
 import { figuurIsGeldig } from "@/lib/toets/figuren/bevriezing";
+import { leerdoelDekking } from "@/lib/toets/leerdoelen-plan";
 
 export function NakijkSheet({
   toets,
@@ -13,6 +14,7 @@ export function NakijkSheet({
 }) {
   const figuurNr = new Map<string, number>();
   for (const q of toets.vragen) if (figuurIsGeldig(q.figuur)) figuurNr.set(q.figuur.id, figuurNr.size + 1);
+  const ldPerVraag = leerdoelDekking(toets.vragen, toets.leerdoelen).perVraag;
   return (
     <article className="rounded-[var(--radius-xl)] bg-paper p-6 sm:p-10">
       <h2 className="text-2xl font-bold text-brand">Nakijkmodel · {toets.meta.titel}</h2>
@@ -20,14 +22,15 @@ export function NakijkSheet({
       <ol className="mt-6 grid gap-6">
         {toets.nakijkmodel.map((n) => {
           const q = toets.vragen.find((v) => v.nummer === n.nummer);
+          const ld = ldPerVraag.get(n.nummer);
           return (
             <li key={n.nummer} className="border-t border-border pt-4">
               <p className="font-semibold text-brand">
                 Vraag {n.nummer} ({q?.punten ?? "?"}p) {q ? RTTI_META[q.rtti].kort : ""}
               </p>
-              {q?.rttiUitleg || q?.bronvermelding ? (
+              {q?.rttiUitleg || q?.bronvermelding || ld ? (
                 <p className="mt-1 text-xs italic text-muted">
-                  {[q.rttiUitleg ? `RTTI ${q.rttiUitleg}` : "", q.vraagtype && q.vraagtype !== "OVERIG" ? `type ${q.vraagtype}` : "", q.bronvermelding ?? ""].filter(Boolean).join(" · ")}
+                  {[ld ? `leerdoel ${ld}` : "", q?.rttiUitleg ? `RTTI ${q.rttiUitleg}` : "", q?.vraagtype && q.vraagtype !== "OVERIG" ? `type ${q.vraagtype}` : "", q?.bronvermelding ?? ""].filter(Boolean).join(" · ")}
                 </p>
               ) : null}
               {q && figuurIsGeldig(q.figuur) ? (

@@ -9,6 +9,7 @@ import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
 import { extractParagrafen } from "./leerdoelen";
+import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan } from "./leerdoelen-plan";
 import { bouwKwaliteit } from "./kwaliteit-check";
 import { CONTROLE_MODEL as CONTROLE_MODEL_NAAM, TEKST_MODEL } from "./figuren/modellen";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
@@ -332,6 +333,20 @@ function paragrafenRegel(bron: string, antwoorden?: string): string {
 }
 
 type GenerateData = z.infer<typeof generateInputSchema>;
+
+/** Officiële leerdoelen (NaSk): deterministisch uit hoofdstuk/onderwerp/lesstof; zelfde invoer → zelfde plan. */
+function leerdoelPlanVoor(data: GenerateData, k: Kalibratie | null, bron: string) {
+  if (!k) return null;
+  return maakLeerdoelPlan({
+    titel: data.titel ?? "",
+    bron,
+    antwoorden: data.antwoordenmateriaal ?? "",
+    leerjaar: k.leerjaar,
+    leerweg: k.leerweg,
+    doelPunten: data.doelPunten,
+    aantalVragen: data.aantalVragen,
+  });
+}
 type GeneratedPayload = z.infer<typeof generatedPayloadSchema>;
 
 /** Stap 1: lesstof ophalen + modelaanroep → ruwe vragen (nog niet afgewerkt). */
@@ -351,10 +366,12 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
     k && magExamenvragen(k.leerjaar, k.examen) && data.examenvragen !== false && !wilGeenExamenvragen(`${data.extraEisen ?? ""}\n${data.feedback ?? ""}`)
       ? kiesExamenContexten(bron, k.leerweg, aantalExamenContexten(k.leerweg, k.items))
       : [];
+  const plan = leerdoelPlanVoor({ ...data, antwoordenmateriaal: antwoorden }, k, bron);
   const kal = k
     ? {
         k,
         extra: [
+          leerdoelenPrompt(plan),
           vraagtypenPrompt(bron, k.leerjaar, k.leerweg),
           novaPrompt(data.titel ?? "", bron, k.leerjaar, k.leerweg, extractParagrafen(bron, antwoorden).length >= 2),
           examenvragenPrompt(examen),
@@ -366,17 +383,17 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
   const system = bouwSystemPrompt(data.stuurdocument);
   const basisPrompt = userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron, kal);
   // Lange NaSk-toetsen: gesloten en open deel parallel (binnen 100 s).
-  const plan = k && !data.feedback?.trim() ? deelPlan(k, data.aantalVragen, data.doelPunten) : null;
+  const delen = k && !data.feedback?.trim() ? deelPlan(k, data.aantalVragen, data.doelPunten) : null;
   let payload: GeneratedPayload;
-  if (plan) {
+  if (delen) {
     const deadline = Date.now() + 80_000;
     const [a, b] = await Promise.all(
-      plan.map((d, i) => {
+      delen.map((d, i) => {
         // Elk deel krijgt zijn eigen aantallen en vormmix, zodat het model niet de hele toets maakt.
         const kd = deelKalibratie(k!, d, data.aantalVragen);
         const deelData = { ...data, aantalVragen: d.aantal, doelPunten: d.punten, antwoordenmateriaal: antwoorden };
-        const deelKal = { k: kd, extra: d.soort === "gesloten" ? vraagtypenPrompt(bron, kd.leerjaar, kd.leerweg) : kal!.extra };
-        const opdracht = deelOpdracht(d, plan[1 - i]!);
+        const deelKal = { k: kd, extra: d.soort === "gesloten" ? [leerdoelenPrompt(plan, true), vraagtypenPrompt(bron, kd.leerjaar, kd.leerweg)].filter(Boolean).join("\n") : kal!.extra };
+        const opdracht = deelOpdracht(d, delen[1 - i]!);
         return vraagPayload(system, `${opdracht}\n\n${userPrompt(deelData, bron, deelKal)}\n\n${opdracht}`, d.aantal, deadline).catch((e) => {
           console.warn(`[generate] deel ${d.soort} mislukt:`, e instanceof Error ? e.message.slice(0, 200) : e);
           return null;
@@ -477,7 +494,10 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
         Math.min(8000, Math.max(2000, Math.ceil(prompt.length / 3))),
       ).catch(() => null),
   });
-  const vragen = kal ? markeerExamenvragen(normaliseerVraagtypen(af.vragen), examenCtx) : af.vragen;
+  const leerdoelPlan = leerdoelPlanVoor(data, kal, bron);
+  const gelabeld = kal ? herstelLeerdoelen(markeerExamenvragen(normaliseerVraagtypen(af.vragen), examenCtx), leerdoelPlan) : { vragen: af.vragen, hersteld: [] };
+  const vragen = gelabeld.vragen;
+  if (leerdoelPlan && gelabeld.hersteld.length) leerdoelPlan.hersteld = gelabeld.hersteld;
   const nakijkmodel = af.nakijkmodel;
   const max = totaalPunten(vragen);
   const cijferNorm = data.cijferNorm;
@@ -515,7 +535,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       formule: formuleTekst(cijferNorm, max),
     },
     matrijs: bouwMatrijs(vragen, rttiDoel),
-    kwaliteit: (kal ? (kw: GegenereerdeToets["kwaliteit"]) => annoteerKalibratie(kw, vragen, kal, bron) : (kw: GegenereerdeToets["kwaliteit"]) => kw)(annoteerMcAandeel(
+    kwaliteit: (kal ? (kw: GegenereerdeToets["kwaliteit"]) => annoteerLeerdoelen(annoteerKalibratie(kw, vragen, kal, bron), vragen, leerdoelPlan) : (kw: GegenereerdeToets["kwaliteit"]) => kw)(annoteerMcAandeel(
       bouwKwaliteit({
         vragen,
         nakijkmodel,
@@ -540,6 +560,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
     )),
   };
   if (af.controle) toets.controle = af.controle;
+  if (leerdoelPlan) toets.leerdoelen = leerdoelPlan;
   const modus = plaatjesModus(data);
   toets.plaatjes = modus;
   if (modus === "zonder") toets.metPlaatjes = false;
