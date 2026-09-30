@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { SCHOOL } from "./constants";
 import { cesuurPunten, formuleTekst } from "./cijfer";
 import { bouwMatrijs, normaliseer, somVerdeling, totaalPunten } from "./rtti";
@@ -128,6 +129,13 @@ async function callGrok(messages: { role: string; content: string }[], maxTokens
   return content;
 }
 
+/** Figuurregel in de prompt: terughoudend met plaatjes, of helemaal zonder. */
+export function figuurRegel(metPlaatjes: boolean): string {
+  return metPlaatjes
+    ? "Figuren: alleen als een figuur echt iets toevoegt (aflezen, herkennen, schakeling, krachten). 0 figuren is prima. Pictogramvraag: veld pictogram en beschrijf het symbool niet. Onderdompelen: veld maatcilinder met af te lezen standen. Figuren passen bij Nova NaSk (VMBO): spanningsmeter parallel over een lampje/weerstand, nooit over de bron; stroommeter in serie."
+    : "ZONDER PLAATJES: maak GEEN figuren — geen velden grafiek, schemaFiguur, pictogram of maatcilinder. Verwijs in geen enkele vraag naar een figuur, grafiek, afbeelding, plaatje, tekening of schema. Alle gegevens die nodig zijn staan in de tekst of in een tabel (veld tabel).";
+}
+
 function userPrompt(
   input: {
     titel?: string;
@@ -148,6 +156,7 @@ function userPrompt(
     feedback?: string;
     vorigeSamenvatting?: string;
     ronde?: number;
+    metPlaatjes?: boolean;
   },
   bron: string,
 ): string {
@@ -200,7 +209,7 @@ Puntenregels: MC/juist-onjuist max 1p (tenzij stam een extra opdracht stelt); ee
 MC-sleutel: het juiste antwoord mag op A, B, C of D staan (niet steeds dezelfde letter). De app husselt de opties daarna en zet de rubriek op "Juiste keuze <letter>". modelantwoord = letter + tekst (bijv. "C. 12 N"). Schrijf in puntenverdeling geen letter.
 Vraagstam-volgorde (Cito): EERST situatieschets/inleiding, DAARNA de vraagzin. NOOIT andersom. Optioneel veld context = inleiding vóór stam, alleen als die iets toevoegt.
 Volgorde vragen (standaard): EERST alle meerkeuze/juist-onjuist, DAARNA open/berekening/invul/bron. Alleen afwijken als Extra eisen dat expliciet vragen (open eerst / gemengde volgorde).
-NaSk/exacte vakken: minstens één ECHTE figuur (pictogram, maatcilinder, grafiek of schemaFiguur). Een tabel telt niet. Pictogramvraag: veld pictogram en beschrijf het symbool niet. Onderdompelen: veld maatcilinder met af te lezen standen.
+${figuurRegel(input.metPlaatjes !== false)}
 Kwaliteit in JSON: alleen een korte kwalitatieve opmerking. Verzin geen puntentotaal, RTTI-percentages, figuuraantal of "dekt alle leerdoelen" — de app rekent die zelf uit.
 Domein = paragraaf uit de leerdoelen (bijv. "2.1 Stoffen herkennen"), niet een losse deelvaardigheid. Zet PLUS in het leerdoel als het leerdoel PLUS is. Spelling: stofeigenschap.
 Versie: ${input.versie ?? "A"}
@@ -224,132 +233,178 @@ ${input.antwoordenmateriaal.trim()}
 }`;
 }
 
+type GenerateData = z.infer<typeof generateInputSchema>;
+type GeneratedPayload = z.infer<typeof generatedPayloadSchema>;
+
+/** Stap 1: lesstof ophalen + modelaanroep → ruwe vragen (nog niet afgewerkt). */
+async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload: GeneratedPayload }> {
+  let bron = data.bronmateriaal ?? "";
+  if (data.bronUrl?.trim()) {
+    const extra = await fetchBronUrl(data.bronUrl.trim());
+    bron = [bron, extra].filter(Boolean).join("\n\n");
+  }
+  bron = bron.slice(0, 100000);
+  const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, 100000);
+  if (!bron.trim()) throw new GebruikersFout("Plak lesstof, lever het leerlingboek in, of zet een openbare link.");
+  const messages = [
+    { role: "system", content: bouwSystemPrompt(data.stuurdocument) },
+    { role: "user", content: userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron) },
+  ];
+  const maxTok = tokensVoorAantalVragen(data.aantalVragen);
+  let raw = await callGrok(messages, maxTok);
+  let parsed: unknown;
+  try {
+    parsed = parseAiJson(raw);
+  } catch {
+    raw = await callGrok(
+      [
+        ...messages,
+        { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
+        {
+          role: "user",
+          content: "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object, zonder markdown. Kap niet af.",
+        },
+      ],
+      maxTok,
+    );
+    parsed = parseAiJson(raw);
+  }
+  return { bron, payload: generatedPayloadSchema.parse(parsed) };
+}
+
+class GebruikersFout extends Error {}
+
+/** Ruwe vragen uit de payload (genormaliseerd) — ook de basis voor de vroege beeldpijplijn. */
+export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
+  return payload.vragen.map((q, i) =>
+    normaliseerVraagTekst({
+      ...q,
+      nummer: q.nummer || i + 1,
+      opties: q.opties?.length ? q.opties : undefined,
+    }),
+  );
+}
+
+/** Stap 2: afwerken (reparatie, punten, MC-hussel, kwaliteit) → complete toets. */
+async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload): Promise<GegenereerdeToets> {
+  const rttiDoel = normaliseer(data.rttiDoel);
+  const vragenRaw = ruweVragen(payload);
+  const vakNaam = data.vak?.trim() || payload.meta.vak || "";
+  const skipMcEerst = wilGemengdeOfOpenEerst(`${data.extraEisen ?? ""}\n${data.feedback ?? ""}`);
+  const af = await werkVragenAf({
+    vragen: vragenRaw,
+    nakijkmodel: payload.nakijkmodel,
+    bron,
+    vak: vakNaam,
+    skipOrder: skipMcEerst,
+    figuren: data.metPlaatjes === false ? "geen" : "nodig",
+    repair: (prompt) =>
+      callGrok(
+        [
+          { role: "system", content: REPAIR_SYSTEM },
+          { role: "user", content: prompt },
+        ],
+        Math.min(8000, Math.max(2000, Math.ceil(prompt.length / 3))),
+      ).catch(() => null),
+  });
+  const vragen = af.vragen;
+  const nakijkmodel = af.nakijkmodel;
+  const max = totaalPunten(vragen);
+  const cijferNorm = data.cijferNorm;
+  const cesuurP = cesuurPunten(max, cijferNorm);
+  const toets: GegenereerdeToets = {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    bronmateriaal: bron,
+    extraEisen: data.extraEisen ?? "",
+    ronde: data.ronde ?? 1,
+    parentId: data.parentId,
+    feedback: data.feedback || undefined,
+    cijferNorm,
+    meta: {
+      ...payload.meta,
+      titel: data.titel?.trim() || payload.meta.titel || "Toets",
+      vak: data.vak?.trim() || payload.meta.vak || "Algemeen",
+      leerweg: payload.meta.leerweg ?? data.leerweg,
+      leerjaar: (Math.min(4, Math.max(1, Math.round(payload.meta.leerjaar ?? data.leerjaar))) || 2) as 1 | 2 | 3 | 4,
+      duurMinuten: payload.meta.duurMinuten || data.duurMinuten,
+      school: SCHOOL,
+      hulpmiddelen: payload.meta.hulpmiddelen,
+      instructies: payload.meta.instructies,
+      onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
+      versie: data.versie,
+      moeilijkheid: data.moeilijkheid,
+      extraTijd: payload.meta.extraTijd?.trim() || undefined,
+    },
+    vragen,
+    nakijkmodel,
+    cesuur: {
+      nTerm: 1,
+      cesuurPunten: cesuurP,
+      toelichting: payload.cesuur.toelichting,
+      formule: formuleTekst(cijferNorm, max),
+    },
+    matrijs: bouwMatrijs(vragen, rttiDoel),
+    kwaliteit: annoteerMcAandeel(
+      bouwKwaliteit({
+        vragen,
+        nakijkmodel,
+        bron,
+        vak: vakNaam,
+        rttiDoel,
+        llm: payload.kwaliteit,
+        issues: af.issues,
+      }),
+      vragen,
+      wilHogeMcShare({
+        bron,
+        extraEisen: data.extraEisen,
+        titel: data.titel || payload.meta.titel,
+        vak: data.vak || payload.meta.vak,
+        mcVragen: data.mcVragen,
+        openVragen: data.openVragen,
+      }),
+    ),
+  };
+  if (data.metPlaatjes === false) toets.metPlaatjes = false;
+  return toets;
+}
+
 export const generateToets = createServerFn({ method: "POST" })
   .validator((input: unknown) => generateInputSchema.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; toets: GegenereerdeToets } | { ok: false; error: string }> => {
     try {
-      let bron = data.bronmateriaal ?? "";
-      if (data.bronUrl?.trim()) {
-        const extra = await fetchBronUrl(data.bronUrl.trim());
-        bron = [bron, extra].filter(Boolean).join("\n\n");
-      }
-      bron = bron.slice(0, 100000);
-      const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, 100000);
-      if (!bron.trim()) {
-        return { ok: false, error: "Plak lesstof, lever het leerlingboek in, of zet een openbare link." };
-      }
-      const messages = [
-        { role: "system", content: bouwSystemPrompt(data.stuurdocument) },
-        { role: "user", content: userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron) },
-      ];
-      const maxTok = tokensVoorAantalVragen(data.aantalVragen);
-      let raw = await callGrok(messages, maxTok);
-      let parsed: unknown;
-      try {
-        parsed = parseAiJson(raw);
-      } catch {
-        raw = await callGrok(
-          [
-            ...messages,
-            { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
-            {
-              role: "user",
-              content:
-                "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object, zonder markdown. Kap niet af.",
-            },
-          ],
-          maxTok,
-        );
-        parsed = parseAiJson(raw);
-      }
-      const payload = generatedPayloadSchema.parse(parsed);
-      const rttiDoel = normaliseer(data.rttiDoel);
-      const vragenRaw = payload.vragen.map((q, i) =>
-        normaliseerVraagTekst({
-          ...q,
-          nummer: q.nummer || i + 1,
-          opties: q.opties?.length ? q.opties : undefined,
-        }),
-      );
-      const vakNaam = data.vak?.trim() || payload.meta.vak || "";
-      const skipMcEerst = wilGemengdeOfOpenEerst(
-        `${data.extraEisen ?? ""}\n${data.feedback ?? ""}`,
-      );
-      const af = await werkVragenAf({
-        vragen: vragenRaw,
-        nakijkmodel: payload.nakijkmodel,
-        bron,
-        vak: vakNaam,
-        skipOrder: skipMcEerst,
-        repair: (prompt) =>
-          callGrok(
-            [
-              { role: "system", content: REPAIR_SYSTEM },
-              { role: "user", content: prompt },
-            ],
-            Math.min(8000, Math.max(2000, Math.ceil(prompt.length / 3))),
-          ).catch(() => null),
-      });
-      const vragen = af.vragen;
-      const nakijkmodel = af.nakijkmodel;
-      const max = totaalPunten(vragen);
-      const cijferNorm = data.cijferNorm;
-      const cesuurP = cesuurPunten(max, cijferNorm);
-      const toets: GegenereerdeToets = {
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-        bronmateriaal: bron,
-        extraEisen: data.extraEisen ?? "",
-        ronde: data.ronde ?? 1,
-        parentId: data.parentId,
-        feedback: data.feedback || undefined,
-        cijferNorm,
-        meta: {
-          ...payload.meta,
-          titel: data.titel?.trim() || payload.meta.titel || "Toets",
-          vak: data.vak?.trim() || payload.meta.vak || "Algemeen",
-          leerweg: payload.meta.leerweg ?? data.leerweg,
-          leerjaar: (Math.min(4, Math.max(1, Math.round(payload.meta.leerjaar ?? data.leerjaar))) || 2) as 1 | 2 | 3 | 4,
-          duurMinuten: payload.meta.duurMinuten || data.duurMinuten,
-          school: SCHOOL,
-          hulpmiddelen: payload.meta.hulpmiddelen,
-          instructies: payload.meta.instructies,
-          onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
-          versie: data.versie,
-          moeilijkheid: data.moeilijkheid,
-          extraTijd: payload.meta.extraTijd?.trim() || undefined,
-        },
-        vragen,
-        nakijkmodel,
-        cesuur: {
-          nTerm: 1,
-          cesuurPunten: cesuurP,
-          toelichting: payload.cesuur.toelichting,
-          formule: formuleTekst(cijferNorm, max),
-        },
-        matrijs: bouwMatrijs(vragen, rttiDoel),
-        kwaliteit: annoteerMcAandeel(
-          bouwKwaliteit({
-            vragen,
-            nakijkmodel,
-            bron,
-            vak: vakNaam,
-            rttiDoel,
-            llm: payload.kwaliteit,
-            issues: af.issues,
-          }),
-          vragen,
-          wilHogeMcShare({
-            bron,
-            extraEisen: data.extraEisen,
-            titel: data.titel || payload.meta.titel,
-            vak: data.vak || payload.meta.vak,
-            mcVragen: data.mcVragen,
-            openVragen: data.openVragen,
-          }),
-        ),
-      };
-      return { ok: true, toets };
+      const { bron, payload } = await genereerRuw(data);
+      return { ok: true, toets: await rondAf(data, bron, payload) };
+    } catch (err) {
+      return { ok: false, error: err instanceof GebruikersFout ? err.message : vriendelijkeAiFout(err) };
+    }
+  });
+
+/** Stap 1 los (voor de snelle route: figuren starten zodra de vragen er zijn). */
+export const generateVragenRuw = createServerFn({ method: "POST" })
+  .validator((input: unknown) => generateInputSchema.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true; bron: string; payload: GeneratedPayload } | { ok: false; error: string }> => {
+    try {
+      return { ok: true, ...(await genereerRuw(data)) };
+    } catch (err) {
+      return { ok: false, error: err instanceof GebruikersFout ? err.message : vriendelijkeAiFout(err) };
+    }
+  });
+
+const afwerkInputSchema = z.object({
+  input: generateInputSchema,
+  bron: z.string().max(210000),
+  payload: z.unknown(),
+});
+
+/** Stap 2 los: afwerken + kwaliteit. Payload wordt opnieuw gevalideerd (komt van de client). */
+export const afwerkToets = createServerFn({ method: "POST" })
+  .validator((input: unknown) => afwerkInputSchema.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true; toets: GegenereerdeToets } | { ok: false; error: string }> => {
+    try {
+      const payload = generatedPayloadSchema.parse(data.payload);
+      return { ok: true, toets: await rondAf(data.input, data.bron, payload) };
     } catch (err) {
       return { ok: false, error: vriendelijkeAiFout(err) };
     }

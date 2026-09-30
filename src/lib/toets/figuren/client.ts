@@ -1,11 +1,11 @@
 import { maakFiguur, planFiguren } from "../figuur-pipeline";
-import type { VerwerkDeps } from "./verwerk";
+import type { FiguurGebeurtenis, VerwerkDeps } from "./verwerk";
 
 /** Koppelt de client-orkestratie aan de serverfuncties (één aanroep per figuur, parallel). */
-export function figuurDeps(voortgang?: (tekst: string) => void): VerwerkDeps {
+export function figuurDeps(voortgang?: (tekst: string) => void, gebeurtenis?: (e: FiguurGebeurtenis) => void): VerwerkDeps {
   return {
     plan: (input) => planFiguren({ data: input }),
-    maak: (opdracht) =>
+    maak: (opdracht, budgetMs) =>
       maakFiguur({
         data: {
           vraag: opdracht.vraag,
@@ -14,8 +14,10 @@ export function figuurDeps(voortgang?: (tekst: string) => void): VerwerkDeps {
           legacy: opdracht.legacy,
           verwijst: opdracht.verwijst,
           nieuweStam: opdracht.nieuweStam,
+          budgetMs: budgetMs == null ? undefined : Math.max(3_000, Math.min(165_000, Math.round(budgetMs))),
         },
       }),
     voortgang,
+    gebeurtenis,
   };
 }

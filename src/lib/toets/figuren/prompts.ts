@@ -39,7 +39,7 @@ const SPEC_UITLEG = `Een figuurspec is JSON:
     lijngrafiek: {"xLabel","yLabel","xEenheid","yEenheid","reeksen":[{"naam"?, "punten":[{"x":n,"y":n}]}],"toonPunten":bool}
     staafdiagram: {"yLabel","yEenheid","xLabel"?,"staven":[{"label","waarde":n}],"toonWaarden":bool}
     spreidingsdiagram: {"xLabel","yLabel","xEenheid","yEenheid","punten":[{"x","y"}]}
-    stroomkring: {"schakeling":"serie"|"parallel","bron":{"soort":"batterij"|"spanningsbron","label":"6 V"},"componenten":[{"soort":"lampje"|"weerstand"|"variabele weerstand"|"LDR"|"NTC"|"schakelaar-open"|"schakelaar-dicht"|"ampèremeter"|"motor"|"led"|"diode"|"zoemer"|"zekering","label"?}],"takken":[[component,...]] (alleen parallel),"voltmeters":[{"over":index|"bron","label"?}]}
+    stroomkring: {"schakeling":"serie"|"parallel","bron":{"soort":"batterij"|"spanningsbron","label":"6 V"},"componenten":[{"soort":"lampje"|"weerstand"|"variabele weerstand"|"LDR"|"NTC"|"schakelaar-open"|"schakelaar-dicht"|"ampèremeter"|"motor"|"led"|"diode"|"zoemer"|"zekering","label"?}],"takken":[[component,...]] (alleen parallel),"voltmeters":[{"over":index (onderdeel in componenten) | {"tak":t,"index":i} (onderdeel in een tak),"label"?}] (nooit over de bron)}
     katrol: {"type":"vast"|"los"|"takel","touwdelen":n,"last":string,"kracht":string}
     hefboom: {"lengte":n,"eenheid":"m","draaipunt":n (afstand vanaf linkeruiteinde),"krachten":[{"positie":n,"label":string,"richting":"omlaag"|"omhoog"}],"toonMaten":bool}
     krachtenschema: {"voorwerp":string,"krachten":[{"naam":"Fz","richting":"omhoog"|"omlaag"|"links"|"rechts","grootte":n,"eenheid":"N"}],"toonGrootte":bool,"schaal"?:n}
@@ -50,7 +50,9 @@ Grafieken en schema's tekent de app zelf exact uit "data". Een sfeerplaat is all
 
 export const PLANNER_SYSTEM = `Je bent beeldredacteur voor VMBO-toetsen (NaSk, methode Nova). Je bepaalt welke vragen een figuur NODIG hebben en schrijft per figuur eerst een precieze figuurspec. Je tekent niets.
 Regels:
-- Alleen een figuur als die de vraag echt beter of beantwoordbaar maakt (aflezen, schakeling herkennen, krachten, situatie). Niet bij elke vraag. Maximaal ${MAX_FIGUREN_PER_TOETS} figuren, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten.
+- Wees terughoudend. Alleen een figuur als die echt waarde toevoegt: de leerling moet iets aflezen of herkennen (grafiek, schakeling, krachten, maatcilinder), of de vraag is zonder figuur onduidelijk. Nooit "ter versiering". 0 figuren is een prima uitkomst: geef dan { "figuren": [] }. Meestal zijn 0–3 figuren genoeg; maximaal ${MAX_FIGUREN_PER_TOETS}, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten (alleen als de situatie echt helpt).
+- Sluit aan bij wat leerlingen in Nova NaSk (VMBO) zien: Nova-achtige opstellingen en symbolen, eenvoudige schema's, SI-eenheden met decimale komma.
+- Stroomkring (Nova): bron links; stroommeter (A) in serie; spanningsmeter (V) ALTIJD parallel over een lampje, weerstand of ander onderdeel — NOOIT over de spanningsbron of batterij (de bronspanning staat als label bij de bron). Bij parallelschakelingen mag een spanningsmeter over een onderdeel in een tak: "over": {"tak": t, "index": i}.
 - Getallen in de figuur moeten exact kloppen met de vraag en het nakijkmodel. Bereken het antwoord zelf na.
 - De figuur mag het antwoord NIET weggeven: zet het gevraagde in "nietTonen" en laat het uit data/labels weg.
 - Geef "nieuweStam" alleen als de stam moet gaan verwijzen naar de figuur, anders weglaten. "nieuweStam" is dan de VOLLEDIGE nieuwe stam: de hele oude stam met alle gegevens en de vraagzin, plus een korte verwijzing (bijv. "In de grafiek zie je ... . Lees af ..."). Nooit alleen "Bekijk de grafiek.". Verander nooit wat er gevraagd wordt of het antwoord.
@@ -80,6 +82,7 @@ Extra bij een stroomkring (schakelschema) — tel en controleer ELK symbool tege
 - Open schakelaar = twee OPEN (holle) contactcirkeltjes met een hendeltje dat schuin omhoog staat vanaf het ene contactpunt richting het andere. Gesloten schakelaar = twee OPEN (holle) contactcirkeltjes met een rechte, iets dikkere hendel ertussen. Twee dichte stippen op een doorlopende draad lijken op knooppunten en zijn GEEN herkenbaar schakelaarsymbool → no_go. Alleen twee stippen of een onderbroken draad zonder hendel is ook GEEN schakelaar → no_go (zet klopt_met_spec en veilig_en_vakinhoudelijk_juist op false).
 - Staat in de spec een schakelaar en kun je hem niet als schakelaar aanwijzen, dan is het altijd no_go.
 - Stand van de schakelaar (open/dicht) moet overeenkomen met de spec en met de vraag.
+- Nova-opstelling: stroommeter in serie; spanningsmeter parallel over een onderdeel. Een spanningsmeter over de bron/batterij hoort niet in deze toets → no_go.
 - Ontbreekt een onderdeel, staat er een extra onderdeel, of is een symbool fout/onduidelijk → no_go.
 - Draden vormen een gesloten kring (behalve bij een open schakelaar); geen losse draadeinden of kortsluiting die niet in de spec staat.
 Antwoord ALLEEN met JSON:

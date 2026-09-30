@@ -54,6 +54,8 @@ export const generateInputSchema = z.object({
   feedback: z.string().max(8000).optional().default(""),
   vorigeSamenvatting: z.string().max(8000).optional().default(""),
   stuurdocument: z.string().max(20000).optional(),
+  /** "Met plaatjes" (standaard) of "Zonder plaatjes". */
+  metPlaatjes: z.boolean().optional().default(true),
 });
 
 export const vraagSchema = z.object({

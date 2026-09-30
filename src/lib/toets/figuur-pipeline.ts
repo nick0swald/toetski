@@ -20,6 +20,8 @@ const planInput = z.object({
   /** Aantal figuren dat al vastligt (telt mee voor het maximum). */
   alGepland: z.coerce.number().int().min(0).max(20).default(0),
   alSfeer: z.coerce.number().int().min(0).max(20).default(0),
+  /** Tijdslimiet voor de planner (ms); de client geeft een krap budget mee voor de 60 s-doelstelling. */
+  timeoutMs: z.coerce.number().int().min(5_000).max(70_000).default(70_000),
 });
 
 export interface GeplandeFiguur {
@@ -38,7 +40,7 @@ export const planFiguren = createServerFn({ method: "POST" })
       const raw = (await vraagJson(
         PLANNER_SYSTEM,
         plannerUser({ vak: data.vak, vragen: data.vragen as Vraag[], nakijk: data.nakijkmodel as NakijkItem[], overslaan: data.overslaan }),
-        { maxTokens: 5000, timeoutMs: 70_000 },
+        { maxTokens: 5000, timeoutMs: data.timeoutMs },
       )) as { figuren?: unknown[] };
       const meldingen: string[] = [];
       const figuren: GeplandeFiguur[] = [];
@@ -74,6 +76,8 @@ const maakInput = z.object({
   legacy: z.boolean().default(false),
   verwijst: z.boolean().default(false),
   nieuweStam: z.string().max(1500).optional(),
+  /** Resterend tijdsbudget voor deze figuur (ms). Niet op tijd goedgekeurd = gedropt. */
+  budgetMs: z.coerce.number().int().min(3_000).max(165_000).optional(),
 });
 
 export const maakFiguur = createServerFn({ method: "POST" })
@@ -98,7 +102,7 @@ export const maakFiguur = createServerFn({ method: "POST" })
           nieuweStam: data.nieuweStam,
         },
         {
-          tekenPng: (svg, breedte) => png.svgNaarPng(svg, breedte),
+          tekenPng: (svg, breedte) => png.svgNaarPng(svg, breedte, 1.5),
           genereerBeeld: (prompt, timeoutMs) => xai.genereerBeeld(prompt, { timeoutMs }),
           verkleinJpeg: (bytes) => jpeg.verkleinJpeg(bytes),
           keur: (system, user, beeld, timeoutMs) => xai.keurMetVisie(system, user, beeld, { timeoutMs }),
@@ -106,6 +110,7 @@ export const maakFiguur = createServerFn({ method: "POST" })
           nu: () => Date.now(),
           nieuwId: () => crypto.randomUUID(),
         },
+        { budgetMs: data.budgetMs },
       );
     } catch (err) {
       return {

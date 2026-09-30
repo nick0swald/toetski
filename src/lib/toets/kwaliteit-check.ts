@@ -175,7 +175,11 @@ export function figuurKeuringPunten(
   const pogingen = items.reduce((s, i) => s + (i.pogingen || 0), 0);
   const tabellen = vragen.filter((q) => q.tabel?.koppen?.length).length;
 
-  const figuren: Kwaliteitspunt = echte.length
+  const figuren: Kwaliteitspunt = rapport?.zonderPlaatjes
+    ? { criterium: "Figuren", oordeel: "voldoet", toelichting: "Zonder plaatjes gekozen: geen figuren; gegevens staan in de tekst of een tabel." }
+    : !echte.length && rapport && !beschadigd && !(rapport.items ?? []).length
+      ? { criterium: "Figuren", oordeel: "voldoet", toelichting: "Geen figuur nodig volgens de beeldredactie (figuren alleen als ze echt iets toevoegen)." }
+      : echte.length
     ? {
         criterium: "Figuren",
         oordeel: "voldoet",

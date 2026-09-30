@@ -30,9 +30,35 @@ export interface VerwerkDeps {
     overslaan: number[];
     alGepland: number;
     alSfeer: number;
+    timeoutMs?: number;
   }) => Promise<PlanAntwoord>;
-  maak: (opdracht: FiguurOpdracht) => Promise<FiguurUitkomst>;
+  /** budgetMs: resterende tijd voor deze figuur; niet op tijd goedgekeurd = gedropt. */
+  maak: (opdracht: FiguurOpdracht, budgetMs?: number) => Promise<FiguurUitkomst>;
   voortgang?: (tekst: string) => void;
+  /** Gestructureerde voortgang voor de voortgangsbalk. */
+  gebeurtenis?: (e: FiguurGebeurtenis) => void;
+  nu?: () => number;
+}
+
+export type FiguurGebeurtenis =
+  | { soort: "plannen" }
+  | { soort: "gepland"; totaal: number }
+  | { soort: "figuur-klaar"; klaar: number; totaal: number; go: boolean };
+
+/** Minimale resttijd om een figuur nog te laten maken (anders direct gedropt → terugval). */
+export const MIN_FIGUUR_BUDGET_MS = 7_000;
+
+/** Promise met tijdslimiet; de timer wordt altijd opgeruimd. */
+export function metTimeout<T>(p: Promise<T>, ms: number, bijTimeout: () => T): Promise<T> {
+  let id: ReturnType<typeof setTimeout> | undefined;
+  const t = new Promise<T>((res) => {
+    id = setTimeout(() => res(bijTimeout()), ms);
+  });
+  return Promise.race([p, t]).finally(() => clearTimeout(id));
+}
+
+function tijdslimiet(pogingen = 0): FiguurUitkomst {
+  return { status: "gedropt", pogingen, redenen: ["tijdslimiet: niet op tijd goedgekeurd"], log: [] };
 }
 
 /** Vraag zonder beelddata (voor serveraanroepen). */
@@ -59,8 +85,16 @@ function samenvoegRapport(oud: FiguurRapport | undefined, items: FiguurRapportIt
 export async function verwerkFiguren(
   toets: GegenereerdeToets,
   deps: VerwerkDeps,
-  opts: { alleenNummers?: number[] } = {},
+  opts: {
+    alleenNummers?: number[];
+    /** Absolute deadline (ms, deps.nu-klok) voor alle figuren samen. */
+    deadline?: number;
+    /** Alleen bestaande figuurvelden keuren, geen extra figuren plannen. */
+    zonderPlanner?: boolean;
+  } = {},
 ): Promise<GegenereerdeToets> {
+  const nu = deps.nu ?? (() => Date.now());
+  const rest = () => (opts.deadline == null ? Infinity : opts.deadline - nu());
   const scope = new Set(opts.alleenNummers ?? toets.vragen.map((q) => q.nummer));
   const meldingen: string[] = [];
   const items: FiguurRapportItem[] = [];
@@ -91,18 +125,27 @@ export async function verwerkFiguren(
       jobs.push({ nummer: q.nummer, vraag: licht(zonderLegacyFiguren(q)), nakijk: nakijkVan(q.nummer), spec, legacy: true, verwijst: true });
     }
 
-    deps.voortgang?.("Figuren plannen…");
     const overslaan = vragen.filter((q) => !scope.has(q.nummer) || figuurIsGeldig(q.figuur) || jobs.some((j) => j.nummer === q.nummer)).map((q) => q.nummer);
-    if (totaal < MAX_FIGUREN_PER_TOETS && vragen.some((q) => !overslaan.includes(q.nummer))) {
+    // Planner krijgt hooguit wat er overblijft minus de tijd die een figuur minimaal nodig heeft.
+    const plannerTijd = Math.min(40_000, rest() - MIN_FIGUUR_BUDGET_MS - 5_000);
+    if (!opts.zonderPlanner && plannerTijd < 5_000 && scope.size) meldingen.push("Geen tijd meer om extra figuren te plannen (60 s-doel).");
+    if (!opts.zonderPlanner && plannerTijd >= 5_000 && totaal < MAX_FIGUREN_PER_TOETS && vragen.some((q) => !overslaan.includes(q.nummer))) {
+      deps.voortgang?.("Figuren plannen…");
+      deps.gebeurtenis?.({ soort: "plannen" });
       try {
-        const plan = await deps.plan({
-          vak: toets.meta.vak,
-          vragen: vragen.map((q) => licht(zonderLegacyFiguren(q))),
-          nakijkmodel,
-          overslaan,
-          alGepland: totaal,
-          alSfeer: sfeer,
-        });
+        const plan = await metTimeout(
+          deps.plan({
+            vak: toets.meta.vak,
+            vragen: vragen.map((q) => licht(zonderLegacyFiguren(q))),
+            nakijkmodel,
+            overslaan,
+            alGepland: totaal,
+            alSfeer: sfeer,
+            timeoutMs: Math.round(Math.max(5_000, plannerTijd)),
+          }),
+          Math.max(5_000, plannerTijd) + 3_000,
+          (): PlanAntwoord => ({ ok: false, error: "planner te traag" }),
+        );
         if (!plan.ok) meldingen.push(`Figuurplanner niet bereikbaar (${plan.error ?? "onbekend"}); alleen bestaande figuren gekeurd.`);
         meldingen.push(...(plan.meldingen ?? []));
         for (const f of plan.figuren ?? []) {
@@ -120,14 +163,26 @@ export async function verwerkFiguren(
     }
 
     deps.voortgang?.(jobs.length ? `${jobs.length} figuur${jobs.length === 1 ? "" : "en"} maken en keuren (go/no-go)…` : "Geen figuren nodig");
+    deps.gebeurtenis?.({ soort: "gepland", totaal: jobs.length });
+    let klaar = 0;
     const uitkomsten = await Promise.all(
       jobs.map(async (job): Promise<FiguurUitkomst> => {
+        let u: FiguurUitkomst;
         try {
           const { nummer: _n, ...opdracht } = job;
-          return await deps.maak(opdracht);
+          const budget = rest();
+          if (budget < MIN_FIGUUR_BUDGET_MS) u = tijdslimiet();
+          else if (budget === Infinity) u = await deps.maak(opdracht);
+          else {
+            const b = Math.round(budget - 1_000);
+            u = await metTimeout(deps.maak(opdracht, b), b + 4_000, () => tijdslimiet());
+          }
         } catch (err) {
-          return { status: "gedropt", pogingen: 0, redenen: [`figuurfunctie faalde: ${err instanceof Error ? err.message.slice(0, 120) : "fout"}`], log: [] };
+          u = { status: "gedropt", pogingen: 0, redenen: [`figuurfunctie faalde: ${err instanceof Error ? err.message.slice(0, 120) : "fout"}`], log: [] };
         }
+        klaar++;
+        deps.gebeurtenis?.({ soort: "figuur-klaar", klaar, totaal: jobs.length, go: u.status === "go" });
+        return u;
       }),
     );
 
@@ -149,9 +204,9 @@ export async function verwerkFiguren(
       if (u.status === "gedropt" && u.herschreven) {
         const h = u.herschreven;
         const punten = repareerPunten([h.vraag], [h.nakijk]);
-        const klaar = finalizeVragen(punten.vragen, punten.nakijkmodel, { skipOrder: true });
-        const nv = zonderLegacyFiguren(klaar.vragen[0] ?? h.vraag);
-        const nn = klaar.nakijkmodel[0] ?? h.nakijk;
+        const klaar1 = finalizeVragen(punten.vragen, punten.nakijkmodel, { skipOrder: true });
+        const nv = { ...zonderLegacyFiguren(klaar1.vragen[0] ?? h.vraag), nummer: job.nummer };
+        const nn = { ...(klaar1.nakijkmodel[0] ?? h.nakijk), nummer: job.nummer };
         vragen = vragen.map((v) => (v.nummer === job.nummer ? nv : v));
         nakijkmodel = nakijkmodel.some((n) => n.nummer === job.nummer)
           ? nakijkmodel.map((n) => (n.nummer === job.nummer ? nn : n))
@@ -211,6 +266,11 @@ export async function naModelRonde(
     toets = { ...toets, figuurRapport: samenvoegRapport(oud.figuurRapport, [], meldingen, []) };
   }
   if (!pijplijn) return toets;
+  if (oud.metPlaatjes === false) {
+    // Zonder plaatjes blijft zonder plaatjes: nieuwe figuurvelden → tabel/tekst, geen pijplijn.
+    const { zonderPlaatjes } = await import("./vroeg.ts");
+    return zonderPlaatjes(toets);
+  }
   if (nieuweFiguurvragen.length) return verwerkFiguren(toets, deps, { alleenNummers: nieuweFiguurvragen });
   const nask = detectVakProfiel(toets.meta.vak, toets.bronmateriaal) === "nask";
   const vragen = toets.vragen.map((q) => zonderLegacyFiguren(q));
