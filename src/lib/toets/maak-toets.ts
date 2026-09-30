@@ -6,9 +6,12 @@ import { zonderLegacyFiguren } from "./figuren/bevriezing";
 import type { GegenereerdeToets, GenerateInput } from "./types";
 
 /** Doel: totale wachttijd ± 60 s, inclusief figuren. */
-export const DOEL_TOTAAL_MS = 58_000;
-/** Figuren krijgen altijd minstens zoveel tijd na het verschijnen van de vragen. */
-export const MIN_FIGUURVENSTER_MS = 25_000;
+export const DOEL_TOTAAL_MS = 60_000;
+/**
+ * Figuren krijgen altijd minstens zoveel tijd na het verschijnen van de vragen.
+ * (25 s bleek te krap: planner + één vision-keuring liep uit → alle figuren gedropt.)
+ */
+export const MIN_FIGUURVENSTER_MS = 40_000;
 
 export type Fase = "vragen" | "afwerken" | "plaatjes" | "word" | "klaar";
 
