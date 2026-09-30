@@ -1,5 +1,6 @@
 import { RTTI_META } from "@/lib/toets/constants";
 import type { GegenereerdeToets } from "@/lib/toets/types";
+import { figuurIsGeldig } from "@/lib/toets/figuren/bevriezing";
 
 export function NakijkSheet({
   toets,
@@ -10,6 +11,8 @@ export function NakijkSheet({
   editing?: boolean;
   onAntwoord?: (nummer: number, modelantwoord: string) => void;
 }) {
+  const figuurNr = new Map<string, number>();
+  for (const q of toets.vragen) if (figuurIsGeldig(q.figuur)) figuurNr.set(q.figuur.id, figuurNr.size + 1);
   return (
     <article className="rounded-[var(--radius-xl)] bg-paper p-6 sm:p-10">
       <h2 className="text-2xl font-bold text-brand">Nakijkmodel · {toets.meta.titel}</h2>
@@ -22,6 +25,12 @@ export function NakijkSheet({
               <p className="font-semibold text-brand">
                 Vraag {n.nummer} ({q?.punten ?? "?"}p) {q ? RTTI_META[q.rtti].kort : ""}
               </p>
+              {q && figuurIsGeldig(q.figuur) ? (
+                <p className="mt-1 text-xs italic text-muted">
+                  Zie figuur {figuurNr.get(q.figuur.id)} ({q.figuur.alt.toLowerCase()}, goedgekeurd na {q.figuur.pogingen}{" "}
+                  keuringspoging{q.figuur.pogingen === 1 ? "" : "en"}).
+                </p>
+              ) : null}
               {editing ? (
                 <textarea
                   className="mt-2 w-full min-h-20 rounded-[var(--radius-md)] bg-surface/50 p-3 text-sm"

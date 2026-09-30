@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { generateToets } from "@/lib/toets/generate";
+import { verwerkFigurenVeilig } from "@/lib/toets/figuren/veilig";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { totaalPunten } from "@/lib/toets/rtti";
 import { kwaliteitAlsTekst, samenstellenFeedback, vorigeSamenvatting } from "@/lib/toets/text";
@@ -98,10 +99,12 @@ export function FeedbackForm({ startId }: { startId?: string }) {
         toast.error(result.error);
         return;
       }
-      const toetsId = await persistToetsBeforeNavigate(result.toets);
+      toast.message("Figuren maken en keuren (go/no-go)…");
+      const nieuweToets = await verwerkFigurenVeilig(result.toets);
+      const toetsId = await persistToetsBeforeNavigate(nieuweToets);
       try {
         const { downloadPakketDocx } = await import("@/lib/toets/docx-export");
-        await downloadPakketDocx(result.toets);
+        await downloadPakketDocx(nieuweToets);
         toast.success("Aangepaste toets als Word gedownload.");
       } catch {
         toast.error("Download geblokkeerd. Tik Word op de toets.");

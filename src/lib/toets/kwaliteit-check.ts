@@ -6,7 +6,8 @@ import { rubricSomKlopt } from "./punten-rubric.ts";
 import { bouwMatrijs } from "./rtti.ts";
 import { RTTI_ORDER } from "./constants.ts";
 import type { ItemIssue } from "./item-kwaliteit";
-import type { Kwaliteitscheck, Kwaliteitspunt, NakijkItem, RttiVerdeling, Vraag } from "./types";
+import { figuurIsGeldig } from "./figuren/bevriezing.ts";
+import type { FiguurRapport, Kwaliteitscheck, Kwaliteitspunt, NakijkItem, RttiVerdeling, Vraag } from "./types";
 
 function kwalitatief(llm?: Kwaliteitscheck | null): string {
   if (!llm) return "";
@@ -27,6 +28,7 @@ function figuurSoorten(vragen: Vraag[]): string[] {
     if (q.maatcilinder) set.add("maatcilinder");
     if (q.grafiek && q.grafiek.punten.length >= 2) set.add("grafiek");
     if (q.schemaFiguur) set.add("schema");
+    if (figuurIsGeldig(q.figuur)) set.add(q.figuur.soort);
   }
   return [...set];
 }
@@ -151,4 +153,91 @@ export function bouwKwaliteit(input: {
     .join(" ");
 
   return { samenvatting, punten };
+}
+
+/**
+ * Figuurkwaliteit, berekend uit de echte toets en het figuurrapport (niet uit een modelclaim).
+ * Vervangt het punt "Figuren" en voegt "Figuurkeuring (go/no-go)" toe.
+ */
+export function figuurKeuringPunten(
+  vragen: Vraag[],
+  rapport: FiguurRapport | undefined,
+  opts: { nask: boolean },
+): { figuren: Kwaliteitspunt; keuring: Kwaliteitspunt; samenvatting: string } {
+  const geplaatst = vragen.filter((q) => figuurIsGeldig(q.figuur));
+  const beschadigd = vragen.filter((q) => q.figuur && !figuurIsGeldig(q.figuur)).length;
+  const echte = vragen.filter(heeftEchtFiguur);
+  const soorten = figuurSoorten(vragen);
+  const items = rapport?.items ?? [];
+  const aangevraagd = items.length;
+  const go = items.filter((i) => i.status === "go").length;
+  const gedropt = items.filter((i) => i.status === "gedropt");
+  const pogingen = items.reduce((s, i) => s + (i.pogingen || 0), 0);
+  const tabellen = vragen.filter((q) => q.tabel?.koppen?.length).length;
+
+  const figuren: Kwaliteitspunt = echte.length
+    ? {
+        criterium: "Figuren",
+        oordeel: "voldoet",
+        toelichting: `${echte.length} echte figuur${echte.length === 1 ? "" : "en"} (${soorten.join(", ") || "figuur"}). Een tabel telt niet mee${tabellen ? ` (${tabellen} tabel${tabellen === 1 ? "" : "len"} apart)` : ""}.`,
+      }
+    : {
+        criterium: "Figuren",
+        oordeel: opts.nask ? "let op" : "voldoet",
+        toelichting: opts.nask
+          ? `Geen goedgekeurde figuur in de toets.${tabellen ? ` Wel ${tabellen} tabel; een tabel telt niet.` : ""}`
+          : "Geen figuren nodig of geplaatst.",
+      };
+
+  const drop = gedropt
+    .slice(0, 5)
+    .map((i) => {
+      const wat = i.fallback === "herschreven" || i.fallback === "vervangen"
+        ? `vraag ${i.fallback} zonder figuur`
+        : i.fallback === "tabel"
+          ? "gegevens als tabel"
+          : i.fallback === "tekst"
+            ? "gegevens in de tekst"
+            : i.fallback === "verwijderd"
+              ? "figuur weggelaten — controleer de vraag"
+              : "geen figuur";
+      return `vraag ${i.nummer} (${i.soort}, ${i.pogingen} poging${i.pogingen === 1 ? "" : "en"}: ${(i.redenen[0] ?? "no-go").replace(/\.$/, "")}) → ${wat}`;
+    })
+    .join("; ");
+  const probleem = beschadigd > 0 || gedropt.some((i) => i.fallback === "verwijderd") || geplaatst.length !== go;
+  const keuring: Kwaliteitspunt = {
+    criterium: "Figuurkeuring (go/no-go)",
+    oordeel: probleem || gedropt.length ? "let op" : "voldoet",
+    toelichting: aangevraagd
+      ? `${aangevraagd} figu${aangevraagd === 1 ? "ur" : "ren"} gekeurd: ${go} go (geplaatst en bevroren), ${gedropt.length} gedropt, ${pogingen} keuringspoging${pogingen === 1 ? "" : "en"} totaal.${
+          drop ? ` Gedropt: ${drop}.` : ""
+        }${beschadigd ? ` ${beschadigd} figuur geweigerd: inhoud gewijzigd na goedkeuring.` : ""}${
+          geplaatst.length !== go ? ` Nu geplaatst: ${geplaatst.length}.` : ""
+        }`
+      : "Geen figuren aangevraagd.",
+  };
+  const samenvatting = `Figuren: ${geplaatst.length} geplaatst (go), ${gedropt.length} gedropt, ${pogingen} keuringspogingen.`;
+  return { figuren, keuring, samenvatting };
+}
+
+export function metFiguurKwaliteit(
+  kwaliteit: Kwaliteitscheck,
+  vragen: Vraag[],
+  rapport: FiguurRapport | undefined,
+  opts: { nask: boolean },
+): Kwaliteitscheck {
+  const { figuren, keuring, samenvatting } = figuurKeuringPunten(vragen, rapport, opts);
+  const rest = (kwaliteit?.punten ?? []).filter((p) => p.criterium !== "Figuren" && p.criterium !== keuring.criterium);
+  const idx = (kwaliteit?.punten ?? []).findIndex((p) => p.criterium === "Figuren");
+  const punten = rest.slice();
+  punten.splice(idx >= 0 ? Math.min(idx, punten.length) : Math.min(2, punten.length), 0, figuren, keuring);
+  const basis = (kwaliteit?.samenvatting ?? "")
+    .replace(/\s*Echte figuren: \d+\./, "")
+    .replace(/\s*Figuren: \d+ geplaatst \(go\), \d+ gedropt, \d+ keuringspogingen\./, "")
+    .trim();
+  const zinnen = basis.split(/(?<=\.)\s+/);
+  const plek = zinnen.findIndex((z) => /^R \d+%/.test(z));
+  if (plek >= 0) zinnen.splice(plek + 1, 0, samenvatting);
+  else zinnen.push(samenvatting);
+  return { samenvatting: zinnen.filter(Boolean).join(" "), punten };
 }

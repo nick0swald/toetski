@@ -157,6 +157,7 @@ function schrapSymboolbeschrijving(s: string): string {
 /** Elke pictogramvraag krijgt het GHS-symbool; de stam beschrijft het niet. */
 export function plaatsPictogrammen(vragen: Vraag[], nakijk: NakijkItem[] = []): Vraag[] {
   return vragen.map((q) => {
+    if (q.figuur || q.figuurId) return q; // bevroren figuur: niets toevoegen
     if (!isPictogramVraag(q) && !q.pictogram) return q;
     const n = nakijk.find((item) => item.nummer === q.nummer);
     const soort =
@@ -191,6 +192,7 @@ function isOnderdompel(q: Vraag): boolean {
 /** Onderdompelvragen: maatcilinder aflezen. De standen staan in de figuur. */
 export function plaatsMaatcilinders(vragen: Vraag[]): Vraag[] {
   return vragen.map((q) => {
+    if (q.figuur || q.figuurId) return q; // bevroren figuur: niets toevoegen
     if (q.maatcilinder || !isOnderdompel(q)) return q;
     const nrs = parseMl(`${q.context ?? ""} ${q.stam}`);
     const begin = nrs[0] ?? 30;
@@ -233,7 +235,7 @@ export function verzekerBronFiguren(
   let next = plaatsPictogrammen(vragen, nakijk);
   next = plaatsMaatcilinders(next);
   if (vakProfiel !== "nask") return next;
-  if (next.some(heeftEchtFiguur)) return next;
+  if (next.some((q) => heeftEchtFiguur(q) || q.figuurId)) return next;
 
   const wilFiguur = noemtFiguur(bron) || isRuimeBron(bron);
   if (!wilFiguur) return verzekerMinimaalFiguur(next);
@@ -261,7 +263,7 @@ export function verzekerBronFiguren(
 
 /** Laatste redmiddel: één maatcilinder of het blijft zonder echte figuur niet "voldoet". */
 function verzekerMinimaalFiguur(vragen: Vraag[]): Vraag[] {
-  if (vragen.some(heeftEchtFiguur)) return vragen;
+  if (vragen.some((q) => heeftEchtFiguur(q) || q.figuurId)) return vragen;
   const idx = vragen.findIndex((q) => /volume|water|cilinder|dichtheid/i.test(`${q.stam} ${q.leerdoel}`));
   const i = idx >= 0 ? idx : vragen.findIndex((q) => q.type === "berekening" || q.type === "open");
   if (i < 0) return vragen;

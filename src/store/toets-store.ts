@@ -4,12 +4,28 @@ import { cesuurPunten, formuleTekst } from "@/lib/toets/cijfer";
 import { withDefaults } from "@/lib/toets/defaults";
 import { herbouwMatrijs, totaalPunten } from "@/lib/toets/rtti";
 import { maakVoorbeeldToets } from "@/lib/toets/sample";
+import { bewaakFiguren, diepBevriezen } from "@/lib/toets/figuren/bevriezing";
 import type { CijferNorm, GegenereerdeToets, NakijkItem, Vraag } from "@/lib/toets/types";
 
 const VOORBEELD_ID = "voorbeeld-fotosynthese";
 
+/** Bevroren figuren blijven bevroren (ook na rehydrate uit localStorage). */
+function bevriesFiguren(t: GegenereerdeToets): GegenereerdeToets {
+  for (const q of t.vragen ?? []) if (q.figuur) diepBevriezen(q.figuur);
+  return t;
+}
+
+/** Harde regel: een goedgekeurde figuur wordt door geen enkele store-update gewijzigd. */
+function bewaak(prev: GegenereerdeToets | undefined, next: GegenereerdeToets): GegenereerdeToets {
+  if (!prev) return next;
+  const heeftFiguren = prev.vragen.some((q) => q.figuur) || next.vragen.some((q) => q.figuur || q.figuurId);
+  if (!heeftFiguren) return next;
+  const r = bewaakFiguren(prev.vragen, next.vragen, { pijplijn: Boolean(next.figuurPijplijn ?? prev.figuurPijplijn) });
+  return { ...next, vragen: r.vragen };
+}
+
 function normalizeToets(t: GegenereerdeToets): GegenereerdeToets {
-  const next = withDefaults(herbouwMatrijs(t));
+  const next = withDefaults(herbouwMatrijs(bevriesFiguren(t)));
   const max = totaalPunten(next.vragen);
   return {
     ...next,
@@ -44,7 +60,7 @@ export const useToetsStore = create<ToetsStore>()(
       setStuurdocument: (tekst) => set({ stuurdocument: tekst.trim() }),
       resetStuurdocument: () => set({ stuurdocument: "" }),
       upsert: (t) => {
-        const next = normalizeToets(t);
+        const next = normalizeToets(bewaak(get().toetsen.find((x) => x.id === t.id), t));
         set((s) => {
           const i = s.toetsen.findIndex((x) => x.id === next.id);
           const toetsen =
@@ -55,7 +71,7 @@ export const useToetsStore = create<ToetsStore>()(
       update: (id, patch) => {
         set((s) => ({
           toetsen: s.toetsen.map((t) =>
-            t.id === id ? normalizeToets({ ...t, ...patch, id: t.id }) : t,
+            t.id === id ? normalizeToets(bewaak(t, { ...t, ...patch, id: t.id })) : t,
           ),
         }));
       },
@@ -63,7 +79,9 @@ export const useToetsStore = create<ToetsStore>()(
         set((s) => ({
           toetsen: s.toetsen.map((t) => {
             if (t.id !== id) return t;
-            const vragen = t.vragen.map((q) => (q.nummer === nummer ? { ...q, ...patch } : q));
+            // figuur/figuurId zijn nooit via een patch te wijzigen.
+            const { figuur: _f, figuurId: _i, ...veilig } = patch;
+            const vragen = t.vragen.map((q) => (q.nummer === nummer ? { ...q, ...veilig } : q));
             return normalizeToets({ ...t, vragen });
           }),
         }));

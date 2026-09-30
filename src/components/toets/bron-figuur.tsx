@@ -1,4 +1,5 @@
-import type { GhsSymbool, MaatcilinderFiguur, SchemaFiguur, VraagGrafiek, VraagTabel } from "@/lib/toets/types";
+import type { GhsSymbool, GoedgekeurdeFiguur, MaatcilinderFiguur, SchemaFiguur, VraagGrafiek, VraagTabel } from "@/lib/toets/types";
+import { figuurIsGeldig } from "@/lib/toets/figuren/bevriezing";
 import { ghsPictogramSvg, maatcilinderSvg, schemaFiguurSvg } from "@/lib/toets/figuur-svg";
 
 function inlineSvg(svg: string): string {
@@ -189,5 +190,34 @@ export function StimulusFiguren({
       {grafiek ? <BronGrafiek grafiek={grafiek} /> : null}
       {schemaFiguur ? <BronSchemaFiguur figuur={schemaFiguur} /> : null}
     </div>
+  );
+}
+
+/**
+ * Goedgekeurde figuur (go) onder de stam: exact de bytes die gekeurd zijn, nooit opnieuw getekend.
+ * Is de hash niet meer geldig, dan wordt de figuur geweigerd en niet getoond.
+ */
+export function GoedgekeurdeFiguurBeeld({ figuur, nummer }: { figuur?: GoedgekeurdeFiguur; nummer?: number }) {
+  if (!figuur) return null;
+  if (!figuurIsGeldig(figuur)) {
+    return (
+      <p className="mt-3 text-sm text-warn">Figuur geweigerd: de inhoud is na goedkeuring gewijzigd.</p>
+    );
+  }
+  return (
+    <figure className="mt-3 w-fit max-w-full rounded-[var(--radius-sm)] border border-border bg-white p-3">
+      <img
+        src={`data:${figuur.mime};base64,${figuur.data}`}
+        alt={figuur.alt}
+        width={figuur.breedte}
+        height={figuur.hoogte}
+        className="h-auto max-w-full"
+        style={{ width: Math.min(figuur.breedte, 440) }}
+        draggable={false}
+      />
+      <figcaption className="mt-1 text-xs italic text-muted">
+        {nummer ? `Figuur ${nummer}` : "Figuur"}
+      </figcaption>
+    </figure>
   );
 }

@@ -4,6 +4,7 @@ import { groepeerDomeinen } from "./leerdoelen.ts";
 import { finalizeVragen } from "./mc-balance.ts";
 import { repareerPunten } from "./punten-rubric.ts";
 import { bijschavenPayloadSchema } from "./schema.ts";
+import { figuurNaarVerwijzing, zonderLegacyFiguren } from "./figuren/bevriezing.ts";
 import type { NakijkItem, Vraag } from "./types";
 
 const REPAIR_SYSTEM = `Je verbetert ALLEEN de aangewezen VMBO-vragen. Antwoord met één JSON-object:
@@ -14,7 +15,9 @@ function reparatiePrompt(vragen: Vraag[], nakijk: NakijkItem[], issues: ItemIssu
   const nummers = [...new Set(issues.map((i) => i.nummer))];
   const blok = nummers
     .map((nr) => {
-      const q = vragen.find((v) => v.nummer === nr);
+      // Beelddata gaat nooit naar het model; een bevroren figuur is alleen een verwijzing.
+      const gevonden = vragen.find((v) => v.nummer === nr);
+      const q = gevonden ? figuurNaarVerwijzing(gevonden) : gevonden;
       const n = nakijk.find((item) => item.nummer === nr);
       const waarom = issues.filter((i) => i.nummer === nr).map((i) => `- ${i.code}: ${i.uitleg}`).join("\n");
       return `Vraag ${nr}\n${waarom}\n${JSON.stringify({ vraag: q, nakijk: n })}`;
@@ -33,7 +36,13 @@ function mergeOpNummer(
   const v = vragen.map((q) => {
     if (!nummers.has(q.nummer)) return q;
     const vervanging = nieuwV.find((x) => x.nummer === q.nummer);
-    return vervanging ? { ...q, ...vervanging, nummer: q.nummer } : q;
+    if (!vervanging) return q;
+    // Een goedgekeurde figuur blijft staan zoals hij is; de reparatie mag er niets aan veranderen.
+    if (q.figuur || q.figuurId) {
+      const { figuur: _f, figuurId: _i, ...rest } = vervanging;
+      return zonderLegacyFiguren({ ...q, ...rest, nummer: q.nummer, figuur: q.figuur, figuurId: q.figuurId });
+    }
+    return { ...q, ...vervanging, nummer: q.nummer };
   });
   const n = nakijk.map((item) => {
     if (!nummers.has(item.nummer)) return item;
@@ -85,8 +94,10 @@ export async function werkVragenAf(input: {
   nakijk = punten.nakijkmodel;
   vragen = groepeerDomeinen(vragen, bron);
   const klaar = finalizeVragen(vragen, nakijk, { skipOrder: input.skipOrder });
+  // Vragen met een bevroren figuur krijgen nooit (opnieuw) ongekeurde figuurvelden.
+  const beschermd = klaar.vragen.map((q) => (q.figuur || q.figuurId ? zonderLegacyFiguren(q) : q));
   return {
-    vragen: klaar.vragen,
+    vragen: beschermd,
     nakijkmodel: klaar.nakijkmodel,
     issues: detecteerItemIssues(klaar.vragen, klaar.nakijkmodel, bron),
   };

@@ -17,6 +17,7 @@ import {
   rttiVoorMoeilijkheid,
 } from "@/lib/toets/constants";
 import { generateToets } from "@/lib/toets/generate";
+import { verwerkFigurenVeilig } from "@/lib/toets/figuren/veilig";
 import {
   herkenBatch,
   herkenBron,
@@ -38,7 +39,14 @@ import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { PageIntro } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 
-const STAPPEN = ["Lesstof lezen", "Toetsmatrijs met RTTI", "Vragen in Cito-stijl", "Nakijkmodel en Word-bestand"];
+const STAPPEN = [
+  "Lesstof lezen",
+  "Toetsmatrijs met RTTI",
+  "Vragen in Cito-stijl",
+  "Figuren maken en keuren (go/no-go)",
+  "Nakijkmodel en Word-bestand",
+];
+const STAP_FIGUREN = 3;
 
 type Stuk = {
   id: string;
@@ -110,6 +118,7 @@ export function CreateForm() {
   const [lezend, setLezend] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [stap, setStap] = useState(0);
+  const [figuurStatus, setFiguurStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const velden = veldenUitStukken(stukken);
@@ -266,7 +275,8 @@ export function CreateForm() {
     setBusy(true);
     setError(null);
     setStap(0);
-    const timer = window.setInterval(() => setStap((s) => (s < STAPPEN.length - 1 ? s + 1 : s)), 2200);
+    // Tot de vragen er zijn, loopt de indicator niet verder dan "Vragen in Cito-stijl".
+    const timer = window.setInterval(() => setStap((s) => (s < STAP_FIGUREN - 1 ? s + 1 : s)), 2200);
     const parseOpt = (s: string) => {
       const t = s.trim();
       if (!t) return undefined;
@@ -317,10 +327,15 @@ export function CreateForm() {
         toast.error(msg);
         return;
       }
-      const toetsId = await persistToetsBeforeNavigate(result.toets);
+      window.clearInterval(timer);
+      setStap(STAP_FIGUREN);
+      // Beeldpijplijn: figuren parallel maken + go/no-go-keuring. Breekt de toets nooit.
+      const toets = await verwerkFigurenVeilig(result.toets, setFiguurStatus);
+      setStap(STAP_FIGUREN + 1);
+      const toetsId = await persistToetsBeforeNavigate(toets);
       try {
         const { downloadPakketDocx } = await import("@/lib/toets/docx-export");
-        await downloadPakketDocx(result.toets);
+        await downloadPakketDocx(toets);
         toast.success("Word-pakket gedownload.");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Download werd geblokkeerd. Tik Word op de toets.");
@@ -504,6 +519,7 @@ export function CreateForm() {
               <li key={s} className={cn(i <= stap ? "text-fg" : "text-muted")}>
                 {i < stap ? "Klaar — " : i === stap ? "Bezig — " : ""}
                 {s}
+                {i === STAP_FIGUREN && i === stap && figuurStatus ? ` · ${figuurStatus}` : ""}
               </li>
             ))}
           </ol>

@@ -8,6 +8,7 @@ import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import { REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
 import { bouwKwaliteit } from "./kwaliteit-check";
+import { TEKST_MODEL } from "./figuren/modellen";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 
 function stripJsonFence(raw: string): string {
@@ -96,6 +97,9 @@ async function fetchBronUrl(url: string): Promise<string> {
   return text.replace(/\s+\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim().slice(0, 12000);
 }
 
+/** Tekstmodel (ongewijzigd); ook gebruikt door de beeldpijplijn via figuren/modellen.ts. */
+const GROK_TEKST_MODEL = TEKST_MODEL;
+
 async function callGrok(messages: { role: string; content: string }[], maxTokens = 4000): Promise<string> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
@@ -107,7 +111,7 @@ async function callGrok(messages: { role: string; content: string }[], maxTokens
     },
     signal: AbortSignal.timeout(180000),
     body: JSON.stringify({
-      model: "grok-4.20-0309-non-reasoning",
+      model: GROK_TEKST_MODEL,
       temperature: 0.4,
       max_tokens: maxTokens,
       response_format: { type: "json_object" },
@@ -650,6 +654,7 @@ const BIJSCHAVEN_JSON = `Antwoord ALLEEN met één JSON-object, geen markdown. S
 }
 Behoud hetzelfde aantal vragen tenzij de instructie expliciet vraagt om te schrappen of te splitsen.
 Nummers 1…n opeenvolgend. Figuurvelden (tabel/grafiek/schemaFiguur) behouden tenzij de instructie die wijzigt.
+Vragen met "figuurId" hebben een vastgezette, goedgekeurde figuur: neem "figuurId" exact over, voeg bij die vraag GEEN figuurvelden toe, en houd de vraag passend bij die figuur (de figuur zelf verandert nooit).
 Geen meta, cesuur of kwaliteit.
 `;
 
@@ -683,7 +688,8 @@ ${BIJSCHAVEN_JSON}`;
           .map((q) => {
             const opt =
               q.opties?.length ? ` | opties: ${q.opties.map((o) => `${o.letter}:${o.tekst}`).join("; ")}` : "";
-            return `${q.nummer}. [${q.type}/${q.rtti}] ${q.punten}p · ${q.domein} · ${q.leerdoel}\ncontext: ${q.context || "—"}\nstam: ${q.stam}${opt}`;
+            const fig = q.figuurId ? `\nfiguurId: ${q.figuurId} (vastgezette figuur onder de stam; niet wijzigen)` : "";
+            return `${q.nummer}. [${q.type}/${q.rtti}] ${q.punten}p · ${q.domein} · ${q.leerdoel}\ncontext: ${q.context || "—"}\nstam: ${q.stam}${opt}${fig}`;
           })
           .join("\n\n");
         const nakijk = data.nakijkmodel

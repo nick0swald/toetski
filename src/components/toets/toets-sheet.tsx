@@ -1,4 +1,4 @@
-import { BronTabel, StimulusFiguren } from "@/components/toets/bron-figuur";
+import { BronTabel, GoedgekeurdeFiguurBeeld, StimulusFiguren } from "@/components/toets/bron-figuur";
 import { blokkenVoorVraag } from "@/lib/toets/blad-volgorde";
 import type { GegenereerdeToets } from "@/lib/toets/types";
 import { totaalPunten } from "@/lib/toets/rtti";
@@ -14,6 +14,9 @@ export function ToetsSheet({
 }) {
   const m = toets.meta;
   const max = totaalPunten(toets.vragen);
+  const pijplijn = Boolean(toets.figuurPijplijn);
+  const figuurNr = new Map<string, number>();
+  for (const q of toets.vragen) if (q.figuur && blokkenVoorVraag(q).includes("figuur")) figuurNr.set(q.figuur.id, figuurNr.size + 1);
   return (
     <article className="rounded-[var(--radius-xl)] bg-paper p-6 shadow-[var(--shadow-sheet)] sm:p-10">
       <p className="text-sm font-semibold text-brand">{m.school}</p>
@@ -41,7 +44,7 @@ export function ToetsSheet({
       ) : null}
       <ol className="mt-8 grid gap-8">
         {toets.vragen.map((q) => {
-          const blokken = blokkenVoorVraag(q);
+          const blokken = blokkenVoorVraag(q, { pijplijn });
           return (
           <li key={q.nummer}>
             {blokken.includes("context") && q.context ? (
@@ -67,6 +70,9 @@ export function ToetsSheet({
             ) : (
               <p className="mt-2 whitespace-pre-wrap leading-relaxed">{q.stam}</p>
             )}
+            {blokken.includes("figuur") && q.figuur ? (
+              <GoedgekeurdeFiguurBeeld figuur={q.figuur} nummer={figuurNr.get(q.figuur.id)} />
+            ) : null}
             {blokken.includes("tabel") && q.tabel ? <BronTabel tabel={q.tabel} /> : null}
             {q.opties?.length ? (
               <ul className="mt-3 grid gap-1">
