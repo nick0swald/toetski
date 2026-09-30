@@ -6,7 +6,7 @@ import { rttiVolgensRegels } from "./rtti-regels.ts";
 import type { NakijkItem, Vraag } from "./types.ts";
 import { herstelGroepen } from "./context-groepen.ts";
 import { markeerExamenvragen } from "./examenvragen.ts";
-import { herstelZinsbreuk } from "./eind-controle.ts";
+import { herstelZinsbreuk, hoofdletterNaPunt } from "./eind-controle.ts";
 
 const v = (nummer: number, x: Partial<Vraag>): Vraag => ({ nummer, type: "open", stam: "", punten: 1, rtti: "T1", ...x }) as Vraag;
 
@@ -68,5 +68,10 @@ describe("ronde 7", () => {
     const n: NakijkItem[] = [1, 2].map((nummer) => ({ nummer, modelantwoord: "x", puntenverdeling: [{ punt: 1, criterium: "x" }] }) as NakijkItem);
     const uit = borgFiguurVerwijzingen([v(1, { stam: "Emma ziet een fles met een gevarensymbool van een doodshoofd." }), v(2, { stam: "Noteer wat giftig betekent." })], n);
     assert.deepEqual(uit.verwijderd, [1]);
+  });
+
+  it("ronde 9: hoofdletter na punt, niet na afkorting", () => {
+    assert.equal(hoofdletterNaPunt("In de fabriek meet Sanne 92 dB. mag je hier werken?"), "In de fabriek meet Sanne 92 dB. Mag je hier werken?");
+    assert.equal(hoofdletterNaPunt("Gebruik bijv. een demper. dat helpt."), "Gebruik bijv. een demper. Dat helpt.");
   });
 });
