@@ -85,16 +85,26 @@ function dichtBij(n: number, verboden: number[]): boolean {
   return verboden.some((v) => Math.abs(n - v) < 0.051 || Math.abs(n - Math.round(v * 10) / 10) < 0.051);
 }
 
-export function normaliseerTaalOpTekst(s: string): string {
+/** Voornaam van de hoofdpersoon ('Daan gaat …', '… ziet Lotte …'), of null. */
+export function hoofdpersoon(tekst: string): string | null {
+  const m = tekst.match(/(?:^|[.!?]\s+)([A-Z][a-zéëï]{2,})\s+(?:[a-z]+t|is|wil|heeft|kan|mag|zet|legt|ziet|hoort|meet)\b/) ?? tekst.match(/[a-z,]\s+([A-Z][a-zéëï]{2,})\b/);
+  const naam = m?.[1];
+  if (!naam || /^(Bij|Een|Het|De|Dit|Deze|Op|In|Na|Als|Hoe|Wat|Welke|Waarom|Bereken|Noem|Leg|Geef|Frituur|Juist|Onjuist|Binas)$/.test(naam)) return null;
+  return naam;
+}
+
+export function normaliseerTaalOpTekst(s: string, naam?: string | null): string {
   let t = s
     .replace(/\s+volgens de lesstof/gi, "")
     .replace(/\s+uit de lesstof/gi, "")
     .replace(/\s+zoals in het boek/gi, "")
     .replace(/\s+zoals in de lesstof/gi, "");
-  t = t.replace(/\bvoordat hij\b/gi, "voordat de leerling");
-  t = t.replace(/\bwaarbij hij\b/gi, "waarbij de leerling");
-  t = t.replace(/\bals hij\b/gi, "als de leerling");
-  t = t.replace(/\bdat hij\b/gi, "dat de leerling");
+  // Met een hoofdpersoon in de vraag blijft het over die persoon ('als Daan'), anders 'de leerling'.
+  const wie = naam ?? "de leerling";
+  t = t.replace(/\bvoordat (?:hij|zij|ze)\b/gi, `voordat ${wie}`);
+  t = t.replace(/\bwaarbij (?:hij|zij|ze)\b/gi, `waarbij ${wie}`);
+  t = t.replace(/\bals hij\b/gi, `als ${wie}`);
+  t = t.replace(/\bdat hij\b/gi, `dat ${wie}`);
   t = t.replace(/\bdeze leerling\b/gi, "de leerling");
   t = t.replace(/de leerling([^.]{0,80})de leerling/gi, "de leerling$1die");
   return t.replace(/\s{2,}/g, " ").replace(/\s+([?.!,])/g, "$1").trim();
@@ -102,8 +112,9 @@ export function normaliseerTaalOpTekst(s: string): string {
 
 function pasTaalToe(vragen: Vraag[]): void {
   for (const q of vragen) {
-    q.stam = normaliseerTaalOpTekst(q.stam);
-    if (q.context) q.context = normaliseerTaalOpTekst(q.context);
+    const naam = hoofdpersoon(`${q.context ?? ""} ${q.stam}`.trim());
+    q.stam = naam ? normaliseerTaalOpTekst(q.stam, naam).replace(new RegExp(`(\\b${naam}\\b[^.?!]{0,80})\\b${naam}\\b`), "$1hij") : normaliseerTaalOpTekst(q.stam);
+    if (q.context) q.context = normaliseerTaalOpTekst(q.context, naam);
     q.leerdoel = normaliseerTaalOpTekst(q.leerdoel || "");
     q.domein = normaliseerTaalOpTekst(q.domein || "");
   }
@@ -268,7 +279,7 @@ export function tekortPunten(q: Vraag): string | null {
   const n = m ? TELWOORD[m[1]!]! : 0;
   const uitleg = /\b(leg (?:ook )?uit|verklaar|waarom)\b/.test(t) ? 1 : 0;
   // 'Noem drie' mag 2 punten met een staffel; 'noem twee' = 2 punten; een uitleg is een extra punt.
-  const nodig = (n >= 3 ? n - 1 : Math.max(n, 1)) + (uitleg && (n || /\b(noem|geef)\b/.test(t)) ? 1 : 0);
+  const nodig = (n >= 3 ? n - 1 : Math.max(n, 1)) + (uitleg && (n || /\b(noem|geef|bereken)\b/.test(t) || /\?.*\b(leg (?:ook )?uit|verklaar)\b/.test(t)) ? 1 : 0);
   if (nodig > (q.punten ?? 1) && nodig >= 2) return `Vraagt ${nodig} onderdelen maar geeft ${q.punten} punt(en); maak de punten gelijk aan het aantal gevraagde onderdelen of vraag minder.`;
   return null;
 }
@@ -503,7 +514,7 @@ function verzamel(vragen: Vraag[], nakijk: NakijkItem[], bron: string): ItemIssu
     if (/volgens de lesstof|uit de lesstof|zoals in het boek/i.test(blob)) {
       issues.push({ nummer: q.nummer, code: "lesstof-frase", uitleg: "Formulering 'volgens de lesstof' of 'zoals in het boek'." });
     }
-    if (/\bhij\b/i.test(blob) && /leerling/i.test(blob)) {
+    if (/\bhij\b/i.test(blob) && /leerling/i.test(blob) && !hoofdpersoon(blob)) {
       issues.push({ nummer: q.nummer, code: "niet-neutraal", uitleg: "Gebruik 'de leerling', niet 'hij'." });
     }
     if (q.opties?.length && /\bveilig/.test(q.stam.toLowerCase())) {

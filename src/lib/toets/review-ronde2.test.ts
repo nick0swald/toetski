@@ -194,3 +194,42 @@ describe("ronde 3: context en pictogram", () => {
     assert.equal(uit!.pictogram, undefined);
   });
 });
+
+describe("ronde 4: taal en punten", () => {
+  it("'hij' wordt de naam van de hoofdpersoon, niet 'de leerling'", () => {
+    const q = v(7, "Boven welke geluidssterkte loopt Daan risico als hij lang blijft staan?", { context: "Daan gaat naar een concert." });
+    const r = repareerItemsDeterministisch([q], [], "");
+    assert.doesNotMatch(r.vragen[0]!.stam, /de leerling/);
+    const zonder = repareerItemsDeterministisch([v(8, "Wat doet je buurman als hij de fles opent?")], [], "");
+    assert.match(zonder.vragen[0]!.stam, /de leerling/);
+  });
+  it("'Hoe lang …? Leg uit' voor 1 punt → te weinig punten", () => {
+    assert.ok(tekortPunten(v(12, "Hoe lang mag een bezoeker hier blijven? Leg uit hoe je dit weet.")));
+  });
+});
+
+describe("ronde 4: figuur valt weg zonder kapotte zinnen", () => {
+  it("maatcilinder: oorspronkelijke tekst met standen komt terug", async () => {
+    const { plaatsMaatcilinders } = await import("./bron-figuren.ts");
+    const q = v(10, "Bram dompelt een steen onder. De beginstand is 30 mL. Na het onderdompelen staat het water op 52 mL. Bereken het volume van de steen.", { punten: 3 });
+    const [m] = plaatsMaatcilinders([q]);
+    assert.ok(m!.maatcilinder && m!.tekstZonderFiguur);
+    const spec = { soort: "maatcilinder", data: { maxMl: 100, standen: [{ label: "begin", ml: 30 }, { label: "na", ml: 52 }] }, nietTonen: [] } as unknown as FiguurSpec;
+    const fb = vraagZonderFiguur(m!, spec, { legacy: true, verwijst: true });
+    assert.match(fb.vraag.stam, /30 mL/);
+    assert.match(fb.vraag.stam, /52 mL/);
+    assert.equal(fb.vraag.tekstZonderFiguur, undefined);
+  });
+  it("pictogram: beschrijving van wat je ziet, zonder de betekenis", () => {
+    const q = v(5, "Wat betekent dit gevarensymbool?", { type: "open" });
+    const spec = { soort: "pictogram", data: { symbool: "giftig" }, nietTonen: [] } as unknown as FiguurSpec;
+    const fb = vraagZonderFiguur(q, spec, { legacy: true, verwijst: true });
+    assert.match(fb.vraag.stam, /doodshoofd/);
+    assert.doesNotMatch(fb.vraag.stam, /giftig/);
+  });
+  it("tekenopdracht zonder tekening → op je antwoordblad", () => {
+    const spec = { soort: "krachtenschema", data: { krachten: [{ naam: "Fz", richting: "omlaag", grootte: 120 }] }, nietTonen: [] } as unknown as FiguurSpec;
+    const fb = vraagZonderFiguur(v(16, "Teken in de figuur de zwaartekracht."), spec, { legacy: true, verwijst: true });
+    assert.match(fb.vraag.stam, /antwoordblad/);
+  });
+});

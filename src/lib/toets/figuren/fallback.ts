@@ -1,4 +1,4 @@
-import type { FiguurRapportItem, FiguurSpec, Vraag, VraagTabel } from "../types.ts";
+import { PICTOGRAM_BESCHRIJVING, type FiguurRapportItem, type FiguurSpec, type GhsSymbool, type Vraag, type VraagTabel } from "../types.ts";
 import { parseSpecData } from "./spec.ts";
 import { nl } from "./svg.ts";
 import { zonderLegacyFiguren } from "./bevriezing.ts";
@@ -52,7 +52,11 @@ export function vraagZonderFiguur(
   spec: FiguurSpec,
   opts: { legacy: boolean; verwijst: boolean; tegenspraak?: boolean },
 ): { vraag: Vraag; fallback: NonNullable<FiguurRapportItem["fallback"]> } {
-  const kaal = zonderLegacyFiguren(q);
+  // Tekst die voor de figuur was ingekort, komt ongewijzigd terug (zolang de stam sindsdien niet is herschreven).
+  const hersteld = q.tekstZonderFiguur && q.tekstZonderFiguur.na === q.stam ? { ...q, stam: q.tekstZonderFiguur.stam, context: q.tekstZonderFiguur.context } : q;
+  const { tekstZonderFiguur: _t, ...zonderTekst } = hersteld;
+  const kaal = zonderLegacyFiguren(zonderTekst as Vraag);
+  if (q.tekstZonderFiguur && q.tekstZonderFiguur.na === q.stam) return { vraag: kaal, fallback: "tekst" };
   // Nieuwe (geplande) figuur die de vraag niet nodig had: vraag blijft zoals hij was.
   if (!opts.legacy && !opts.verwijst) return { vraag: kaal, fallback: "geen-figuur" };
   // Figuurdata die de vraag tegenspreekt, wordt ook geen tabel.
@@ -83,5 +87,19 @@ export function vraagZonderFiguur(
       /* val door */
     }
   }
-  return { vraag: { ...kaal, stam: vervangWoorden(kaal.stam, "de situatie") ?? kaal.stam }, fallback: "verwijderd" };
+  if (spec.soort === "pictogram") {
+    // Geen plaatje: beschrijf wat je op het symbool ziet (niet wat het betekent).
+    const symbool = (spec.data as { symbool?: GhsSymbool } | undefined)?.symbool;
+    const beschrijving = symbool ? PICTOGRAM_BESCHRIJVING[symbool] : undefined;
+    if (beschrijving) {
+      const zet = (t?: string) => t?.replace(/\b(?:dit|het|deze|dat)\s+(gevarensymbool|pictogram|veiligheidsbord|bord|symbool)(?:\s+met\s+een)?\b(?!\s+met)/i, `het $1 met ${beschrijving}`);
+      const stamB = zet(kaal.stam) ?? kaal.stam;
+      const ctxB = stamB === kaal.stam ? zet(kaal.context) : kaal.context;
+      if (stamB !== kaal.stam || ctxB !== kaal.context) return { vraag: { ...kaal, stam: stamB, context: ctxB }, fallback: "tekst" };
+    }
+  }
+  let stam = vervangWoorden(kaal.stam, "de situatie") ?? kaal.stam;
+  // Tekenopdracht zonder tekening: teken op het antwoordblad.
+  if (/\bteken\b/i.test(stam)) stam = stam.replace(/\s+in de situatie\b/gi, " op je antwoordblad");
+  return { vraag: { ...kaal, stam }, fallback: "verwijderd" };
 }
