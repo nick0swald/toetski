@@ -788,8 +788,14 @@ export async function downloadKwaliteitDocx(toets: GegenereerdeToets) {
 
 export async function downloadPakketDocx(toets: GegenereerdeToets) {
   const t = withDefaults(toets);
+  await saveDoc(await pakketDocument(t), `${slug(t.meta.titel)}-versie-${t.meta.versie}-pakket.docx`);
+}
+
+/** Het volledige pakket (leerlingblad, nakijkmodel, matrijs, cijfers) als docx-Document. */
+export async function pakketDocument(toets: GegenereerdeToets): Promise<Document> {
+  const t = withDefaults(toets);
   const leerling = await toetsParagrafen(t);
-  const doc = new Document({
+  return new Document({
     styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
     sections: [
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...schoolLeerlingChrome(), children: leerling },
@@ -798,7 +804,6 @@ export async function downloadPakketDocx(toets: GegenereerdeToets) {
       { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...headerFooter("Cijferomzetting"), children: cijferParagrafen(t) },
     ],
   });
-  await saveDoc(doc, `${slug(t.meta.titel)}-versie-${t.meta.versie}-pakket.docx`);
 }
 
 /** Alleen leerlingblad (voorblad + vragen), met figuren. */
