@@ -220,6 +220,11 @@ function userPrompt(
   } else {
     verdelingTekst = `AUTO (~${input.aantalVragen} vragen): kies MC vs open op basis van de lesstof. Dictee/schrijf/luister/spreek → vooral open, weinig of geen MC. Hoofdstuktoets met voldoende stof → ${mcShareDoelTekst()} Anders gemengd.`;
   }
+  // Puntenplan: gesloten vragen zijn 1 punt, dus de open vragen moeten de rest van het totaal dragen.
+  const geslotenN = mcN ?? Math.ceil(input.aantalVragen / 2);
+  const openPlanN = Math.max(1, (openN ?? input.aantalVragen - geslotenN));
+  const openPunten = Math.max(openPlanN, input.doelPunten - geslotenN);
+  const puntenPlan = `Puntenplan (verplicht, tel na): ${geslotenN} gesloten vragen × 1 punt = ${geslotenN} punten; ${openPlanN} open vragen samen ${openPunten} punten (gemiddeld ${(openPunten / openPlanN).toFixed(1).replace(".", ",")} per open vraag: 2–4 punten, met een rubriek van 1 punt per onderdeel). Totaal ${geslotenN + openPunten}.`;
   let feedbackBlok = "";
   if (input.feedback?.trim() || input.vorigeSamenvatting?.trim()) {
     feedbackBlok = `
@@ -244,6 +249,7 @@ Toetsduur: ${input.duurMinuten} minuten
 Aantal vragen: ${input.aantalVragen} (lever er echt zoveel; de toets moet de toetsduur vullen)
 Vraagverdeling: ${verdelingTekst}
 Totaal punten: ${input.doelPunten} (± 2; passend bij ${input.duurMinuten} minuten, tenzij de docent anders stuurt)
+${puntenPlan}
 ${paragrafenRegel(bron, input.antwoordenmateriaal)}
 Context-eisen (verplicht): realistische getallen en situaties (een echo in een lokaal of hal: tientallen meters, niet honderden; geluid van een klein apparaat hoor je niet op 500 m); alle gegevens die nodig zijn staan in de vraag; noem een ding eerst concreet voordat je 'de/dit' gebruikt; nooit een schoolnaam; verzonnen bedrijven mogen grappig zijn (bijv. 'Frituur De Vette Hap'); personen hebben Nederlandse voornamen (Sanne, Daan, Lotte, Bram). Staat er een figuur of tabel bij, zet de getallen die nodig zijn ÓÓK in de vraagtekst (de figuur kan wegvallen). Een tijdsverschil (echo, onweer) meet je alleen met een startsignaal (flits, zichtbare klap, eigen roep). Juist/onjuist is altijd een stelling, nooit een vraagzin. Elke context is een echte zin (geen los woord als 'pictogram').
 Juist/onjuist: opties altijd in de volgorde A. Juist, B. Onjuist.

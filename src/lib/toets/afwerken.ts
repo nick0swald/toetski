@@ -100,7 +100,7 @@ async function controleerVragen(
   bron: { lesstof: string; antwoorden?: string },
   controleer: Repair,
 ): Promise<{ oordelen: ControleOordeel[]; gelukt: number }> {
-  const stukken = inStukken(vragen, 4);
+  const stukken = inStukken(vragen, 3);
   const res = await Promise.all(
     stukken.map(async (st) => {
       const raw = await controleer(controlePrompt(st.map(figuurNaarVerwijzing), nakijk.filter((n) => st.some((q) => q.nummer === n.nummer)), bron)).catch(() => null);
@@ -125,7 +125,7 @@ async function repareerRonde(
   let n = nakijk;
   const gewijzigd: number[] = [];
   const res = await Promise.all(
-    inStukken(nummers, 4).map(async (st) => {
+    inStukken(nummers, 3).map(async (st) => {
       const sub = issues.filter((i) => st.includes(i.nummer));
       const extra = vervang
         ? "\n\nDeze vragen bleven na een reparatie fout. VERVANG elke vraag door een NIEUWE, eenvoudige en eenduidige vraag over hetzelfde leerdoel (zelfde type, punten en rtti), met een realistische situatie en alle gegevens in de tekst."

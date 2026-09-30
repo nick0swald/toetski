@@ -426,3 +426,9 @@ export interface GenerateMatrijsInput {
   bronUrl?: string;
   feedbackGewenst: boolean;
 }
+
+/** Past een pictogramveld bij de vraagtekst? (Een drukberekening met een gevarensymbool niet.) */
+export function pictogramPastBijVraag(q: Pick<Vraag, "stam" | "context" | "leerdoel" | "opties">): boolean {
+  const t = `${q.context ?? ""} ${q.stam} ${q.leerdoel ?? ""} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`;
+  return /symbool|pictogram|\bbord|etiket|gevaar|gevaarlijk|veilig|bescherming|\bbril|handschoen|brandbaar|ontvlambaar|giftig|bijtend|explosie|oxider|milieu|irriter|schadelijk|lawaai|verplicht|verboden/i.test(t);
+}
