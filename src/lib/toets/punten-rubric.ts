@@ -54,8 +54,7 @@ export const DOORREKENEN =
 
 /**
  * Rekenvragen krijgen deelpunten: een fout (bijv. niet delen door 2) kost 1 punt, niet de hele vraag.
- * "Niet toekennen"-regels worden aftrekregels. De algemene examenregel (DOORREKENEN) staat één keer
- * bovenaan het nakijkmodel, niet bij elke vraag (r236).
+ * "Niet toekennen"-regels worden aftrekregels; de doorrekenregel staat er altijd bij.
  */
 export function rekenAftrek(regels: string[] | undefined): string[] {
   const uit = (regels ?? [])
@@ -63,12 +62,7 @@ export function rekenAftrek(regels: string[] | undefined): string[] {
     .filter(Boolean)
     .filter((r) => !/^rekenfout of vergeten stap|^examenregel:/i.test(r))
     .map((r) => (/aftrek|punt minder|-\s*1\s*p/i.test(r) ? r : `${r.replace(/[.;]+$/, "")}: 1 punt aftrek (niet de hele vraag fout)`));
-  return uit;
-}
-
-/** Oude toetsen: de examenregel stond bij elke vraag; bij tonen alleen de vraagspecifieke regels. */
-export function vraagSpecifiek(regels: string[] | undefined): string[] {
-  return (regels ?? []).filter((r) => !/^examenregel:/i.test(r.trim()));
+  return [...uit, DOORREKENEN];
 }
 
 function overlapt(a: string, b: string): boolean {

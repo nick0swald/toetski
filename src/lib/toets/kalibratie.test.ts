@@ -83,10 +83,10 @@ describe("kalibratie op de schooltoetsen", () => {
 });
 
 describe("vraagtypen", () => {
-  it("62 examentypen + OVERIG + drie onderbouwtypen + twee schooltypen (K-FZ, K-VEER)", () => {
+  it("62 examentypen + OVERIG + drie onderbouwtypen", () => {
     const ids = VRAAGTYPEN.map((t) => t.id);
-    for (const id of ["O-LICHT", "O-HEELAL", "O-WEER", "G-ECHO", "OVERIG", "K-FZ", "K-VEER"]) assert.ok(ids.includes(id), id);
-    assert.equal(ids.length, 68);
+    for (const id of ["O-LICHT", "O-HEELAL", "O-WEER", "G-ECHO", "OVERIG"]) assert.ok(ids.includes(id), id);
+    assert.equal(ids.length, 66);
   });
   it("elk type heeft een standaard-RTTI", () => {
     for (const t of VRAAGTYPEN) assert.ok(TYPE_RTTI[t.id], t.id);
@@ -167,8 +167,7 @@ describe("RTTI-regels", () => {
   it("labelRtti zet label + reden en laat vakken zonder vraagtype met rust", () => {
     const [a, b] = labelRtti([v(1, { vraagtype: "K-SOORT", rtti: "T2", stam: "Noem de kracht." }), v(2, { rtti: "I" })]);
     assert.equal(a!.rtti, "R");
-    assert.match(a!.rttiUitleg!, /^R — /);
-    assert.doesNotMatch(a!.rttiUitleg!, /→|model:/);
+    assert.match(a!.rttiUitleg!, /type K-SOORT → R.*\(model: T2\)/);
     assert.equal(b!.rtti, "I");
     assert.equal(b!.rttiUitleg, undefined);
   });
@@ -219,8 +218,7 @@ describe("nakijken in de stijl van de docent + examenregel", () => {
     const out = repareerPunten([q], [n]);
     assert.equal(out.vragen[0]!.punten, 2);
     assert.ok(!out.nakijkmodel[0]!.puntenverdeling.some((c) => /gegevens/.test(c.criterium)));
-    // De examenregel staat één keer bovenaan het nakijkmodel, niet per vraag.
-    assert.ok(!out.nakijkmodel[0]!.nietToekennen!.includes(DOORREKENEN));
+    assert.ok(out.nakijkmodel[0]!.nietToekennen!.includes(DOORREKENEN));
     assert.match(DOORREKENEN, /samen hooguit 1 punt/);
     assert.match(DOORREKENEN, /significantie/);
   });

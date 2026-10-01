@@ -57,20 +57,7 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Veiligheid: beloon nooit onveilig handelen (onbekende vloeistof bij een vlam houden, proeven, ruiken) als 'veiligste' antwoord. Het etiket of gevarensymbool bekijken is veilig.",
       "Open vragen: commando’s als Noem, Geef, Leg uit, Bereken, Verklaar.",
       "Vraagstam (Cito/school): EERST situatieschets/inleiding (wie/wat/waar), DAARNA de vraagzin of opdracht. NOOIT andersom — geen vraag eerst en verhaal erna.",
-      "Veld context = optionele inleiding vóór de stam; veld stam = de eigenlijke vraagtekst. Situatieschets óf in context óf aan het begin van stam; nooit ná de vraagzin. Herhaal een zin uit de context NIET in de stam.",
-      "Afleiders: plausibele leerlingfouten, grammaticaal parallel aan het juiste antwoord, onder geen enkele voorwaarde ook waar ('alleen bij kleine gewichten' bij een veer is óók waar — elasticiteitsgrens). Geen onzinopties ('Altijd 10 N', 'kleiner dan 0 N') en geen kracht/begrip dat er niets mee te maken heeft ('magnetische kracht' bij een veer).",
-    ],
-  },
-  {
-    id: "samenhang",
-    titel: "Samenhang over de hele toets",
-    punten: [
-      "Geen weggevers tussen vragen: geen stam, optie of antwoord mag het antwoord, de formule of een scorestap van een andere vraag tonen (geen optie 'F1 × r1 = F2 × r2' als een andere vraag een punt geeft voor de hefboomwet; geen MC 'welke kracht trekt naar beneden' als een open vraag om die kracht vraagt).",
-      "Elke concrete situatie/voorwerp komt één keer voor in de toets (niet twee keer koevoet + steen, niet twee keer 'X tilt ... op'), behalve bij een bewuste doorlopende situatie met contextTitel en gedeelde inleiding.",
-      "Elk verband (bijv. groter oppervlak → kleinere druk) hooguit één keer; een tweede alleen als echte I-vraag die niets weggeeft. Spreid de vragen over alle leerdoelen en paragrafen van de lesstof.",
-      "Realistische, alledaagse vergelijkingen (niet 'een punaise drukt met dezelfde kracht als een brede schoen').",
-      "Klas 3–4: minstens één I-vraag (verklaren, voorspellen, beoordelen in een nieuwe situatie).",
-      "Correct Nederlands: 'kleiner oppervlak', 'het krat', 'hetzelfde krat', 'het gewicht'.",
+      "Veld context = optionele inleiding vóór de stam; veld stam = de eigenlijke vraagtekst. Situatieschets óf in context óf aan het begin van stam; nooit ná de vraagzin.",
     ],
   },
   {
@@ -113,9 +100,6 @@ export const STUUR_SECTIES: StuurSectie[] = [
       "Onderdompelmethode: veld maatcilinder met de af te lezen standen; de getallen staan in de figuur, niet als kant-en-klare zin in de stam.",
       "Noemt de lesstof een grafiek: zet een grafiek (veld grafiek) in de JSON. Een tabel mag erbij, maar telt zelf niet als de verplichte figuur.",
       "Bij schakelingen, krachten of blokkenschema's: gebruik schemaFiguur (soort circuit|krachten|blokken) met korte labels. Alleen eenvoudige lijnkunst, nooit boekillustraties kopiëren.",
-      "Zwaartekracht: gebruik één waarde van g in de hele toets, dezelfde als de lesstof (Nova: g = 9,8 N/kg; anders 10 N/kg als de lesstof dat zegt). Rond correct af, nooit afkappen (18 × 9,8 = 176,4 ≈ 176 N; 18 × 9,81 = 176,6 ≈ 177 N). Het nakijkmodel rekent ook goed met een andere gangbare g (9,81 of 10 N/kg).",
-      "Vraagtype bij berekeningen: zwaartekracht (Fz = m × g) = K-FZ; veer/veerconstante (F = C × u) = K-VEER; druk = K-DRUK; moment/hefboom = K-MOM; nettokracht = K-NET. S-CALC-OV alleen voor echt omrekenen van eenheden.",
-      "Tekenvraag (krachtpijl met krachtenschaal, parallellogram, F-u-grafiek): veld tekenvak {soort: raster, kolommen, rijen, schaal, xLabel, yLabel} geeft een leeg, door code getekend raster als antwoordkader. Zet de schaal in de stam (bijv. 1 cm ≙ 10 N) en geef een rubriek per getekend element (aangrijpingspunt, richting, lengte volgens schaal). Mag ook zonder plaatjes.",
     ],
   },
   {
@@ -144,7 +128,7 @@ export function stuurdocumentTekst(): string {
 export const JSON_SCHEMA_PROMPT = `Antwoord ALLEEN met één JSON-object, geen markdown. Schema:
 {
   "meta": { "titel": string, "vak": string, "leerweg": "BB"|"KB"|"GT", "leerjaar": 1|2|3|4, "duurMinuten": number, "hulpmiddelen": string[], "instructies": string[], "onderwerp": string, "extraTijd": string },
-  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "contextTitel": string (optioneel, alleen bij een doorlopende context), "vraagtype": string (id uit de lijst, anders OVERIG), "leerdoelId": string (id uit de LEERDOELEN-lijst, als die er is), "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] }, "pictogram": "ontvlambaar"|"giftig"|"bijtend"|"milieu"|"schadelijk"|"explosief"|"oxiderend"|"gas-onder-druk"|"gezondheidsgevaar", "maatcilinder": { "titel": string, "maxMl": number, "standen": [{"label": string, "ml": number}] }, "tekenvak": { "soort": "raster"|"leeg", "kolommen": number, "rijen": number, "schaal": string, "xLabel": string, "yLabel": string } (optioneel, alleen bij een tekenvraag) }],
+  "vragen": [{ "nummer": number, "type": "meerkeuze"|"juist-onjuist"|"open"|"invul"|"berekening"|"bronvraag", "rtti": "R"|"T1"|"T2"|"I", "domein": string, "leerdoel": string, "punten": number, "context": string, "contextTitel": string (optioneel, alleen bij een doorlopende context), "vraagtype": string (id uit de lijst, anders OVERIG), "leerdoelId": string (id uit de LEERDOELEN-lijst, als die er is), "stam": string, "opties": [{"letter":"A","tekst": string}], "tabel": { "koppen": string[], "rijen": string[][] }, "grafiek": { "titel": string, "xLabel": string, "yLabel": string, "punten": [{"x": number, "y": number}] }, "schemaFiguur": { "soort": "circuit"|"krachten"|"blokken", "titel": string, "labels": string[] }, "pictogram": "ontvlambaar"|"giftig"|"bijtend"|"milieu"|"schadelijk"|"explosief"|"oxiderend"|"gas-onder-druk"|"gezondheidsgevaar", "maatcilinder": { "titel": string, "maxMl": number, "standen": [{"label": string, "ml": number}] } }],
   "nakijkmodel": [{ "nummer": number, "modelantwoord": string, "puntenverdeling": [{"punt": number, "criterium": string}], "nietToekennen": string[] }],
   "cesuur": { "nTerm": 1, "cesuurPunten": number, "toelichting": string, "formule": string },
   "kwaliteit": { "samenvatting": string, "punten": [{"criterium": string, "oordeel": "voldoet"|"aandacht"|"ontbreekt", "toelichting": string}] }

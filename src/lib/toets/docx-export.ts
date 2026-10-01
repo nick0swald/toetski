@@ -16,20 +16,18 @@ import {
   Header,
   Footer,
   VerticalAlign,
-  HeightRule,
 } from "docx";
 import { RTTI_META, RTTI_ORDER } from "./constants";
 import { cesuurPunten, formuleTekst, modelLabel, omzetTabel, voldoendeHint } from "./cijfer";
 import { totaalPunten } from "./rtti";
 import { slug } from "./text";
 import { ghsPictogramSvg, grafiekSvg, maatcilinderSvg, schemaFiguurSvg } from "./figuur-svg";
-import { blokkenVoorVraag, tekenvakMaat } from "./blad-volgorde";
+import { blokkenVoorVraag } from "./blad-volgorde";
 import { figuurIsGeldig } from "./figuren/bevriezing";
 import type { CijferNorm, GegenereerdeToets, GoedgekeurdeFiguur, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
 import { startGroep } from "./context-groepen";
 import { leerdoelDekking } from "./leerdoelen-plan";
-import { DOORREKENEN, vraagSpecifiek } from "./punten-rubric";
 
 const GREEN = "004422";
 const INK = "000000";
@@ -101,43 +99,6 @@ function vraagTabelDocx(tabel: VraagTabel): Table {
     columnWidths: Array.from({ length: cols }, () => colW),
     rows,
   });
-}
-
-/** Tekenvak: raster van 1 cm-hokjes als Word-tabel (door code getekend, geen beeld), met schaal/aslabels. */
-function tekenvakBlocks(q: Vraag): DocChild[] {
-  const { kolommen, rijen } = tekenvakMaat(q);
-  const cm = 567; // 1 cm in twips
-  const raster = q.tekenvak?.soort !== "leeg";
-  const lijn = { style: BorderStyle.SINGLE, size: raster ? 2 : 0, color: raster ? "B0B0B0" : "FFFFFF" };
-  const rand = { style: BorderStyle.SINGLE, size: 8, color: INK };
-  const rows = Array.from(
-    { length: rijen },
-    (_, r) =>
-      new TableRow({
-        height: { value: cm, rule: HeightRule.EXACT },
-        children: Array.from(
-          { length: kolommen },
-          (_, c) =>
-            new TableCell({
-              width: { size: cm, type: WidthType.DXA },
-              borders: {
-                top: r === 0 ? rand : lijn,
-                bottom: r === rijen - 1 ? rand : lijn,
-                left: c === 0 ? rand : lijn,
-                right: c === kolommen - 1 ? rand : lijn,
-              },
-              children: [new Paragraph({ children: [] })],
-            }),
-        ),
-      }),
-  );
-  const out: DocChild[] = [];
-  const t = q.tekenvak;
-  const bijschrift = [t?.schaal ? `Schaal: ${t.schaal}` : "", t?.yLabel ? `verticaal: ${t.yLabel}` : "", t?.xLabel ? `horizontaal: ${t.xLabel}` : ""].filter(Boolean).join("   ");
-  if (bijschrift) out.push(p(bijschrift, { size: SMALL_SIZE, before: 60, after: 40 }));
-  out.push(new Table({ width: { size: kolommen * cm, type: WidthType.DXA }, columnWidths: Array.from({ length: kolommen }, () => cm), rows }));
-  out.push(p("", { after: 80 }));
-  return out;
 }
 
 async function svgImageParagraph(svg: string, widthPx: number, heightPx: number): Promise<Paragraph> {
@@ -484,8 +445,6 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
             }),
           );
         }
-      } else if (blok === "tekenvak") {
-        out.push(...tekenvakBlocks(q));
       } else if (blok === "antwoordlijnen") {
         const lijnen = Math.max(2, (Number(q.punten) || 1) + 1);
         for (let i = 0; i < lijnen; i++) {
@@ -516,9 +475,7 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
       `${t.meta.vak} · ${t.meta.leerweg} klas ${t.meta.leerjaar} · versie ${t.meta.versie}`,
       { size: SMALL_SIZE, after: 40 },
     ),
-    p(formuleTekst(t.cijferNorm, max), { bold: true, after: t.vragen.some((q) => !q.opties?.length) ? 80 : 200 }),
-    // De algemene examenregel één keer bovenaan (niet onder elke vraag bij 'Niet toekennen').
-    ...(t.vragen.some((q) => !q.opties?.length) ? [p(DOORREKENEN, { size: SMALL_SIZE, after: 200 })] : []),
+    p(formuleTekst(t.cijferNorm, max), { bold: true, after: 200 }),
   ];
   const ldPerVraag = leerdoelDekking(t.vragen, t.leerdoelen).perVraag;
   for (const n of t.nakijkmodel) {
@@ -565,9 +522,8 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
         }),
       );
     }
-    const eigenRegels = vraagSpecifiek(n.nietToekennen);
-    if (eigenRegels.length) {
-      out.push(p(`Niet toekennen: ${eigenRegels.join("; ")}`, { size: SMALL_SIZE, italics: true }));
+    if (n.nietToekennen?.length) {
+      out.push(p(`Niet toekennen: ${n.nietToekennen.join("; ")}`, { size: SMALL_SIZE, italics: true }));
     }
   }
   return out;
@@ -721,7 +677,7 @@ function matrijsBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
 export function leerdoelBlocks(t: GegenereerdeToets): (Paragraph | Table)[] {
   const plan = t.leerdoelen;
   if (!plan?.doelen.length) return [];
-  const { rijen, ongedekt, alleenTekening, perVraag } = leerdoelDekking(t.vragen, plan);
+  const { rijen, ongedekt, perVraag } = leerdoelDekking(t.vragen, plan);
   const fill = "E8F0EA";
   const w = [1150, 4260, 700, 1450, 900, 900];
   const kop = new TableRow({
@@ -761,7 +717,6 @@ export function leerdoelBlocks(t: GegenereerdeToets): (Paragraph | Table)[] {
     sub(`${plan.bronTitel}${plan.herkomst ? ` · ${plan.herkomst}` : ""} · ${plan.leerweg} klas ${plan.leerjaar}`),
     new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: w, rows: [kop, ...rows] }),
     p(ongedekt.length ? `Niet getoetst: ${ongedekt.map((r) => `${r.id} (${r.tekst})`).join("; ")}.` : "Alle leerdoelen van dit hoofdstuk zijn getoetst.", { bold: ongedekt.length > 0, before: 120, after: 60 }),
-    ...(alleenTekening.length ? [p(`Alleen met een tekening toetsbaar (toets zonder plaatjes): ${alleenTekening.map((r) => `${r.id} (${r.tekst})`).join("; ")}.`, { size: SMALL_SIZE, after: 60 })] : []),
     p(`Leerdoel per vraag: ${perVraagTekst}`, { size: SMALL_SIZE, after: 60 }),
     p("Richtpunten liggen vast per hoofdstuk, klas, leerweg en toetslengte (zelfde keuze → zelfde verdeling).", { size: SMALL_SIZE, italics: true }),
   ];

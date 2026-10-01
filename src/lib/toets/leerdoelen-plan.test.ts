@@ -27,7 +27,7 @@ describe("leerdoelen-data", () => {
     const bekend = new Set([...VRAAGTYPEN.map((t) => t.id), "OVERIG"]);
     const gebruikt = new Set(EINDTERMEN.flatMap((d) => d.typen));
     for (const t of [...EINDTERMEN, ...KERNDOELEN].flatMap((d) => d.typen)) assert.ok(bekend.has(t), t);
-    const cse = VRAAGTYPEN.filter((t) => !t.onderbouw && !t.school && t.id !== "OVERIG");
+    const cse = VRAAGTYPEN.filter((t) => !t.onderbouw && t.id !== "OVERIG");
     assert.equal(cse.length, 62);
     assert.deepEqual(cse.filter((t) => !gebruikt.has(t.id)).map((t) => t.id), []);
   });
