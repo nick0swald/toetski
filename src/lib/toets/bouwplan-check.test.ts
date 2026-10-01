@@ -145,3 +145,13 @@ describe("bouwplan-check: groep met gesloten én open vragen", () => {
     assert.deepEqual(p.items.slice(0, 2).map((x) => x.vorm), ["mc", "mc"]);
   });
 });
+
+describe("bouwplan-check punten", () => {
+  it("te weinig punten bij alleen gesloten vragen → kort-vragen i.p.v. harde fout", () => {
+    const pars = ["1.1", "1.2", "1.3"];
+    const items = Array.from({ length: 6 }, (_, i) => item(i + 1, { vorm: "mc", punten: 1, rtti: i < 2 ? "R" : i < 5 ? "T1" : "I", par: pars[i % 3], begrip: `uniek${i}` }));
+    const { plan: p, issues } = herstelBouwplan({ versie: 1, items, reserve: [] }, quota);
+    assert.equal(p.items.reduce((s, x) => s + x.punten, 0), 10);
+    assert.ok(!openHard(issues).some((x) => x.code === "punten"));
+  });
+});

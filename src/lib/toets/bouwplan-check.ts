@@ -264,6 +264,21 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
         rest += rest > 0 ? -1 : 1;
       }
     }
+    // Nog steeds te weinig (plan vol gesloten vragen of alles op het maximum): gesloten vragen boven R
+    // worden korte open vragen van 2 punten. Te veel: open R-vragen worden mc. Liever iets andere vormmix
+    // dan terug naar de oude route.
+    for (const it of [...items].filter((x) => (rest > 0 ? isGesloten(x) : !isGesloten(x) && x.rtti === "R" && x.vorm !== "reken")).sort((a, b) => (rest > 0 ? rang[a.rtti] - rang[b.rtti] : b.punten - a.punten))) {
+      if (rest === 0) break;
+      if (rest > 0) {
+        it.vorm = "kort";
+        it.punten = Math.min(1 + rest, 2);
+        rest -= it.punten - 1;
+      } else {
+        rest += it.punten - 1;
+        it.vorm = "mc";
+        it.punten = 1;
+      }
+    }
     meld("punten", `plan had ${q.punten - verschil} punten → ${q.punten - rest} (doel ${q.punten})`, Math.abs(rest) > 2 ? "hard" : "zacht", Math.abs(rest) <= 2);
   }
   const r = rttiPuntenVan(items);
