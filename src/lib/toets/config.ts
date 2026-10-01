@@ -13,6 +13,8 @@ import type { Moeilijkheid, Rtti, RttiVerdeling } from "./types";
 // ── Modellen ────────────────────────────────────────────────────────────────────────────────────
 /** Nick, 1 okt 2026: vragen SCHRIJVEN en REPAREREN op grok-4.5 (was grok-4.20-0309-non-reasoning). */
 export const MODELLEN = {
+  /** Bouwplan (plan-first): per vraag paragraaf, vorm, RTTI, punten, begrip, context, persoon. */
+  plannen: "grok-4.5",
   /** Vragen schrijven (toets, extra vragen, bijschaven). */
   schrijven: "grok-4.5",
   /** Reparatieronde(s) na de inhoudscontrole. */
@@ -31,6 +33,7 @@ export type ModelRol = keyof typeof MODELLEN;
 
 /** Redeneerinspanning per rol (alleen voor redenerende modellen). */
 export const REDENEREN: Partial<Record<ModelRol, "low" | "medium" | "high">> = {
+  plannen: "low",
   schrijven: "low",
   repareren: "low",
   controle: "low",
@@ -38,6 +41,7 @@ export const REDENEREN: Partial<Record<ModelRol, "low" | "medium" | "high">> = {
 
 /** Temperatuur per rol. */
 export const TEMPERATUUR: Partial<Record<ModelRol, number>> = {
+  plannen: 0.5,
   schrijven: 0.4,
   repareren: 0.3,
   controle: 0,
@@ -102,6 +106,33 @@ export const UX_TIJD = {
 } as const;
 
 // ── Generatie-limieten ──────────────────────────────────────────────────────────────────────────
+/** Plan-first (bouwplan → parallel schrijven). */
+export const PLAN = {
+  /** Aan/uit: plan-first voor NaSk-toetsen met kalibratie (anders de oude delen-route). */
+  aan: true,
+  /** Minimaal aantal vragen voor plan-first. */
+  minVragen: 8,
+  /** Reservevragen in het bouwplan (voor vervangen/aanvullen). */
+  reserve: 3,
+  /** Vragen per parallelle schrijf-aanroep. */
+  stukGrootte: 5,
+  /** Uitvoertokens per bouwplan-item (kort JSON) + vaste marge (incl. redeneren). */
+  tokensPerItem: 90,
+  tokensMarge: 2500,
+  /** Bouwplan-aanroep duurt nooit langer dan dit (daarna oude route). */
+  timeoutMs: 60_000,
+} as const;
+
+/**
+ * Voornamen voor contexten (Nederlands/westers, kort, makkelijk leesbaar). Het bouwplan kiest hieruit;
+ * elke naam hooguit één vraag of één context. Geen namen van bekende personen.
+ */
+export const VOORNAMEN = [
+  "Sanne", "Daan", "Lotte", "Bram", "Emma", "Luuk", "Fenna", "Sem", "Julia", "Thijs", "Iris", "Ruben", "Noor", "Jesse",
+  "Femke", "Lars", "Eva", "Milan", "Sophie", "Jasper", "Lisa", "Koen", "Anna", "Stijn", "Tess", "Niels", "Roos", "Finn",
+  "Mila", "Gijs", "Floor", "Teun", "Isa", "Wouter", "Lieke", "Mees", "Nina", "Joep", "Vera", "Bas",
+] as const;
+
 export const LIMIETEN = {
   /** Lesstof die maximaal mee gaat naar het schrijven (tekens). */
   bronMax: 100_000,
