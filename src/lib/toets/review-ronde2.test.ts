@@ -135,8 +135,7 @@ describe("ronde 2: strengere afwerking", () => {
     assert.deepEqual(res.vragen.map((q) => q.nummer), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
     assert.ok(!res.vragen.some((q) => /stof 4 /.test(q.stam)));
     assert.deepEqual(res.controle?.verwijderd, [4]);
-    // Tien keer 'oplost in water' is ook een dubbele situatie (samenhang); de reparatie gaf hier niets terug.
-    assert.deepEqual(res.controle?.blijft.filter((b) => b.code !== "dubbele-context"), []);
+    assert.deepEqual(res.controle?.blijft, []);
   });
   it("zonder plaatjes: pictogram weg vóór de controle", async () => {
     let gezien = "";

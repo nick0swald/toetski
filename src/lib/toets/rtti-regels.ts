@@ -29,8 +29,6 @@ export const TYPE_RTTI: Record<string, Rtti> = {
   // nieuwe situatie / meer stappen / interpreteren
   "E-SERPAR": "T2", "B-DIAG": "T2", "S-VERBAND": "T2", "S-ONDZ": "T2", "K-RES": "T2", "K-NET": "T2", "K-ZWP": "T2",
   "W-DRIJF": "T2", "G-ECHO": "T2", "K-MOM": "T2", "G-DB": "T2", "B-STOP": "T2", "S-CALC-OV": "T2",
-  // schooltoetstypen (niet los in de 62 CSE-typen): één formule of een geleerd verband
-  "K-FZ": "T1", "K-VEER": "T1",
   OVERIG: "T1",
 };
 
@@ -58,19 +56,7 @@ function opdracht(stam: string): string {
 
 export interface RttiOordeel {
   rtti: Rtti;
-  /** Volledige redenering (type → basis; bijstellingen). */
   reden: string;
-  /** Eén korte, begrijpelijke reden voor het eindlabel (voor nakijkmodel en matrijs). */
-  kort: string;
-}
-
-/** Een getal als gegeven (30 N, 0,12 m²), geen index zoals in F1 of r2. */
-const WAARDE = /(?<![A-Za-zÀ-ÿ_])\d+(?:[.,]\d+)?/;
-/** Opties die alleen formules/symbolen tonen (F1 × r1 = F2 × r2, p = F / A): een formule herkennen. */
-function formuleOpties(opties: string[]): boolean {
-  if (opties.length < 2) return false;
-  const formule = opties.filter((o) => /[×x·*\/=]/.test(o) && /\b[A-Za-z]{1,2}\d?\b\s*[×x·*\/=]/.test(o) && !WAARDE.test(o.replace(/\b[A-Za-z]\d\b/g, "")));
-  return formule.length >= Math.ceil(opties.length / 2);
 }
 
 /** RTTI volgens de regels, met korte reden. */
@@ -90,14 +76,10 @@ export function rttiVolgensRegels(
   const gesloten = q.type === "meerkeuze" || q.type === "juist-onjuist";
   // Getallen tellen alleen als er echt mee gerekend wordt: in de keuzes, of een hoeveel/hoe groot-vraag
   // (r8: "92 dB … Wat is juist over de amplitude?" is geen rekenvraag).
-  const optieLijst = (q.opties ?? []).map((o) => (typeof o === "string" ? o : (o?.tekst ?? "")));
-  const optieTekst = optieLijst.join(" ");
-  const getallen = WAARDE.test(optieTekst) || (WAARDE.test(stam) && /hoe\s+groot|hoeveel|hoe\s+lang|hoe\s+ver|bereken|bepaal|resulterende|nettokracht/i.test(op));
+  const optieTekst = (q.opties ?? []).map((o) => (typeof o === "string" ? o : (o?.tekst ?? ""))).join(" ");
+  const getallen = /\d/.test(optieTekst) || (/\d/.test(stam) && /hoe\s+groot|hoeveel|hoe\s+lang|hoe\s+ver|bereken|bepaal/i.test(op));
 
-  if (gesloten && punten <= 1 && formuleOpties(optieLijst)) {
-    r = "R";
-    redenen.push("formule of regel herkennen");
-  } else if (gesloten && punten <= 1 && !reken && !getallen) {
+  if (gesloten && punten <= 1 && !reken && !getallen) {
     // Gesloten 1-puntsvraag zonder rekenwerk: herkennen (R) of een geleerd verband toepassen (T1);
     // inzicht (I) of een nieuwe toepassing (T2) toetst een keuzevraag van 1 punt zonder getallen zelden.
     if (q.type === "juist-onjuist" || basis === "R" || REPRO.test(op)) {
@@ -107,10 +89,9 @@ export function rttiVolgensRegels(
       r = "T1";
       redenen.push(INZICHT.test(op) ? "gesloten keuze: geleerd verband herkennen" : "gesloten keuze: geleerd verband toepassen");
     }
-  } else if (gesloten && punten <= 1 && getallen && (basis === "R" || basis === "T2")) {
-    // Een keuzevraag van 1 punt met een korte som (30 N − 10 N) is geoefend toepassen, geen nieuwe toepassing.
+  } else if (gesloten && punten <= 1 && getallen && basis === "R") {
     r = "T1";
-    redenen.push("keuzevraag met een korte berekening");
+    redenen.push("keuzevraag met getallen: kort toepassen");
   } else if (punten <= 1 && !reken && REPRO.test(op.split(/(?<=[.?!])\s+/).pop() ?? op)) {
     r = "R";
     redenen.push("noem/noteer een feit of begrip");
@@ -146,8 +127,7 @@ export function rttiVolgensRegels(
     r = "T1";
     redenen.push("herkennen in een nieuwe context");
   }
-  const kort = redenen.length > 1 ? redenen[redenen.length - 1]! : r === "R" ? "feit of begrip reproduceren" : r === "T1" ? "geleerde aanpak in een bekende situatie" : r === "T2" ? "meerdere stappen of een nieuwe situatie" : "redeneren/verklaren";
-  return { rtti: r, reden: redenen.join("; "), kort };
+  return { rtti: r, reden: redenen.join("; ") };
 }
 
 /**
@@ -159,8 +139,8 @@ export function labelRtti(vragen: Vraag[]): Vraag[] {
     // Alleen bij een vraagtype (NaSk-taxonomie); andere vakken houden het modellabel.
     if (!q.vraagtype?.trim()) return q;
     const o = rttiVolgensRegels(q);
-    // Eén duidelijk eindlabel met één korte reden (geen tussenstappen of modellabel: dat verwarde docenten).
-    return { ...q, rtti: o.rtti, rttiUitleg: `${o.rtti} — ${o.kort}` };
+    const anders = q.rtti && q.rtti !== o.rtti ? ` (model: ${q.rtti})` : "";
+    return { ...q, rtti: o.rtti, rttiUitleg: `${o.rtti}: ${o.reden}${anders}` };
   });
 }
 

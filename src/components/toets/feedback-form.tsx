@@ -1,4 +1,3 @@
-import { isHandmatigRtti } from "@/lib/toets/constants";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, FileDown, FileUp, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -86,7 +85,6 @@ export function FeedbackForm({ startId }: { startId?: string }) {
           doelPunten: Math.min(100, Math.max(10, totaalPunten(toets.vragen))),
           aantalVragen: Math.min(16, Math.max(4, toets.vragen.length)),
           rttiDoel: toets.matrijs.doelverdeling,
-          rttiHandmatig: isHandmatigRtti(toets.matrijs.doelverdeling, toets.meta.leerjaar, toets.meta.moeilijkheid),
           bronmateriaal: toets.bronmateriaal,
           extraEisen: toets.extraEisen,
           versie: toets.meta.versie,

@@ -42,8 +42,6 @@ export const generateInputSchema = z.object({
     T2: z.coerce.number(),
     I: z.coerce.number(),
   }),
-  /** Docent schoof zelf aan het RTTI-doel; anders geldt het vaste doel per klas (rttiDoelVoor). */
-  rttiHandmatig: z.boolean().optional(),
   bronmateriaal: z.string().max(100000).optional().default(""),
   extraEisen: z.string().max(4000).optional().default(""),
   bronUrl: z.string().max(500).optional(),
@@ -159,19 +157,6 @@ export const vraagSchema = z.object({
       standen: z.array(z.object({ label: z.string(), ml: z.coerce.number() })).min(1).max(4),
     })
     .nullish()
-    .transform((v) => v ?? undefined),
-  /** Leeg antwoordkader voor een tekenvraag (code-getekend raster, nooit een AI-beeld). */
-  tekenvak: z
-    .object({
-      soort: z.enum(["raster", "leeg"]).catch("raster"),
-      kolommen: z.coerce.number().int().min(4).max(16).optional().catch(undefined),
-      rijen: z.coerce.number().int().min(3).max(12).optional().catch(undefined),
-      schaal: z.string().max(40).nullish().transform((v) => v?.trim() || undefined),
-      xLabel: z.string().max(30).nullish().transform((v) => v?.trim() || undefined),
-      yLabel: z.string().max(30).nullish().transform((v) => v?.trim() || undefined),
-    })
-    .nullish()
-    .catch(undefined)
     .transform((v) => v ?? undefined),
   /** Verwijzing naar een bevroren, goedgekeurde figuur (beelddata gaat nooit naar het model). */
   figuurId: z.string().max(80).nullish().transform((v) => v || undefined),
