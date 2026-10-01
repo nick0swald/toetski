@@ -1,13 +1,16 @@
-/** Modelnamen voor de beeldpijplijn (gecontroleerd tegen docs.x.ai en /v1/models, sept 2026). */
+/**
+ * Modelnamen voor de beeldpijplijn: doorgegeven uit config.ts (enige bron, bewaakt door config.test.ts).
+ * Niet hier aanpassen: wijzig MODELLEN in src/lib/toets/config.ts.
+ */
+import { MODELLEN, XAI_BASE as BASE } from "../config.ts";
 
-/** Tekstmodel: gelijk aan het bestaande callGrok-model in generate.ts. */
-export const TEKST_MODEL = "grok-4.20-0309-non-reasoning";
+/** Figuurplanner / figuur-JSON: snel, niet-redenerend model. */
+export const TEKST_MODEL = MODELLEN.snel;
 /** Beeldmodel (Grok Imagine) voor sfeerplaten. */
-export const BEELD_MODEL = "grok-imagine-image-2.0";
+export const BEELD_MODEL = MODELLEN.beeld;
 /** Vision-model voor de go/no-go-keuring (tekst + beeld als input). */
-export const VISIE_MODEL = "grok-4.5";
+export const VISIE_MODEL = MODELLEN.visie;
+/** Onafhankelijke inhoudscontrole. */
+export const CONTROLE_MODEL = MODELLEN.controle;
 
-export const XAI_BASE = "https://api.x.ai/v1";
-
-/** Onafhankelijke inhoudscontrole (sleutel, oplosbaarheid, realisme): redenerend model, lage inspanning. */
-export const CONTROLE_MODEL = "grok-4.5";
+export const XAI_BASE = BASE;

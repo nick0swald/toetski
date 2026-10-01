@@ -1,0 +1,29 @@
+{
+ "case": "geluid-kb2",
+ "omschrijving": "2KB H6 Geluid met antwoordenboek, 45 min.",
+ "input": {
+  "extraEisen": "",
+  "antwoordenmateriaal": "Antwoorden Hoofdstuk 6 Geluid\n6.1 Geluid maken en horen\n1 a de snaar trilt b lucht c het oor\n2 geluidsbron, tussenstof, ontvanger\n6.2 Hoge en lage tonen\n3 a 440 trillingen per seconde b hoger\n4 ultrasoon, want boven 20 000 Hz\n5 een hond hoort 30 000 Hz wel, een mens niet\n6.3 Hard en zacht geluid\n6 decibelmeter, dB\n7 95 dB: 15 minuten\n6.4 Geluidssnelheid\n8 s = v × t = 343 × 3 = 1029 m\n9 echo: s = 343 × 0,2 / 2 = 34 m\n6.5 Geluidshinder\n10 bron: demper; tussenstof: geluidsscherm; ontvanger: oorkappen\n6.6 Het oor\n11 trommelvlies, gehoorbeentjes, slakkenhuis\n",
+  "versie": "A",
+  "moeilijkheid": "normaal",
+  "cijferNorm": {
+   "model": "lineair",
+   "cesuurPct": 55,
+   "exponent": 1
+  },
+  "ronde": 1,
+  "feedback": "",
+  "vorigeSamenvatting": "",
+  "metPlaatjes": false,
+  "plaatjes": "zonder",
+  "lengteAuto": true,
+  "titel": "Toets H6 Geluid",
+  "vak": "NaSk",
+  "leerweg": "KB",
+  "leerjaar": 2,
+  "duurMinuten": 45,
+  "doelPunten": 26,
+  "aantalVragen": 14,
+  "bronmateriaal": "Hoofdstuk 6 Geluid (NaSk 2 KB)\n\n6.1 Geluid maken en horen\nGeluid ontstaat als een voorwerp trilt. Dat voorwerp heet de geluidsbron, bijvoorbeeld een snaar, een luidspreker of je stembanden. De trilling gaat via een tussenstof naar de ontvanger. Een tussenstof kan een gas (lucht), een vloeistof (water) of een vaste stof (hout, metaal) zijn. Zonder tussenstof, zoals in het luchtledige, gaat geluid niet verder. De ontvanger is meestal je oor: het trommelvlies gaat meetrillen. Bron → tussenstof → ontvanger.\n\n6.2 Hoge en lage tonen\nDe frequentie is het aantal trillingen per seconde. De eenheid is hertz (Hz). Hoe hoger de frequentie, hoe hoger de toon. Een mens hoort geluid van ongeveer 20 Hz tot 20 000 Hz. Geluid boven 20 000 Hz heet ultrasoon; geluid onder 20 Hz heet infrasoon. Een hond hoort van ongeveer 15 Hz tot 50 000 Hz, een vleermuis tot ongeveer 120 000 Hz. Met een oscilloscoop kun je een trilling zichtbaar maken: hoe dichter de golven bij elkaar, hoe hoger de frequentie. Trillingstijd T = 1 / f.\n\n6.3 Hard en zacht geluid\nDe geluidssterkte meet je met een decibelmeter in decibel (dB). Hoe groter de amplitude (uitwijking) van de trilling, hoe harder het geluid. Voorbeelden: fluisteren 30 dB, normaal praten 60 dB, drukke weg 80 dB, discotheek 100 dB, straaljager dichtbij 130 dB. Boven 80 dB kun je gehoorschade krijgen als je er lang in zit. Bij elke 3 dB meer halveert de tijd dat je veilig in het geluid kunt zijn: 80 dB 8 uur, 83 dB 4 uur, 86 dB 2 uur, 89 dB 1 uur, 92 dB 30 minuten, 95 dB 15 minuten.\n\n6.4 Geluidssnelheid\nGeluid heeft tijd nodig om zich te verplaatsen. In lucht is de geluidssnelheid ongeveer 343 m/s (bij 20 °C), in water ongeveer 1500 m/s en in staal ongeveer 5900 m/s. Licht gaat veel sneller: daarom zie je bij onweer eerst de bliksem en hoor je later de donder. Afstand = geluidssnelheid × tijd (s = v × t). Echo: geluid kaatst terug tegen een wand. Bij een echo legt het geluid de afstand heen en terug af, dus afstand tot de wand = v × t / 2.\n\n6.5 Geluidshinder\nOngewenst geluid heet lawaai of geluidshinder. Je kunt geluidshinder beperken op drie plaatsen: bij de bron (stillere machine, demper, minder hard zetten), in de tussenstof (geluidsscherm, geluidswal, isolatie, dubbel glas, afstand vergroten) en bij de ontvanger (oordoppen, oorkappen). Op een werkplek met veel lawaai hangt een gebodsbord: gehoorbescherming verplicht (blauw rond bord met een hoofd met oorkappen).\n\n6.6 Het oor\nHet oor bestaat uit oorschelp, gehoorgang, trommelvlies, gehoorbeentjes (hamer, aambeeld, stijgbeugel), slakkenhuis en gehoorzenuw. De oorschelp vangt het geluid op, het trommelvlies trilt mee, de gehoorbeentjes versterken de trilling, in het slakkenhuis worden trillingen omgezet in signalen voor de gehoorzenuw naar de hersenen. Harde geluiden beschadigen de haartjes in het slakkenhuis; dat herstelt niet.\n"
+ }
+}

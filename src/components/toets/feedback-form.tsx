@@ -10,6 +10,7 @@ import { maakToets, type Voortgang } from "@/lib/toets/maak-toets";
 import { VoortgangsBalk } from "@/components/toets/voortgangs-balk";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { totaalPunten } from "@/lib/toets/rtti";
+import { rttiDoelVoor } from "@/lib/toets/config";
 import { kwaliteitAlsTekst, samenstellenFeedback, vorigeSamenvatting } from "@/lib/toets/text";
 import { useToetsStore, persistToetsBeforeNavigate } from "@/store/toets-store";
 import { cn } from "@/lib/utils";
@@ -84,7 +85,9 @@ export function FeedbackForm({ startId }: { startId?: string }) {
           duurMinuten: toets.meta.duurMinuten,
           doelPunten: Math.min(100, Math.max(10, totaalPunten(toets.vragen))),
           aantalVragen: Math.min(16, Math.max(4, toets.vragen.length)),
-          rttiDoel: toets.matrijs.doelverdeling,
+          // Oude toetsen bewaarden een (mogelijk verouderd) doel; alleen een bewust gekozen doel blijft staan.
+          rttiDoel: toets.meta.rttiHandmatig ? toets.matrijs.doelverdeling : rttiDoelVoor(toets.meta.leerjaar, toets.meta.moeilijkheid),
+          rttiHandmatig: Boolean(toets.meta.rttiHandmatig),
           bronmateriaal: toets.bronmateriaal,
           extraEisen: toets.extraEisen,
           versie: toets.meta.versie,

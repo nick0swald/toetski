@@ -1,0 +1,29 @@
+{
+ "case": "krachten-gt3",
+ "omschrijving": "3GT H3 Krachten, 45 min (r236-review; 13 rubriekpunten komen hieruit).",
+ "input": {
+  "extraEisen": "",
+  "antwoordenmateriaal": "",
+  "versie": "A",
+  "moeilijkheid": "normaal",
+  "cijferNorm": {
+   "model": "lineair",
+   "cesuurPct": 55,
+   "exponent": 1
+  },
+  "ronde": 1,
+  "feedback": "",
+  "vorigeSamenvatting": "",
+  "metPlaatjes": false,
+  "plaatjes": "zonder",
+  "lengteAuto": true,
+  "titel": "H3 Krachten",
+  "vak": "NaSk",
+  "leerweg": "GT",
+  "leerjaar": 3,
+  "duurMinuten": 45,
+  "doelPunten": 34,
+  "aantalVragen": 24,
+  "bronmateriaal": "Hoofdstuk 3 Krachten (NaSk 1 GT, leerjaar 3)\n\n3.1 Soorten krachten\nEen kracht kan een voorwerp van vorm doen veranderen, laten versnellen, afremmen of van richting veranderen. Kracht meet je met een krachtmeter (veerunster) in newton (N). Soorten krachten: zwaartekracht (Fz), veerkracht (Fv), spankracht (Fs), normaalkracht (Fn), wrijvingskracht (Fw), spierkracht, magnetische kracht en elektrische kracht. Zwaartekracht: Fz = m × g met g = 9,8 N/kg (op aarde). Een massa van 1 kg heeft een zwaartekracht van 9,8 N.\n\n3.2 Krachten tekenen\nJe tekent een kracht als een pijl. Het beginpunt is het aangrijpingspunt, de richting van de pijl is de richting van de kracht, de lengte is de grootte (krachtenschaal, bijvoorbeeld 1 cm ≙ 10 N). Zwaartekracht grijpt aan in het zwaartepunt. De normaalkracht werkt loodrecht op het steunvlak.\n\n3.3 Krachten samenstellen\nTwee krachten op één lijn in dezelfde richting tel je op; in tegengestelde richting trek je ze van elkaar af. De resulterende kracht Fres. Als Fres = 0 N staat een voorwerp stil of beweegt het met constante snelheid (evenwicht). Twee krachten die een hoek maken stel je samen met de parallellogrammethode.\n\n3.4 Veren\nEen veer rekt uit als je eraan trekt. De uitrekking u is recht evenredig met de kracht (zolang de veer niet overbelast is): F = C × u. C is de veerconstante in N/cm of N/m. Een stuggere veer heeft een grotere C. In een F-u-diagram is dat een rechte lijn door de oorsprong.\n\n3.5 Hefbomen\nEen hefboom draait om een draaipunt. Moment = kracht × arm (M = F × r), in N·m. Hefboomwet: bij evenwicht is het linksdraaiende moment gelijk aan het rechtsdraaiende moment: F1 × r1 = F2 × r2. De arm is de loodrechte afstand van het draaipunt tot de werklijn van de kracht. Voorbeelden: koevoet, schaar, kruiwagen, notenkraker, wip.\n\n3.6 Druk\nDruk is kracht per oppervlakte: p = F / A. Eenheid N/m² = pascal (Pa), of N/cm². Een groter oppervlak geeft een kleinere druk (sneeuwschoenen, brede banden), een klein oppervlak een grote druk (punaise, mes).\n"
+ }
+}

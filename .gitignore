@@ -13,3 +13,4 @@ attachments/
 artifacts/
 *.log
 .DS_Store
+eval-out/

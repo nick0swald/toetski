@@ -1,0 +1,29 @@
+{
+ "case": "stoffen-bb2",
+ "omschrijving": "2BB Stoffen, 45 min.",
+ "input": {
+  "extraEisen": "",
+  "antwoordenmateriaal": "",
+  "versie": "A",
+  "moeilijkheid": "normaal",
+  "cijferNorm": {
+   "model": "lineair",
+   "cesuurPct": 55,
+   "exponent": 1
+  },
+  "ronde": 1,
+  "feedback": "",
+  "vorigeSamenvatting": "",
+  "metPlaatjes": false,
+  "plaatjes": "zonder",
+  "lengteAuto": true,
+  "titel": "Toets Stoffen",
+  "vak": "NaSk",
+  "leerweg": "BB",
+  "leerjaar": 2,
+  "duurMinuten": 45,
+  "doelPunten": 26,
+  "aantalVragen": 14,
+  "bronmateriaal": "Hoofdstuk 2 Stoffen (NaSk 2 BB)\n\n2.1 Stoffen herkennen\nElke stof heeft eigen stofeigenschappen: kleur, geur, smaak (nooit zomaar proeven!), fase bij kamertemperatuur, brandbaarheid, oplosbaarheid in water, geleiding van warmte en stroom, en of een stof magnetisch is. Aan stofeigenschappen kun je een stof herkennen. Proeven of ruiken aan onbekende stoffen is gevaarlijk; kijk op het etiket en naar de gevarensymbolen.\n\n2.2 Fasen en faseovergangen\nEen stof kan vast, vloeibaar of gas zijn. Smelten: vast → vloeibaar. Stollen: vloeibaar → vast. Verdampen: vloeibaar → gas. Condenseren: gas → vloeibaar. Sublimeren: vast → gas. Rijpen: gas → vast. Het smeltpunt van water is 0 °C, het kookpunt 100 °C. In een temperatuur-tijd-diagram zie je bij smelten en koken een horizontaal stuk.\n\n2.3 Mengsels\nEen zuivere stof bestaat uit één soort moleculen. Een mengsel bestaat uit meer stoffen. Oplossing: helder (suikerwater, zout water). Suspensie: troebel, vaste deeltjes zweven (modderwater, sinaasappelsap met vruchtvlees). Emulsie: twee vloeistoffen die niet mengen, met emulgator (mayonaise, melk).\n\n2.4 Scheiden\nMengsels kun je scheiden: filtreren (zand uit water), bezinken en afschenken, indampen (zout uit zout water), destilleren (zuiver water uit zout water), zeven en met een magneet (ijzer uit zand).\n\n2.5 Veilig werken\nGevarensymbolen (GHS) in een rode ruit: ontvlambaar (vlam), giftig (doodshoofd), bijtend (vloeistof op hand), schadelijk (uitroepteken), milieugevaarlijk (dode boom en vis). Bij proeven draag je een veiligheidsbril (gebodsbord: blauw rond bord met bril). Lang haar vast, niet eten of drinken in het lokaal.\n\n2.6 Dichtheid\nDichtheid = massa / volume (ρ = m / V), in g/cm³. Water heeft een dichtheid van 1,0 g/cm³. Een voorwerp met een kleinere dichtheid dan water drijft. Het volume van een onregelmatig voorwerp meet je met de onderdompelmethode in een maatcilinder.\n"
+ }
+}

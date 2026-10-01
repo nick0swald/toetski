@@ -1,3 +1,4 @@
+import { rttiDoelVoor } from "./config.ts";
 import { bouwMatrijs } from "./rtti";
 import type { GegenereerdeToets } from "./types";
 
@@ -201,7 +202,7 @@ const nakijkmodel: GegenereerdeToets["nakijkmodel"] = [
 ];
 
 export function maakVoorbeeldToets(): GegenereerdeToets {
-  const doelverdeling = { R: 35, T1: 40, T2: 20, I: 5 };
+  const doelverdeling = rttiDoelVoor(2);
   return {
     id: "voorbeeld-fotosynthese",
     createdAt: new Date().toISOString(),

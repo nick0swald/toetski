@@ -1,0 +1,1291 @@
+{
+ "id": "51ce8c24-d2d2-4231-8d6d-c73b69ffe628",
+ "createdAt": "2026-10-01T16:58:19.787Z",
+ "bronmateriaal": "Hoofdstuk 11 Kracht en beweging (samenvatting van de onderwerpen, 4GT)\n\n11.1 Voortstuwen en tegenwerken\nEen voertuig rijdt door een aandrijfkracht (motorkracht, spierkracht). Tegenwerkende krachten zijn de rolwrijving (tussen band en weg) en de luchtwrijving (luchtweerstand). De rolwrijving hangt af van de banden (bandenspanning, profiel, contactoppervlak) en het wegdek; de luchtwrijving hangt af van de vorm (stroomlijn), het frontoppervlak en de snelheid: hoe sneller, hoe groter de luchtwrijving. De resulterende kracht (nettokracht) is aandrijfkracht min tegenwerkende krachten. Is de aandrijfkracht groter dan de wrijving, dan versnelt het voertuig. Zijn ze even groot, dan is de snelheid constant. Is de wrijving groter, dan vertraagt het voertuig. Druk = kracht / oppervlakte: een kleiner contactoppervlak geeft een grotere druk op de weg.\n\n11.2 Optrekken en afremmen\nSnelheid omrekenen: km/h ÷ 3,6 = m/s en m/s × 3,6 = km/h. Bij een eenparige beweging: s = v · t. Bij eenparig versnellen of vertragen vanuit stilstand of tot stilstand: gemiddelde snelheid v_gem = (v_begin + v_eind) / 2 en s = v_gem · t. Versnelling a = Δv / t (in m/s²); afremmen geeft een vertraging. Tweede wet van Newton: F = m · a (F in N, m in kg). Traagheid: een voorwerp met een grotere massa heeft een grotere traagheid; het heeft bij dezelfde kracht een kleinere versnelling en is moeilijker af te remmen. In een v,t-diagram is de helling de versnelling en de oppervlakte onder de grafiek de afgelegde afstand.\n\n11.3 Kracht, arbeid en energie\nAls een kracht een voorwerp over een afstand verplaatst, verricht die kracht arbeid: W = F · s (W in joule J, F in N, s in m). Een rijdend voertuig heeft bewegingsenergie Ek = ½ · m · v². Bij remmen wordt bewegingsenergie omgezet in warmte (remmen en banden worden warm). Bij een botsing wordt bewegingsenergie gebruikt om onderdelen te vervormen.\n\n11.4 Veiligheid in het verkeer\nStopafstand = reactieafstand + remweg. Reactieafstand = snelheid × reactietijd (reactietijd meestal 0,5 tot 1 s; langer door alcohol, telefoon, vermoeidheid). De remweg hangt af van de snelheid, het wegdek (nat, droog, ijzel), de banden en de remmen; bij twee keer zo hoge snelheid wordt de remweg ongeveer vier keer zo groot. Advies: houd 2 seconden afstand tot je voorligger. Passieve veiligheid: de kreukelzone vervormt en vangt de botsing op, zodat de vertraging van de inzittenden kleiner is; de kooiconstructie (veiligheidskooi) is stijf en beschermt de inzittenden; de veiligheidsgordel en airbag houden je tegen als je door je traagheid naar voren beweegt; de hoofdsteun beschermt je nek bij een aanrijding van achteren. Actieve veiligheid: ABS, goede banden, verlichting.\n\nHoofdstuk 13 Geluid\n\n13.1 Geluid maken en horen\nGeluid ontstaat als een voorwerp trilt. Dat voorwerp heet de geluidsbron, bijvoorbeeld een snaar, een luidspreker of je stembanden. De trilling gaat via een tussenstof naar de ontvanger. Een tussenstof kan een gas (lucht), een vloeistof (water) of een vaste stof (hout, metaal) zijn. Zonder tussenstof, zoals in het luchtledige, gaat geluid niet verder. De ontvanger is meestal je oor: het trommelvlies gaat meetrillen. Bron → tussenstof → ontvanger.\n\n13.2 Hoge en lage tonen\nDe frequentie is het aantal trillingen per seconde. De eenheid is hertz (Hz). Hoe hoger de frequentie, hoe hoger de toon. Een mens hoort geluid van ongeveer 20 Hz tot 20 000 Hz. Geluid boven 20 000 Hz heet ultrasoon; geluid onder 20 Hz heet infrasoon. Een hond hoort van ongeveer 15 Hz tot 50 000 Hz, een vleermuis tot ongeveer 120 000 Hz. Met een oscilloscoop kun je een trilling zichtbaar maken: hoe dichter de golven bij elkaar, hoe hoger de frequentie. Trillingstijd T = 1 / f.\n\n13.3 Hard en zacht geluid\nDe geluidssterkte meet je met een decibelmeter in decibel (dB). Hoe groter de amplitude (uitwijking) van de trilling, hoe harder het geluid. Voorbeelden: fluisteren 30 dB, normaal praten 60 dB, drukke weg 80 dB, discotheek 100 dB, straaljager dichtbij 130 dB. Boven 80 dB kun je gehoorschade krijgen als je er lang in zit. Bij elke 3 dB meer halveert de tijd dat je veilig in het geluid kunt zijn: 80 dB 8 uur, 83 dB 4 uur, 86 dB 2 uur, 89 dB 1 uur, 92 dB 30 minuten, 95 dB 15 minuten.\n\n13.4 Geluidssnelheid\nGeluid heeft tijd nodig om zich te verplaatsen. In lucht is de geluidssnelheid ongeveer 343 m/s (bij 20 °C), in water ongeveer 1500 m/s en in staal ongeveer 5900 m/s. Licht gaat veel sneller: daarom zie je bij onweer eerst de bliksem en hoor je later de donder. Afstand = geluidssnelheid × tijd (s = v × t). Echo: geluid kaatst terug tegen een wand. Bij een echo legt het geluid de afstand heen en terug af, dus afstand tot de wand = v × t / 2.\n\n13.5 Geluidshinder\nOngewenst geluid heet lawaai of geluidshinder. Je kunt geluidshinder beperken op drie plaatsen: bij de bron (stillere machine, demper, minder hard zetten), in de tussenstof (geluidsscherm, geluidswal, isolatie, dubbel glas, afstand vergroten) en bij de ontvanger (oordoppen, oorkappen). Op een werkplek met veel lawaai hangt een gebodsbord: gehoorbescherming verplicht (blauw rond bord met een hoofd met oorkappen).\n\n13.6 Het oor\nHet oor bestaat uit oorschelp, gehoorgang, trommelvlies, gehoorbeentjes (hamer, aambeeld, stijgbeugel), slakkenhuis en gehoorzenuw. De oorschelp vangt het geluid op, het trommelvlies trilt mee, de gehoorbeentjes versterken de trilling, in het slakkenhuis worden trillingen omgezet in signalen voor de gehoorzenuw naar de hersenen. Harde geluiden beschadigen de haartjes in het slakkenhuis; dat herstelt niet.",
+ "extraEisen": "",
+ "ronde": 1,
+ "cijferNorm": {
+  "model": "lineair",
+  "cesuurPct": 55,
+  "exponent": 1
+ },
+ "meta": {
+  "titel": "Kracht, beweging en geluid (H11 + H13)",
+  "vak": "NaSk",
+  "leerweg": "GT",
+  "leerjaar": 4,
+  "duurMinuten": 60,
+  "hulpmiddelen": [
+   "Rekenmachine",
+   "BINAS"
+  ],
+  "instructies": [
+   "Gebruik alleen de voorkant van het papier.",
+   "Schrijf duidelijk en met eenheden waar nodig."
+  ],
+  "onderwerp": "Geluid en beweging",
+  "school": "",
+  "versie": "A",
+  "moeilijkheid": "normaal"
+ },
+ "vragen": [
+  {
+   "nummer": 1,
+   "type": "meerkeuze",
+   "rtti": "R",
+   "domein": "13.1 Geluid maken en horen",
+   "leerdoel": "Geluid ontstaat door trillingen en plant zich voort via een tussenstof",
+   "punten": 1,
+   "context": "Bram slaat op een trommel.",
+   "vraagtype": "G-BEREIK",
+   "leerdoelId": "K/8.2",
+   "stam": "Wat is nodig om het geluid van de trommel bij Daan te laten horen?",
+   "opties": [
+    {
+     "letter": "A",
+     "tekst": "alleen een geluidsbron"
+    },
+    {
+     "letter": "B",
+     "tekst": "een geluidsbron, een tussenstof en een ontvanger"
+    },
+    {
+     "letter": "C",
+     "tekst": "een ontvanger en een tussenstof"
+    },
+    {
+     "letter": "D",
+     "tekst": "een geluidsbron en een ontvanger"
+    }
+   ],
+   "rttiUitleg": "R: type G-BEREIK → R; gesloten stelling/keuze over een feit of begrip"
+  },
+  {
+   "nummer": 2,
+   "type": "meerkeuze",
+   "rtti": "T1",
+   "domein": "13.2 Hoge en lage tonen",
+   "leerdoel": "Frequentie bepaalt de toonhoogte",
+   "punten": 1,
+   "vraagtype": "G-FREQ",
+   "leerdoelId": "K/8.1",
+   "stam": "Welke verandering geeft een hogere toon?",
+   "opties": [
+    {
+     "letter": "A",
+     "tekst": "een hogere frequentie"
+    },
+    {
+     "letter": "B",
+     "tekst": "een lagere frequentie"
+    },
+    {
+     "letter": "C",
+     "tekst": "een kleinere amplitude"
+    },
+    {
+     "letter": "D",
+     "tekst": "een grotere amplitude"
+    }
+   ],
+   "rttiUitleg": "T1: type G-FREQ → T1; gesloten keuze: geleerd verband toepassen"
+  },
+  {
+   "nummer": 3,
+   "type": "meerkeuze",
+   "rtti": "T1",
+   "domein": "13.3 Hard en zacht geluid",
+   "leerdoel": "Amplitude bepaalt de geluidssterkte",
+   "punten": 1,
+   "context": "Sanne zet de muziek harder.",
+   "vraagtype": "G-OSC",
+   "leerdoelId": "K/8.1",
+   "stam": "Wat verandert er bij harder geluid?",
+   "opties": [
+    {
+     "letter": "A",
+     "tekst": "de toonhoogte wordt lager"
+    },
+    {
+     "letter": "B",
+     "tekst": "de frequentie wordt hoger"
+    },
+    {
+     "letter": "C",
+     "tekst": "de frequentie wordt lager"
+    },
+    {
+     "letter": "D",
+     "tekst": "de amplitude wordt groter"
+    }
+   ],
+   "rttiUitleg": "T1: type G-OSC → T1; gesloten keuze: geleerd verband toepassen"
+  },
+  {
+   "nummer": 4,
+   "type": "meerkeuze",
+   "rtti": "R",
+   "domein": "13.4 Geluidssnelheid",
+   "leerdoel": "Geluid plant zich met verschillende snelheden voort in verschillende stoffen",
+   "punten": 1,
+   "vraagtype": "G-BEREIK",
+   "leerdoelId": "K/8.2",
+   "stam": "In welke stof plant geluid zich het snelst voort?",
+   "opties": [
+    {
+     "letter": "A",
+     "tekst": "lucht"
+    },
+    {
+     "letter": "B",
+     "tekst": "vacuüm"
+    },
+    {
+     "letter": "C",
+     "tekst": "staal"
+    },
+    {
+     "letter": "D",
+     "tekst": "water"
+    }
+   ],
+   "rttiUitleg": "R: type G-BEREIK → R; gesloten stelling/keuze over een feit of begrip"
+  },
+  {
+   "nummer": 5,
+   "type": "meerkeuze",
+   "rtti": "T1",
+   "domein": "13.5 Geluidshinder",
+   "leerdoel": "Geluidshinder kan worden beperkt bij de bron, tussenstof of ontvanger",
+   "punten": 1,
+   "vraagtype": "G-GEHOOR",
+   "leerdoelId": "K/8.5",
+   "stam": "Wat is een maatregel tegen geluidshinder bij de ontvanger?",
+   "opties": [
+    {
+     "letter": "A",
+     "tekst": "een geluidsscherm plaatsen"
+    },
+    {
+     "letter": "B",
+     "tekst": "oordoppen dragen"
+    },
+    {
+     "letter": "C",
+     "tekst": "de afstand tot de machine verkleinen"
+    },
+    {
+     "letter": "D",
+     "tekst": "een stillere machine gebruiken"
+    }
+   ],
+   "rttiUitleg": "T1: type G-GEHOOR → T1; gesloten keuze: geleerd verband toepassen"
+  },
+  {
+   "nummer": 6,
+   "type": "meerkeuze",
+   "rtti": "T1",
+   "domein": "13.6 Het oor",
+   "leerdoel": "Harde geluiden kunnen de haartjes in het slakkenhuis beschadigen",
+   "punten": 1,
+   "vraagtype": "G-GEHOOR",
+   "leerdoelId": "K/8.6",
+   "stam": "Wat kan bij langdurig hard geluid beschadigd raken?",
+   "opties": [
+    {
+     "letter": "A",
+     "tekst": "de oorschelp"
+    },
+    {
+     "letter": "B",
+     "tekst": "de gehoorgang"
+    },
+    {
+     "letter": "C",
+     "tekst": "de gehoorbeentjes"
+    },
+    {
+     "letter": "D",
+     "tekst": "de haartjes in het slakkenhuis"
+    }
+   ],
+   "rttiUitleg": "T1: type G-GEHOOR → T1; gesloten keuze: geleerd verband toepassen"
+  },
+  {
+   "nummer": 7,
+   "type": "berekening",
+   "rtti": "T2",
+   "domein": "13.4 Geluidssnelheid",
+   "leerdoel": "Berekeningen uitvoeren met de geluidssnelheid, de tijd en de afstand",
+   "punten": 2,
+   "context": "Bram staat bij een hoge rotswand in het bos en klapt hard in zijn handen. Het geluid van de klap komt na 1,4 seconden als echo terug.",
+   "contextTitel": "Echo in het bos",
+   "vraagtype": "G-ECHO",
+   "leerdoelId": "K/8.2",
+   "stam": "Bereken de afstand van Bram tot de rotswand. Gebruik de geluidssnelheid in lucht van 340 m/s.",
+   "opties": [],
+   "rttiUitleg": "T2: type G-ECHO → T2; meerstaps (model: T1)"
+  },
+  {
+   "nummer": 8,
+   "type": "open",
+   "rtti": "T2",
+   "domein": "13.1 Geluid maken en horen",
+   "leerdoel": "Uitleggen hoe geluid via een tussenstof een ontvanger bereikt",
+   "punten": 2,
+   "contextTitel": "Echo in het bos",
+   "vraagtype": "G-BEREIK",
+   "leerdoelId": "K/8.2",
+   "stam": "Leg uit waarom Bram de echo later hoort dan zijn eigen klap en welke stof het geluid doorgeeft.",
+   "rttiUitleg": "T2: type G-BEREIK → R; geleerd verband uitleggen in deze situatie"
+  },
+  {
+   "nummer": 9,
+   "type": "berekening",
+   "rtti": "T1",
+   "domein": "13.2 Hoge en lage tonen",
+   "leerdoel": "Berekeningen uitvoeren met de trillingstijd en de frequentie van een geluidstrilling",
+   "punten": 2,
+   "context": "Lotte speelt op haar gitaar een lage toon. Op de oscilloscoop ziet ze dat de trillingstijd van deze toon 0,008 seconden is.",
+   "contextTitel": "Gitaar tonen",
+   "vraagtype": "G-FREQ",
+   "leerdoelId": "K/8.4",
+   "stam": "Bereken de frequentie van deze toon in hertz.",
+   "rttiUitleg": "T1: type G-FREQ → T1; één formule toepassen"
+  },
+  {
+   "nummer": 10,
+   "type": "open",
+   "rtti": "T2",
+   "domein": "13.2 Hoge en lage tonen",
+   "leerdoel": "Een verband leggen tussen de frequentie van een geluid en de toonhoogte",
+   "punten": 2,
+   "contextTitel": "Gitaar tonen",
+   "vraagtype": "G-OSC",
+   "leerdoelId": "K/8.1",
+   "stam": "Lotte trekt de snaar strakker. Leg uit wat er met de toonhoogte gebeurt en waarom.",
+   "rttiUitleg": "T2: type G-OSC → T1; geleerd verband uitleggen in deze situatie"
+  },
+  {
+   "nummer": 11,
+   "type": "berekening",
+   "rtti": "T1",
+   "domein": "13.3 Hard en zacht geluid",
+   "leerdoel": "De amplitude van een elektrisch signaal aflezen op een oscilloscoopscherm",
+   "punten": 2,
+   "context": "Daan meet het geluid van een ventilator in de werkplaats. De amplitude van het signaal op de oscilloscoop is 12 mm. De schaalverdeling is 5 dB per mm.",
+   "contextTitel": "Ventilator geluid",
+   "vraagtype": "G-OSC",
+   "leerdoelId": "K/8.1",
+   "stam": "Bereken de geluidssterkte in dB.",
+   "opties": [],
+   "rttiUitleg": "T1: type G-OSC → T1; één formule toepassen"
+  },
+  {
+   "nummer": 12,
+   "type": "open",
+   "rtti": "T1",
+   "domein": "13.5 Geluidshinder",
+   "leerdoel": "Drie soorten maatregelen noemen die de overheid neemt tegen geluidshinder",
+   "punten": 3,
+   "contextTitel": "Ventilator geluid",
+   "vraagtype": "OVERIG",
+   "leerdoelId": "K/8.5",
+   "stam": "Noteer drie verschillende manieren waarop de overheid geluidshinder bij wegen kan verminderen. Geef bij elke manier een voorbeeld.",
+   "opties": [],
+   "rttiUitleg": "T1: type OVERIG → T1 (model: R)"
+  },
+  {
+   "nummer": 13,
+   "type": "berekening",
+   "rtti": "T2",
+   "domein": "13.4 Geluidssnelheid",
+   "leerdoel": "Berekeningen uitvoeren met de geluidssnelheid, de tijd en de afstand",
+   "punten": 2,
+   "context": "Emma vaart met een boot op een meer. Ze gebruikt een echolood om de diepte te meten. Het signaal komt na 0,08 seconden terug.",
+   "contextTitel": "Echolood op het meer",
+   "vraagtype": "G-ECHO",
+   "leerdoelId": "K/8.2",
+   "stam": "Bereken de diepte van het meer op die plek. Gebruik de geluidssnelheid in water van 1500 m/s.",
+   "opties": [],
+   "rttiUitleg": "T2: type G-ECHO → T2; meerstaps (model: T1)"
+  },
+  {
+   "nummer": 14,
+   "type": "open",
+   "rtti": "T2",
+   "domein": "13.6 Het oor",
+   "leerdoel": "Gehoorschade in verband brengen met geluidssterkte en tijdsduur",
+   "punten": 2,
+   "contextTitel": "Echolood op het meer",
+   "vraagtype": "G-GEHOOR",
+   "leerdoelId": "K/8.6",
+   "stam": "Leg uit waarom langdurig werken met een lawaaiige motorboot gehoorschade kan veroorzaken.",
+   "rttiUitleg": "T2: type G-GEHOOR → T1; geleerd verband uitleggen in deze situatie"
+  },
+  {
+   "nummer": 15,
+   "type": "berekening",
+   "rtti": "T2",
+   "domein": "13.2 Hoge en lage tonen",
+   "leerdoel": "Trillingstijd bepalen uit een oscilloscoopbeeld en de frequentie berekenen",
+   "punten": 3,
+   "context": "Sanne gebruikt een oscilloscoop bij het stemmen van een snaarinstrument. Op het scherm ziet ze 5 volledige trillingen in 0,02 seconden.",
+   "contextTitel": "Snaarinstrument stemmen",
+   "vraagtype": "G-FREQ",
+   "leerdoelId": "K/8.4",
+   "stam": "Bereken de frequentie van deze toon.",
+   "opties": [],
+   "rttiUitleg": "T2: type G-FREQ → T1; 3 stappen, zelf aanpak kiezen (model: T1)"
+  },
+  {
+   "nummer": 16,
+   "type": "open",
+   "rtti": "T2",
+   "domein": "13.3 Hard en zacht geluid",
+   "leerdoel": "Een verband leggen tussen de amplitude van een trilling en de geluidssterkte",
+   "punten": 1,
+   "contextTitel": "Snaarinstrument stemmen",
+   "vraagtype": "G-OSC",
+   "leerdoelId": "K/8.1",
+   "stam": "Sanne slaat harder op de snaar. Leg uit wat er met de amplitude en de geluidssterkte gebeurt.",
+   "rttiUitleg": "T2: type G-OSC → T1; geleerd verband uitleggen in deze situatie"
+  },
+  {
+   "nummer": 17,
+   "type": "berekening",
+   "rtti": "T2",
+   "domein": "13.4 Geluidssnelheid",
+   "leerdoel": "Uitleggen waarom je een echo iets later hoort dan het directe geluid",
+   "punten": 2,
+   "context": "Luuk staat 85 meter van een grote fabriekshal. Hij klapt en hoort de echo na 0,5 seconden.",
+   "contextTitel": "Echo bij de fabriek",
+   "vraagtype": "G-ECHO",
+   "leerdoelId": "K/8.2",
+   "stam": "Toon met een berekening aan of de gemeten tijd klopt met de geluidssnelheid in lucht van 340 m/s.",
+   "rttiUitleg": "T2: type G-ECHO → T2; meerstaps"
+  },
+  {
+   "nummer": 18,
+   "type": "open",
+   "rtti": "T2",
+   "domein": "13.5 Geluidshinder",
+   "leerdoel": "Metingen van geluidssterkte interpreteren en bronnen van geluidshinder aangeven",
+   "punten": 2,
+   "contextTitel": "Echo bij de fabriek",
+   "vraagtype": "G-DB",
+   "leerdoelId": "K/8.5",
+   "stam": "Noteer twee maatregelen om geluidshinder van de fabriek bij omwonenden te verminderen. Noem bij elke maatregel de plaats waar deze werkt (bij bron, tussenstof of ontvanger).",
+   "rttiUitleg": "T2: type G-DB → T2"
+  },
+  {
+   "nummer": 19,
+   "type": "berekening",
+   "rtti": "T1",
+   "domein": "11.4 Veiligheid in het verkeer",
+   "leerdoel": "Snelheid omrekenen en de reactieafstand berekenen",
+   "punten": 2,
+   "context": "Fenna rijdt met een auto van 72 km/h op een rustige weg. Haar reactietijd is 0,6 seconden.",
+   "contextTitel": "Auto remmen",
+   "vraagtype": "B-SNEL",
+   "leerdoelId": "K/8.2",
+   "stam": "Bereken de reactieafstand in meters.",
+   "opties": [],
+   "rttiUitleg": "T1: type B-SNEL → T1; één formule toepassen"
+  },
+  {
+   "nummer": 20,
+   "type": "berekening",
+   "rtti": "T2",
+   "domein": "11.2 Optrekken en afremmen",
+   "leerdoel": "Remweg berekenen bij vertraging",
+   "punten": 3,
+   "contextTitel": "Auto remmen",
+   "vraagtype": "B-SNEL",
+   "leerdoelId": "K/8.2",
+   "stam": "Fenna rijdt met een auto van 72 km/h. De auto remt met een constante vertraging van 6 m/s² tot stilstand. Bereken de remweg.",
+   "opties": [],
+   "rttiUitleg": "T2: type B-SNEL → T1; 3 stappen, zelf aanpak kiezen (model: T1)"
+  },
+  {
+   "nummer": 21,
+   "type": "open",
+   "rtti": "R",
+   "domein": "13.6 Het oor",
+   "leerdoel": "Maatregelen noemen om gehoorschade te voorkomen",
+   "punten": 1,
+   "context": "Fenna werkt met een lawaaiige machine die 92 dB produceert.",
+   "contextTitel": "Lawaaiige machine",
+   "vraagtype": "G-GEHOOR",
+   "leerdoelId": "K/8.6",
+   "stam": "Noteer één maatregel die Fenna kan nemen om gehoorschade te voorkomen.",
+   "opties": [],
+   "rttiUitleg": "R: type G-GEHOOR → T1; noem/noteer een feit of begrip"
+  },
+  {
+   "nummer": 22,
+   "type": "open",
+   "rtti": "T2",
+   "domein": "13.6 Het oor",
+   "leerdoel": "Gehoorschade in verband brengen met geluidssterkte en tijdsduur; maatregelen noemen",
+   "punten": 2,
+   "contextTitel": "Lawaaiige machine",
+   "vraagtype": "G-GEHOOR",
+   "leerdoelId": "K/8.6",
+   "stam": "Leg uit waarom gehoorbescherming bij de betonboor verplicht is en noem een voorbeeld van gehoorbescherming.",
+   "opties": [],
+   "rttiUitleg": "T2: type G-GEHOOR → T1; geleerd verband uitleggen in deze situatie (model: I)"
+  }
+ ],
+ "nakijkmodel": [
+  {
+   "nummer": 1,
+   "modelantwoord": "B. een geluidsbron, een tussenstof en een ontvanger",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "Juiste keuze B"
+    }
+   ],
+   "nietToekennen": [
+    "andere letters"
+   ]
+  },
+  {
+   "nummer": 2,
+   "modelantwoord": "A. een hogere frequentie",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "Juiste keuze A"
+    }
+   ],
+   "nietToekennen": [
+    "andere letters"
+   ]
+  },
+  {
+   "nummer": 3,
+   "modelantwoord": "D. de amplitude wordt groter",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "Juiste keuze D"
+    }
+   ],
+   "nietToekennen": [
+    "andere letters"
+   ]
+  },
+  {
+   "nummer": 4,
+   "modelantwoord": "C. staal",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "Juiste keuze C"
+    }
+   ],
+   "nietToekennen": [
+    "andere letters"
+   ]
+  },
+  {
+   "nummer": 5,
+   "modelantwoord": "B. oordoppen dragen",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "Juiste keuze B"
+    }
+   ],
+   "nietToekennen": [
+    "andere letters"
+   ]
+  },
+  {
+   "nummer": 6,
+   "modelantwoord": "D. de haartjes in het slakkenhuis",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "Juiste keuze D"
+    }
+   ],
+   "nietToekennen": [
+    "andere letters"
+   ]
+  },
+  {
+   "nummer": 7,
+   "modelantwoord": "238 m",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "uitleg dat de tijd voor de heen- en terugweg is (totaal 1,4 s) en dat de afstand daarom met 2 moet worden gedeeld"
+    },
+    {
+     "punt": 1,
+     "criterium": "rest van de berekening juist (uitkomst met eenheid)"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 8,
+   "modelantwoord": "Geluid heeft tijd nodig om zich voort te planten door de lucht (tussenstof). Het directe geluid komt direct aan, de echo moet eerst naar de wand en terug.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "geluid plant zich voort via een tussenstof (lucht)"
+    },
+    {
+     "punt": 1,
+     "criterium": "echo legt dubbele afstand af / komt later aan"
+    }
+   ],
+   "nietToekennen": [
+    "alleen 'geluid gaat langzamer'"
+   ]
+  },
+  {
+   "nummer": 9,
+   "modelantwoord": "125 Hz",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "gebruik van de formule (frequentie = 1 / trillingstijd)"
+    },
+    {
+     "punt": 1,
+     "criterium": "rest van de berekening juist (uitkomst met eenheid)"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 10,
+   "modelantwoord": "De toonhoogte wordt hoger omdat de snaar strakker staat en daardoor sneller trilt / hogere frequentie.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "hogere spanning geeft hogere frequentie"
+    },
+    {
+     "punt": 1,
+     "criterium": "hogere frequentie = hogere toon"
+    }
+   ],
+   "nietToekennen": []
+  },
+  {
+   "nummer": 11,
+   "modelantwoord": "60 dB",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "aflezen of omrekenen van amplitude naar dB (12 × 5)"
+    },
+    {
+     "punt": 1,
+     "criterium": "rest van de berekening juist (uitkomst met eenheid)"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 12,
+   "modelantwoord": "Bij de bron: stillere auto’s of geluidsarm asfalt. In de tussenstof: geluidsscherm of geluidswal. Bij de ontvanger: grotere afstand tot woningen of isolatie in gevels.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "maatregel bij de bron + concreet voorbeeld"
+    },
+    {
+     "punt": 1,
+     "criterium": "maatregel in de tussenstof + concreet voorbeeld"
+    },
+    {
+     "punt": 1,
+     "criterium": "maatregel bij de ontvanger + concreet voorbeeld"
+    }
+   ],
+   "nietToekennen": []
+  },
+  {
+   "nummer": 13,
+   "modelantwoord": "60 m",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "gebruik van de formule (diepte = geluidssnelheid × tijd / 2)"
+    },
+    {
+     "punt": 1,
+     "criterium": "rest van de berekening juist (uitkomst met eenheid)"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 14,
+   "modelantwoord": "Harde geluiden beschadigen de haartjes in het slakkenhuis. Hoe harder en langer, hoe sneller de schade ontstaat en deze is blijvend.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "harde geluiden beschadigen haartjes in het slakkenhuis"
+    },
+    {
+     "punt": 1,
+     "criterium": "schade hangt af van sterkte en duur"
+    }
+   ],
+   "nietToekennen": []
+  },
+  {
+   "nummer": 15,
+   "modelantwoord": "250 Hz",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "bepalen van de trillingstijd per trilling (0,02 / 5 = 0,004 s)"
+    },
+    {
+     "punt": 1,
+     "criterium": "gebruik van de formule frequentie = 1 / trillingstijd"
+    },
+    {
+     "punt": 1,
+     "criterium": "rest van de berekening juist (uitkomst met eenheid)"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 16,
+   "modelantwoord": "De amplitude wordt groter. Daardoor wordt het geluid harder.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "grotere amplitude"
+    }
+   ],
+   "nietToekennen": []
+  },
+  {
+   "nummer": 17,
+   "modelantwoord": "De berekende tijd is 0,5 s, dit klopt.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "gebruik van de formule (tijd = 2 × afstand / snelheid)"
+    },
+    {
+     "punt": 1,
+     "criterium": "rest van de berekening juist (uitkomst met eenheid)"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 18,
+   "modelantwoord": "Bij de bron: stillere machines. In de tussenstof: geluidsscherm langs de weg. Bij de ontvanger: isolatie in woningen.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "twee verschillende plaatsen genoemd"
+    },
+    {
+     "punt": 1,
+     "criterium": "bij elke plaats een juiste maatregel"
+    }
+   ],
+   "nietToekennen": []
+  },
+  {
+   "nummer": 19,
+   "modelantwoord": "12 m",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "omrekenen van 72 km/h naar 20 m/s"
+    },
+    {
+     "punt": 1,
+     "criterium": "berekenen van de reactieafstand (s = v · t) met juiste uitkomst en eenheid"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 20,
+   "modelantwoord": "33 m",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "omrekenen van de beginsnelheid (72 km/h = 20 m/s)"
+    },
+    {
+     "punt": 1,
+     "criterium": "gebruik van de formule voor de remweg (s = v_gem · t of s = v² / (2a))"
+    },
+    {
+     "punt": 1,
+     "criterium": "rest van de berekening juist (uitkomst met eenheid)"
+    }
+   ],
+   "nietToekennen": [
+    "Examenregel: een rekenfout en een fout of ontbrekende eenheid kosten samen hooguit 1 punt; verder rekenen met de eigen (foute) waarde wordt goed gerekend; significantie en tussentijds afronden kosten geen punten; het formulepunt alleen als de formule met de juiste grootheden is opgeschreven (alleen een rekenbewerking is niet genoeg)."
+   ]
+  },
+  {
+   "nummer": 21,
+   "modelantwoord": "Oordoppen dragen of oorkappen gebruiken",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "juiste maatregel bij de ontvanger (bijvoorbeeld oordoppen of oorkappen)"
+    }
+   ],
+   "nietToekennen": []
+  },
+  {
+   "nummer": 22,
+   "modelantwoord": "Bij 92 dB is de veilige blootstellingstijd kort (ongeveer 30 minuten). Gehoorbescherming zoals oorkappen voorkomt beschadiging van de haartjes in het slakkenhuis.",
+   "puntenverdeling": [
+    {
+     "punt": 1,
+     "criterium": "verband tussen dB-waarde en tijdsduur of schade"
+    },
+    {
+     "punt": 1,
+     "criterium": "voorbeeld van gehoorbescherming"
+    }
+   ],
+   "nietToekennen": []
+  }
+ ],
+ "cesuur": {
+  "nTerm": 1,
+  "cesuurPunten": 20,
+  "toelichting": "Normaal niveau, lineaire normering",
+  "formule": "cijfer = 1 + 9 × (score / 39)   ·  elk punt telt even zwaar, 1,0–10,0"
+ },
+ "matrijs": {
+  "domeinen": [
+   "13.1 Geluid maken en horen",
+   "13.2 Hoge en lage tonen",
+   "13.3 Hard en zacht geluid",
+   "13.4 Geluidssnelheid",
+   "13.5 Geluidshinder",
+   "13.6 Het oor",
+   "11.4 Veiligheid in het verkeer",
+   "11.2 Optrekken en afremmen"
+  ],
+  "cellen": {
+   "13.1 Geluid maken en horen": {
+    "R": {
+     "vraagnummers": [
+      1
+     ],
+     "punten": 1
+    },
+    "T1": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T2": {
+     "vraagnummers": [
+      8
+     ],
+     "punten": 2
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   },
+   "13.2 Hoge en lage tonen": {
+    "R": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T1": {
+     "vraagnummers": [
+      2,
+      9
+     ],
+     "punten": 3
+    },
+    "T2": {
+     "vraagnummers": [
+      10,
+      15
+     ],
+     "punten": 5
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   },
+   "13.3 Hard en zacht geluid": {
+    "R": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T1": {
+     "vraagnummers": [
+      3,
+      11
+     ],
+     "punten": 3
+    },
+    "T2": {
+     "vraagnummers": [
+      16
+     ],
+     "punten": 1
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   },
+   "13.4 Geluidssnelheid": {
+    "R": {
+     "vraagnummers": [
+      4
+     ],
+     "punten": 1
+    },
+    "T1": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T2": {
+     "vraagnummers": [
+      7,
+      13,
+      17
+     ],
+     "punten": 6
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   },
+   "13.5 Geluidshinder": {
+    "R": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T1": {
+     "vraagnummers": [
+      5,
+      12
+     ],
+     "punten": 4
+    },
+    "T2": {
+     "vraagnummers": [
+      18
+     ],
+     "punten": 2
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   },
+   "13.6 Het oor": {
+    "R": {
+     "vraagnummers": [
+      21
+     ],
+     "punten": 1
+    },
+    "T1": {
+     "vraagnummers": [
+      6
+     ],
+     "punten": 1
+    },
+    "T2": {
+     "vraagnummers": [
+      14,
+      22
+     ],
+     "punten": 4
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   },
+   "11.4 Veiligheid in het verkeer": {
+    "R": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T1": {
+     "vraagnummers": [
+      19
+     ],
+     "punten": 2
+    },
+    "T2": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   },
+   "11.2 Optrekken en afremmen": {
+    "R": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T1": {
+     "vraagnummers": [],
+     "punten": 0
+    },
+    "T2": {
+     "vraagnummers": [
+      20
+     ],
+     "punten": 3
+    },
+    "I": {
+     "vraagnummers": [],
+     "punten": 0
+    }
+   }
+  },
+  "totalen": {
+   "R": {
+    "punten": 3,
+    "percentage": 8
+   },
+   "T1": {
+    "punten": 13,
+    "percentage": 33
+   },
+   "T2": {
+    "punten": 23,
+    "percentage": 59
+   },
+   "I": {
+    "punten": 0,
+    "percentage": 0
+   }
+  },
+  "doelverdeling": {
+   "R": 15,
+   "T1": 45,
+   "T2": 34,
+   "I": 6
+  }
+ },
+ "kwaliteit": {
+  "samenvatting": "Totaal 39 punten. R 8% · T1 33% · T2 59% · I 0%. Figuren: 0 geplaatst (go), 0 gedropt, 0 keuringspogingen.",
+  "punten": [
+   {
+    "criterium": "Punten",
+    "oordeel": "voldoet",
+    "toelichting": "Totaal 39 punten. Elke rubriek telt op tot de vraagsom, in hele punten."
+   },
+   {
+    "criterium": "RTTI-balans",
+    "oordeel": "let op",
+    "toelichting": "R 8% · T1 33% · T2 59% · I 0%. Doel R 15% · T1 45% · T2 34% · I 6%."
+   },
+   {
+    "criterium": "Figuren",
+    "oordeel": "voldoet",
+    "toelichting": "Zonder plaatjes gekozen: geen figuren; gegevens staan in de tekst of een tabel."
+   },
+   {
+    "criterium": "Figuurkeuring (go/no-go)",
+    "oordeel": "voldoet",
+    "toelichting": "Geen figuren aangevraagd."
+   },
+   {
+    "criterium": "Dekking per paragraaf",
+    "oordeel": "voldoet",
+    "toelichting": "13.1 Geluid maken en horen: vraag 1, 8 · 13.2 Hoge en lage tonen: vraag 2, 9, 10, 15 · 13.3 Hard en zacht geluid: vraag 3, 11, 16 · 13.4 Geluidssnelheid: vraag 4, 7, 13, 17 · 13.5 Geluidshinder: vraag 5, 12, 18 · 13.6 Het oor: vraag 6, 14, 21, 22."
+   },
+   {
+    "criterium": "Nakijkmodel",
+    "oordeel": "voldoet",
+    "toelichting": "Bij meerkeuze volgt de rubriek de sleutelletter."
+   },
+   {
+    "criterium": "Inhoudscontrole",
+    "oordeel": "let op",
+    "toelichting": "22 vragen onafhankelijk nagerekend (sleutel, oplosbaarheid, realisme, helderheid, rubriek). Gevonden en aangepast: vraag 11 (niet realistisch); vraag 12 (sleutel klopte niet, onduidelijk, rubriek); vraag 13 (niet realistisch); vraag 19 (onduidelijk, rubriek); vraag 21 (rubriek); vraag 22 (vage verwijzing). Vervangen: vraag 20. Nog nakijken: vraag 22 (onduidelijk)."
+   },
+   {
+    "criterium": "Realisme",
+    "oordeel": "voldoet",
+    "toelichting": "Onrealistische context gevonden bij vraag 11, 13; gerepareerd of vervangen."
+   },
+   {
+    "criterium": "Kalibratie (schooltoetsen)",
+    "oordeel": "voldoet",
+    "toelichting": "22 vragen / 39 punten; richtwaarde 4GT in 60 min: 22 vragen / 37 punten. 1-puntsvragen 36% (richt 55%), gesloten 27% (richt 28%)."
+   },
+   {
+    "criterium": "Vraagtypen",
+    "oordeel": "aandacht",
+    "toelichting": "7 verschillende typen: G-GEHOOR 5×, G-OSC 4×, G-BEREIK 3×, G-FREQ 3×, G-ECHO 3×, B-SNEL 2×, OVERIG 1×, G-DB 1×. Veelvoorkomende examentypen bij deze stof die ontbreken: K-SOORT, EN-SOORT, S-GRAF."
+   },
+   {
+    "criterium": "Leerdoelen",
+    "oordeel": "aandacht",
+    "toelichting": "5 van 6 leerdoelen getoetst (syllabus NaSk1, Nova H13 Geluid). Niet getoetst: K/8.3. Punten wijken af van de richtverdeling bij K/8.2 (15/6 p)."
+   }
+  ]
+ },
+ "controle": {
+  "gecontroleerd": 22,
+  "gevonden": [
+   {
+    "nummer": 22,
+    "code": "vage-verwijzing",
+    "uitleg": "Verwijst naar 'deze machine' zonder dat die eerder is genoemd; noem concreet welk ding/apparaat het is."
+   },
+   {
+    "nummer": 11,
+    "code": "realisme",
+    "uitleg": "Niet realistisch: 8,4 dB is onrealistisch stil (onder fluisterniveau ~30 dB); een ventilator in een werkplaats is veel harder. Schaal/amplitude-koppeling naar dB zo is ook niet hoe een oscilloscoop werkt.. Maak de situatie en getallen realistisch en pas het antwoord aan."
+   },
+   {
+    "nummer": 12,
+    "code": "sleutel-fout",
+    "uitleg": "Onafhankelijke controle: het modelantwoord klopt niet (eigen uitwerking: Bron: stillere auto’s/asfalt of snelheidslimiet. Tussenstof: geluidsscherm/wal of isolatie. Ontvanger: oorkappen/oordoppen of grotere afstand tot woningen.). Herstel modelantwoord en rubriek, of pas de gegevens aan."
+   },
+   {
+    "nummer": 12,
+    "code": "onhelder",
+    "uitleg": "Niet helder: Gedeelde context over ventilator/oscilloscoop hoort niet bij deze vraag over overheid en wegen; modelantwoord noemt stillere machine/demper i.p.v. wegmaatregelen en ‘afstand vergroten’ als ontvanger i.p.v. typische wegmaatregelen.."
+   },
+   {
+    "nummer": 12,
+    "code": "rubriek",
+    "uitleg": "Rubriek: Criteria overlappen en zijn vaag (‘realistisch en juist’); 3p voor drie plaatsen + voorbeelden past beter als 1p per plaats+voorbeeld, niet als ‘alles realistisch’.. Rekenvragen: deelpunten per stap; één fout kost 1 punt."
+   },
+   {
+    "nummer": 13,
+    "code": "realisme",
+    "uitleg": "Niet realistisch: 225 m is onrealistisch diep voor een (Nederlands) meer; typische meren zijn meters tot enkele tientallen meters diep. Realistischer: t ≈ 0,04–0,08 s → diepte ca. 30–60 m, of een diep meer/zeebodem noemen.. Maak de situatie en getallen realistisch en pas het antwoord aan."
+   },
+   {
+    "nummer": 19,
+    "code": "onhelder",
+    "uitleg": "Niet helder: Stam vraagt 'bereken de reactietijd' terwijl die al in de context staat (0,6 s); onnodig/ verwarrend.."
+   },
+   {
+    "nummer": 19,
+    "code": "rubriek",
+    "uitleg": "Rubriek: Puntenverdeling noemt alleen omrekenen/reactieafstand en 'rest'; apart punt voor gegeven reactietijd past niet; 2 p voor vooral één berekening is scheef.. Rekenvragen: deelpunten per stap; één fout kost 1 punt."
+   },
+   {
+    "nummer": 21,
+    "code": "rubriek",
+    "uitleg": "Rubriek: Rubriek eist maatregel 'bij de ontvanger' terwijl de stam elke maatregel tegen gehoorschade toelaat; nietToekennen 'alleen afstand' botst met lesstof.. Rekenvragen: deelpunten per stap; één fout kost 1 punt."
+   },
+   {
+    "nummer": 15,
+    "code": "rtti",
+    "uitleg": "RTTI-balans: herschrijf deze vraag van T2 naar T1 (Toepassing bekend: Getrainde procedure in een geoefende context.). Zelfde paragraaf en 3 punten; zet rtti op \"T1\"."
+   },
+   {
+    "nummer": 20,
+    "code": "rtti",
+    "uitleg": "RTTI-balans: herschrijf deze vraag van T2 naar R (Reproductie: Letterlijk kennen: begrip, feit, formule, stappenplan.). Zelfde paragraaf en 3 punten; zet rtti op \"R\"."
+   },
+   {
+    "nummer": 7,
+    "code": "rtti",
+    "uitleg": "RTTI-balans: herschrijf deze vraag van T2 naar I (Inzicht: Analyseren, verklaren, verbanden, een oplossing construeren.). Zelfde paragraaf en 2 punten; zet rtti op \"I\"."
+   }
+  ],
+  "opgelost": [
+   11,
+   12,
+   13,
+   19,
+   21,
+   15,
+   20,
+   7
+  ],
+  "vervangen": [
+   20
+  ],
+  "blijft": [
+   {
+    "nummer": 22,
+    "code": "onhelder",
+    "uitleg": "Niet helder: Stam noemt 'de betonboor' terwijl context alleen een lawaaiige machine (92 dB) introduceert; apparaat niet eerder genoemd.."
+   }
+  ],
+  "duurMs": 46121,
+  "paragrafen": [
+   {
+    "code": "13.1",
+    "titel": "Geluid maken en horen",
+    "vragen": [
+     1,
+     8
+    ]
+   },
+   {
+    "code": "13.2",
+    "titel": "Hoge en lage tonen",
+    "vragen": [
+     2,
+     9,
+     10,
+     15
+    ]
+   },
+   {
+    "code": "13.3",
+    "titel": "Hard en zacht geluid",
+    "vragen": [
+     3,
+     11,
+     16
+    ]
+   },
+   {
+    "code": "13.4",
+    "titel": "Geluidssnelheid",
+    "vragen": [
+     4,
+     7,
+     13,
+     17
+    ]
+   },
+   {
+    "code": "13.5",
+    "titel": "Geluidshinder",
+    "vragen": [
+     5,
+     12,
+     18
+    ]
+   },
+   {
+    "code": "13.6",
+    "titel": "Het oor",
+    "vragen": [
+     6,
+     14,
+     21,
+     22
+    ]
+   }
+  ]
+ },
+ "leerdoelen": {
+  "bron": "syllabus",
+  "bronTitel": "Syllabus centraal examen 2028 Natuur- en scheikunde I vmbo (versie 2, april 2026), CvTE",
+  "herkomst": "Nova H13 Geluid",
+  "leerweg": "GT",
+  "leerjaar": 4,
+  "doelen": [
+   {
+    "id": "K/8.1",
+    "tekst": "Begrippen toepassen die een geluid kenmerken (toonhoogte, frequentie, amplitude)",
+    "deel": "CE",
+    "typen": [
+     "G-OSC",
+     "G-BEREIK"
+    ],
+    "doelPunten": 5
+   },
+   {
+    "id": "K/8.2",
+    "tekst": "Uitleggen hoe geluid via een tussenstof een ontvanger bereikt en rekenen met de geluidssnelheid",
+    "deel": "CE",
+    "typen": [
+     "G-BEREIK",
+     "G-ECHO",
+     "G-BRON"
+    ],
+    "doelPunten": 6
+   },
+   {
+    "id": "K/8.3",
+    "tekst": "Toonhoogte van een snaar in verband brengen met lengte en spankracht",
+    "deel": "CE",
+    "typen": [
+     "G-OSC"
+    ],
+    "doelPunten": 5
+   },
+   {
+    "id": "K/8.4",
+    "tekst": "Trillingstijd bepalen uit een oscilloscoopbeeld en de frequentie berekenen",
+    "deel": "CE",
+    "typen": [
+     "G-FREQ",
+     "G-OSC"
+    ],
+    "doelPunten": 8
+   },
+   {
+    "id": "K/8.5",
+    "tekst": "Metingen van geluidssterkte interpreteren en bronnen van geluidshinder aangeven",
+    "deel": "CE",
+    "typen": [
+     "G-DB",
+     "G-BRON"
+    ],
+    "doelPunten": 6
+   },
+   {
+    "id": "K/8.6",
+    "tekst": "Gehoorschade in verband brengen met geluidssterkte en tijdsduur; maatregelen noemen",
+    "deel": "CE",
+    "typen": [
+     "G-GEHOOR",
+     "G-BRON"
+    ],
+    "doelPunten": 7
+   }
+  ]
+ },
+ "plaatjes": "zonder",
+ "metPlaatjes": false,
+ "figuurPijplijn": 1,
+ "figuurRapport": {
+  "versie": 1,
+  "items": [],
+  "meldingen": [
+   "Zonder plaatjes gekozen: geen figuren gemaakt."
+  ],
+  "zonderPlaatjes": true
+ }
+}

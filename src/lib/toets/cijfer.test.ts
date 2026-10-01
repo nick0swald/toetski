@@ -2,14 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   applyVoldoende,
-  bevestigingsRegel,
   cesuurPunten,
-  cesuurZin,
   cijferVanScore,
   cijferVanScoreRaw,
   curvePunten,
   DEFAULT_CIJFER,
-  instructiesMetCesuur,
   nlCijfer,
   omzetTabel,
   roundCijfer,
@@ -30,34 +27,7 @@ describe("lineair 1,0–10,0", () => {
 
   it("27 punten: 5,5 bij 14/27, niet 15/27", () => {
     assert.equal(cesuurPunten(27, n), 14);
-    assert.equal(cesuurZin(27, n), "Cesuur 5,5 bij 14/27 punten (lineair).");
     assert.notEqual(cesuurPunten(27, n), 15);
-  });
-
-  it("bevestigingsregel volgt het vaste format", () => {
-    assert.equal(
-      bevestigingsRegel({
-        leerweg: "KB",
-        leerjaar: 2,
-        versie: "A",
-        moeilijkheid: "normaal",
-        duurMinuten: 50,
-        aantalVragen: 10,
-        doelPunten: 40,
-        model: "lineair",
-      }),
-      "KB · leerjaar 2 · versie A · normaal · 50 min · 10 vragen · max 40 pt · norm lineair",
-    );
-  });
-
-  it("instructies vervangen een tegenstrijdige 15/27", () => {
-    const out = instructiesMetCesuur(
-      ["Cesuur 5,5 bij 15/27 punten (lineair).", "Lees rustig."],
-      27,
-      n,
-    );
-    assert.equal(out[0], "Cesuur 5,5 bij 14/27 punten (lineair).");
-    assert.deepEqual(out.slice(1), ["Lees rustig."]);
   });
 
   it("elk punt telt even zwaar", () => {

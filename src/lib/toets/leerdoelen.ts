@@ -207,10 +207,13 @@ export function extractParagrafen(...teksten: (string | undefined)[]): Paragraaf
   }
   const hoofd = [...telling.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   if (!hoofd) return [];
+  // Lesstof over meer hoofdstukken (bijv. H11 + H13): elk hoofdstuk met minstens twee paragraafkoppen telt mee.
+  // Losse genummerde regels uit een ander hoofdstuk (één kop) blijven ruis en vallen weg.
+  const hoofdstukken = new Set([...telling.entries()].filter(([h, n]) => h === hoofd || n >= 2).map(([h]) => h));
   const lijst = [...gevonden.entries()]
-    .filter(([c]) => c.split(".")[0] === hoofd)
+    .filter(([c]) => hoofdstukken.has(c.split(".")[0]!))
     .map(([code, titel]) => ({ code, titel }))
-    .sort((a, b) => Number(a.code.split(".")[1]) - Number(b.code.split(".")[1]));
+    .sort((a, b) => Number(a.code.split(".")[0]) - Number(b.code.split(".")[0]) || Number(a.code.split(".")[1]) - Number(b.code.split(".")[1]));
   return lijst.length >= 2 ? lijst : [];
 }
 

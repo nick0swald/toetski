@@ -7,6 +7,7 @@ import { zonderLegacyFiguren } from "./figuren/bevriezing";
 import type { GegenereerdeToets, GenerateInput, PlaatjesModus } from "./types";
 import { MAX_TOTAAL_MS, eersteRondeEinde } from "./voortgang";
 import { eindControle } from "./eind-controle";
+import { telOp } from "./llm";
 
 export { eindControle };
 
@@ -15,7 +16,7 @@ export { DOEL_TOTAAL_MS, MAX_TOTAAL_MS, MIN_FIGUURVENSTER_MS, figuurDeadline } f
 /** "Met plaatjes": zoveel figuren laten plannen, en doorgaan tot er minstens MIN_MET_GEPLAATST zijn. */
 export const MIN_MET_GEPLAATST = 2;
 export const MET_DOEL_FIGUREN = 3;
-/** Eerste figuurronde bij "Met plaatjes" stopt hier, zodat er tijd is voor een extra ronde binnen 100 s. */
+/** Eerste figuurronde bij "Met plaatjes" stopt hier, zodat er tijd is voor een extra ronde vóór het maximum. */
 export { MET_EERSTE_RONDE_MS, eersteRondeEinde } from "./voortgang";
 
 export type Fase = "vragen" | "afwerken" | "plaatjes" | "word" | "klaar";
@@ -64,7 +65,7 @@ export async function maakToets(
     meld({ fase: "afwerken" });
     const af = await afwerkToets({ data: { ...afwerkData, verstrekenMs: nu() - t0 } });
     if (!af.ok) return { ok: false, error: af.error };
-    const toets = eindControle(zonderPlaatjes(af.toets));
+    const toets = eindControle(zonderPlaatjes(metKosten(af.toets, ruw)));
     const t1 = nu();
     toets.figuurRapport = { ...toets.figuurRapport!, tijden: { vragenMs: tVragen - t0, afwerkenMs: t1 - tVragen, totaalMs: t1 - t0 } };
     meld({ fase: "word", afwerkenKlaar: true });
@@ -102,6 +103,7 @@ export async function maakToets(
 
   const af = await afwerkToets({ data: { ...afwerkData, verstrekenMs: nu() - t0 } });
   if (!af.ok) return { ok: false, error: af.error };
+  af.toets = metKosten(af.toets, ruw);
   const tAf = nu();
   meld({ fase: "plaatjes", afwerkenKlaar: true, wachtOpPlaatjes: true });
 
@@ -119,7 +121,7 @@ export async function maakToets(
     };
   }
   // "Met plaatjes" is een harde keuze: te weinig goedgekeurde figuren → nieuwe ronde (andere vragen of
-  // eenvoudiger spec) zolang het harde maximum van 100 s het toelaat.
+  // eenvoudiger spec) zolang het harde maximum (MAX_TOTAAL_MS) het toelaat.
   if (verplicht) {
     const hardeDeadline = t0 + MAX_TOTAAL_MS;
     for (let ronde = 0; ronde < 2; ronde++) {
@@ -138,7 +140,7 @@ export async function maakToets(
     if (n < MIN_MET_GEPLAATST && toets.figuurRapport) {
       toets.figuurRapport = {
         ...toets.figuurRapport,
-        meldingen: [...toets.figuurRapport.meldingen, `Met plaatjes: binnen 100 s ${n === 0 ? "geen" : `maar ${n}`} goedgekeurde ${n === 1 ? "figuur" : "figuren"}. Afgekeurde figuren worden nooit geplaatst.`],
+        meldingen: [...toets.figuurRapport.meldingen, `Met plaatjes: binnen de tijd ${n === 0 ? "geen" : `maar ${n}`} goedgekeurde ${n === 1 ? "figuur" : "figuren"}. Afgekeurde figuren worden nooit geplaatst.`],
       };
     }
   }
@@ -150,6 +152,13 @@ export async function maakToets(
   };
   meld({ fase: "word", wachtOpPlaatjes: false });
   return { ok: true, toets };
+}
+
+/** Kosten van stap 1 (vragen) en stap 2 (afwerken) samen op de toets. */
+function metKosten(toets: GegenereerdeToets, ruw: { kosten?: GegenereerdeToets["kosten"]; duurMs?: number }): GegenereerdeToets {
+  if (!ruw.kosten && !toets.kosten) return toets;
+  const k = telOp(ruw.kosten, toets.kosten);
+  return { ...toets, kosten: { ...k, duurVragenMs: ruw.duurMs, duurAfwerkenMs: toets.kosten?.duurAfwerkenMs } };
 }
 
 const OPSLAG_SLEUTEL = "toetski:plaatjes";

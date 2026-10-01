@@ -1,23 +1,24 @@
 import type { Voortgang } from "./maak-toets";
+import { TIJD, UX_TIJD } from "./config.ts";
 
-/** Doel: totale wachttijd ± 60 s; figuren mogen uitlopen tot het harde maximum. */
-export const DOEL_TOTAAL_MS = 60_000;
-/** Hard maximum voor de hele toets inclusief figuren (Nick: max 100 s). */
-export const MAX_TOTAAL_MS = 100_000;
+/** Doel voor de totale wachttijd (config.UX_TIJD); figuren mogen uitlopen tot het harde maximum. */
+export const DOEL_TOTAAL_MS: number = UX_TIJD.doelTotaalMs;
+/** Hard maximum voor de hele toets inclusief figuren (grok-4.5: vragen ± 2 min + afwerken ± 1,5 min). */
+export const MAX_TOTAAL_MS: number = UX_TIJD.maxTotaalMs;
 /**
  * Figuren krijgen minstens zoveel tijd na het verschijnen van de vragen (binnen MAX_TOTAAL_MS).
  * Figuren die eerder klaar zijn, laten de toets ook eerder klaar zijn; alleen trage figuren benutten dit.
  */
-export const MIN_FIGUURVENSTER_MS = 60_000;
+export const MIN_FIGUURVENSTER_MS: number = UX_TIJD.minFiguurvensterMs;
 
 export function figuurDeadline(t0: number, tVragen: number): number {
   return Math.min(t0 + MAX_TOTAAL_MS, Math.max(t0 + DOEL_TOTAAL_MS, tVragen + MIN_FIGUURVENSTER_MS));
 }
 
 /** Typische duur van de figuren na de vragen (voor de afteller; gemeten 20–35 s). */
-export const TYPISCH_FIGUREN_MS = 30_000;
-/** Typische duur van afwerken incl. verplichte inhoudscontrole + reparatie (gemeten 25–45 s). */
-export const TYPISCH_AFWERKEN_MS = 35_000;
+export const TYPISCH_FIGUREN_MS: number = UX_TIJD.typischFigurenMs;
+/** Typische duur van afwerken incl. verplichte inhoudscontrole + reparatie (grok-4.5). */
+export const TYPISCH_AFWERKEN_MS: number = UX_TIJD.typischAfwerkenMs;
 
 /**
  * Voortgangsbalk: tijdgestuurde easing binnen een fase, sprongen bij echte gebeurtenissen.
@@ -48,9 +49,9 @@ const RANGE = {
   klaar: [100, 100],
 } as const;
 
-/** Verwachte vragentijd: gemeten ± 8 s + 1,4 s per vraag (grok-4.20 niet-redenerend). */
+/** Verwachte vragentijd (grok-4.5, low): vast + per vraag uit config.UX_TIJD. */
 export function verwachteVragenMs(aantalVragen: number): number {
-  return 8_000 + 1_400 * Math.max(4, Math.min(80, aantalVragen));
+  return UX_TIJD.vragenVastMs + UX_TIJD.vragenPerVraagMs * Math.max(4, Math.min(80, aantalVragen));
 }
 
 function ease(verstreken: number, verwacht: number): number {
@@ -111,20 +112,23 @@ export function berekenVoortgang(v: Voortgang, t: VoortgangTijden, nu: number): 
   }
 }
 
-/** Eerste figuurronde bij "Met plaatjes" stopt standaard hier (ruimte voor een extra ronde binnen 100 s). */
-export const MET_EERSTE_RONDE_MS = 72_000;
+/** Eerste figuurronde bij "Met plaatjes" stopt standaard hier (ruimte voor een extra ronde vóór het maximum). */
+export const MET_EERSTE_RONDE_MS: number = UX_TIJD.metEersteRondeMs;
 
 /**
  * Einde van de eerste figuurronde bij "Met plaatjes": minstens 72 s na start, maar altijd ≥ 40 s na de
- * vragen (anders krijgen keuringen geen kans als de vragen traag waren), en nooit later dan 100 s − 16 s.
+ * vragen (anders krijgen keuringen geen kans als de vragen traag waren), en nooit later dan het maximum − 16 s.
  */
 export function eersteRondeEinde(t0: number, tVragen: number): number {
   return Math.min(t0 + MAX_TOTAAL_MS - 16_000, Math.max(t0 + MET_EERSTE_RONDE_MS, tVragen + 40_000));
 }
 
 
-/** Afwerkbudget: maximaal 60 s, en zo dat de hele toets binnen ~100 s klaar is (≥ 30 s voor de controle). */
-export function afwerkBudget(verstrekenMs?: number): number {
-  if (verstrekenMs === undefined) return 60_000;
-  return Math.max(30_000, Math.min(60_000, 100_000 - 10_000 - verstrekenMs));
+/**
+ * Afwerkbudget (server-side, config.TIJD): VAST, los van hoe lang de vragen duurden. Stap 2 is een eigen
+ * Vercel-aanroep (maxDuration 180 s), dus de controle én minstens één reparatieronde passen altijd.
+ * (Vóór 1 okt 2026: 90 s − verstreken, min 30 s → na trage vragen geen reparatie; zie r236-review.)
+ */
+export function afwerkBudget(_verstrekenMs?: number): number {
+  return TIJD.afwerkBudgetMs;
 }

@@ -1,4 +1,4 @@
-import type { Leerweg, Moeilijkheid, Rtti, RttiVerdeling, ToetsVersie } from "./types";
+import type { Leerweg, Moeilijkheid, Rtti, ToetsVersie } from "./types";
 
 export const APP_NAME = "Toetski";
 
@@ -28,33 +28,16 @@ export const RTTI_META: Record<Rtti, { kort: string; naam: string; uitleg: strin
   I: { kort: "I", naam: "Inzicht", uitleg: "Analyseren, verklaren, verbanden, een oplossing construeren." },
 };
 
-export const RTTI_PRESETS: Record<string, { label: string; verdeling: RttiVerdeling }> = {
-  onderbouw: { label: "Onderbouw (klas 1–2)", verdeling: { R: 35, T1: 40, T2: 20, I: 5 } },
-  bovenbouw: { label: "Klas 3", verdeling: { R: 25, T1: 40, T2: 27, I: 8 } },
-  klas4: { label: "Klas 4 (richting examen)", verdeling: { R: 15, T1: 45, T2: 34, I: 6 } },
-  examen: { label: "CSE NaSk1 2013–2026 (referentie)", verdeling: { R: 8, T1: 58, T2: 32, I: 2 } },
-};
-
-/**
- * RTTI-verdeling (punten %) van de echte CSE's NaSk1 2013–2026, berekend met dezelfde regels als de app
- * (rtti-regels.ts, tools/examen-rtti.ts). Referentie voor klas 4.
- */
-export const RTTI_EXAMEN: Record<"BB" | "KB" | "GT" | "alle", RttiVerdeling> = {
-  BB: { R: 8, T1: 75, T2: 17, I: 0 },
-  KB: { R: 9, T1: 63, T2: 27, I: 1 },
-  GT: { R: 8, T1: 53, T2: 37, I: 2 },
-  alle: { R: 8, T1: 58, T2: 32, I: 2 },
-};
-
-export function presetVoorLeerjaar(jaar: 1 | 2 | 3 | 4): keyof typeof RTTI_PRESETS {
-  return jaar <= 2 ? "onderbouw" : jaar === 3 ? "bovenbouw" : "klas4";
-}
-
-export function rttiVoorMoeilijkheid(basis: RttiVerdeling, m: Moeilijkheid): RttiVerdeling {
-  if (m === "makkelijk") return { R: basis.R + 10, T1: basis.T1 + 5, T2: Math.max(5, basis.T2 - 10), I: Math.max(0, basis.I - 5) };
-  if (m === "moeilijk") return { R: Math.max(10, basis.R - 10), T1: Math.max(15, basis.T1 - 5), T2: basis.T2 + 10, I: basis.I + 5 };
-  return { ...basis };
-}
+/** RTTI-doelen staan in config.ts (enige bron); hier alleen doorgegeven voor bestaande imports. */
+export {
+  RTTI_EXAMEN,
+  RTTI_PRESETS,
+  isHandmatigRtti,
+  metRttiDoel,
+  presetVoorLeerjaar,
+  rttiDoelVoor,
+  rttiVoorMoeilijkheid,
+} from "./config.ts";
 
 export function normalizeLeerweg(s: string): Leerweg {
   const x = s.toUpperCase().trim();

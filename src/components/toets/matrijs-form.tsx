@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { RTTI_PRESETS } from "@/lib/toets/constants";
+import { rttiDoelVoor } from "@/lib/toets/config";
 import { generateMatrijs } from "@/lib/toets/generate";
 import { BRON_ACCEPT, bestandTeGroot, leesBronBestand } from "@/lib/toets/lees-bron";
 import { VOORBEELD_TOETS_TEKST } from "@/lib/toets/sample";
@@ -90,7 +90,7 @@ export function MatrijsForm() {
         data: {
           leerweg: "KB",
           leerjaar: 2,
-          rttiDoel: RTTI_PRESETS.onderbouw.verdeling,
+          rttiDoel: rttiDoelVoor(2),
           bronmateriaal: toetsTekst,
           extraEisen: notities.trim() || undefined,
           feedbackGewenst: feedback,

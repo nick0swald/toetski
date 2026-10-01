@@ -1,4 +1,3 @@
-import { afwerkBudget } from "./voortgang";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { cesuurPunten, formuleTekst } from "./cijfer";
@@ -11,7 +10,8 @@ import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
 import { extractParagrafen } from "./leerdoelen";
 import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan, zonderDoelJargon } from "./leerdoelen-plan";
 import { bouwKwaliteit } from "./kwaliteit-check";
-import { CONTROLE_MODEL as CONTROLE_MODEL_NAAM, TEKST_MODEL } from "./figuren/modellen";
+import { LIMIETEN, TIJD, metRttiDoel, tokensVoorAantalVragen } from "./config";
+import { berichten, nieuweKosten, vraagJson, vriendelijkeAiFout, xaiChat, type Kosten } from "./llm";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 import {
   annoteerKalibratie,
@@ -53,18 +53,6 @@ function metKalibratieLengte<T extends { lengteAuto?: boolean; mcVragen?: number
   return { ...data, aantalVragen: k.items, doelPunten: k.punten };
 }
 
-function stripJsonFence(raw: string): string {
-  const trimmed = raw.trim();
-  const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence?.[1]) return fence[1].trim();
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
-  return trimmed;
-}
-
-/** Grotere toetsen (veel MC) knappen anders midden in JSON af. */
-
 /** Trim context/stam; lege context wordt weggelaten. Volgorde (inleiding→vraag) wordt via prompts afgedwongen. */
 function normaliseerVraagTekst<T extends { context?: string; stam: string }>(q: T): T {
   const context = (q.context ?? "").trim();
@@ -74,29 +62,6 @@ function normaliseerVraagTekst<T extends { context?: string; stam: string }>(q: 
     context: context || undefined,
     stam,
   } as T;
-}
-
-function tokensVoorAantalVragen(n: number): number {
-  const aantal = Math.max(4, Math.min(80, Math.floor(n || 10)));
-  return Math.min(16000, Math.max(5000, 3000 + aantal * 450));
-}
-
-function parseAiJson(raw: string): unknown {
-  try {
-    return JSON.parse(stripJsonFence(raw));
-  } catch {
-    throw new Error(
-      "De AI-respons was onvolledig of geen geldige JSON (vaak bij heel veel vragen). Probeer opnieuw, of zet tijdelijk iets minder MC/open.",
-    );
-  }
-}
-
-function vriendelijkeAiFout(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err ?? "");
-  if (/JSON|Expected ','|Unexpected token|position \d+/i.test(raw)) {
-    return "De AI-respons was onvolledig (vaak bij heel veel vragen). Probeer opnieuw, of zet tijdelijk iets minder MC/open.";
-  }
-  return raw || "Het maken van de toets is mislukt.";
 }
 
 function isPrivateHost(hostname: string): boolean {
@@ -139,61 +104,19 @@ async function fetchBronUrl(url: string): Promise<string> {
   return text.replace(/\s+\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim().slice(0, 12000);
 }
 
-/** Tekstmodel (ongewijzigd); ook gebruikt door de beeldpijplijn via figuren/modellen.ts. */
-const GROK_TEKST_MODEL = TEKST_MODEL;
-const CONTROLE_MODEL = CONTROLE_MODEL_NAAM;
-
-/** Onafhankelijke controle: redenerend model (grok-4.5, lage redeneerinspanning), temperatuur 0. */
-async function callControle(system: string, user: string): Promise<string> {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(45_000),
-    body: JSON.stringify({
-      model: CONTROLE_MODEL,
-      reasoning_effort: "low",
-      temperature: 0,
-      max_tokens: 6000,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  });
-  if (!res.ok) throw new Error(`xAI API error ${res.status}`);
-  const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  return body.choices?.[0]?.message?.content ?? "";
+/** Inhoudscontrole (rol "controle", grok-4.5 low, temp 0) met eigen timeout uit config.ts. */
+function controleAanroep(kosten: Kosten): (prompt: string) => Promise<string | null> {
+  return (prompt) => xaiChat("controle", berichten(CONTROLE_SYSTEM, prompt), { maxTokens: 6000, timeoutMs: TIJD.controleTimeoutMs, kosten }).catch(() => null);
 }
 
-async function callGrok(messages: { role: string; content: string }[], maxTokens = 4000, timeoutMs = 180000): Promise<string> {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    signal: AbortSignal.timeout(Math.max(5000, timeoutMs)),
-    body: JSON.stringify({
-      model: GROK_TEKST_MODEL,
-      temperature: 0.4,
-      max_tokens: maxTokens,
-      response_format: { type: "json_object" },
-      messages,
-    }),
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`xAI API error ${res.status}${errText ? `: ${errText.slice(0, 180)}` : ""}`);
-  }
-  const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const content = body.choices?.[0]?.message?.content ?? "";
-  if (!content) throw new Error("Lege AI-respons.");
-  return content;
+/** Reparatie (rol "repareren", grok-4.5 low) met eigen timeout uit config.ts. */
+function reparatieAanroep(kosten: Kosten, min = 2000): (prompt: string) => Promise<string | null> {
+  return (prompt) =>
+    xaiChat("repareren", berichten(REPAIR_SYSTEM, prompt), {
+      maxTokens: Math.min(8000, Math.max(min, Math.ceil(prompt.length / 3))) + LIMIETEN.redeneerMarge,
+      timeoutMs: TIJD.reparatieTimeoutMs,
+      kosten,
+    }).catch(() => null);
 }
 
 /** Plaatjeskeuze uit de invoer (oude invoer: metPlaatjes=false → zonder). */
@@ -350,14 +273,16 @@ function leerdoelPlanVoor(data: GenerateData, k: Kalibratie | null, bron: string
 type GeneratedPayload = z.infer<typeof generatedPayloadSchema>;
 
 /** Stap 1: lesstof ophalen + modelaanroep → ruwe vragen (nog niet afgewerkt). */
-async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload: GeneratedPayload }> {
+async function genereerRuw(data: GenerateData, kosten: Kosten = nieuweKosten()): Promise<{ bron: string; payload: GeneratedPayload }> {
+  data = metRttiDoel(data);
+  const deadline = Date.now() + TIJD.vragenDeadlineMs;
   let bron = data.bronmateriaal ?? "";
   if (data.bronUrl?.trim()) {
     const extra = await fetchBronUrl(data.bronUrl.trim());
     bron = [bron, extra].filter(Boolean).join("\n\n");
   }
-  bron = bron.slice(0, 100000);
-  const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, 100000);
+  bron = bron.slice(0, LIMIETEN.bronMax);
+  const antwoorden = (data.antwoordenmateriaal ?? "").slice(0, LIMIETEN.bronMax);
   if (!bron.trim()) throw new GebruikersFout("Plak lesstof, lever het leerlingboek in, of zet een openbare link.");
   const k = kalibratieVoor(data, bron);
   data = metKalibratieLengte(data, k);
@@ -382,11 +307,10 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
     : null;
   const system = bouwSystemPrompt(data.stuurdocument);
   const basisPrompt = userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron, kal);
-  // Lange NaSk-toetsen: gesloten en open deel parallel (binnen 100 s).
+  // Lange NaSk-toetsen: gesloten en open deel parallel (samen binnen TIJD.vragenDeadlineMs).
   const delen = k && !data.feedback?.trim() ? deelPlan(k, data.aantalVragen, data.doelPunten) : null;
   let payload: GeneratedPayload;
   if (delen) {
-    const deadline = Date.now() + 80_000;
     const [a, b] = await Promise.all(
       delen.map((d, i) => {
         // Elk deel krijgt zijn eigen aantallen en vormmix, zodat het model niet de hele toets maakt.
@@ -394,7 +318,7 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
         const deelData = { ...data, aantalVragen: d.aantal, doelPunten: d.punten, antwoordenmateriaal: antwoorden };
         const deelKal = { k: kd, extra: d.soort === "gesloten" ? [leerdoelenPrompt(plan, true), vraagtypenPrompt(bron, kd.leerjaar, kd.leerweg)].filter(Boolean).join("\n") : kal!.extra };
         const opdracht = deelOpdracht(d, delen[1 - i]!);
-        return vraagPayload(system, `${opdracht}\n\n${userPrompt(deelData, bron, deelKal)}\n\n${opdracht}`, d.aantal, deadline).catch((e) => {
+        return vraagPayload(system, `${opdracht}\n\n${userPrompt(deelData, bron, deelKal)}\n\n${opdracht}`, d.aantal, deadline, kosten).catch((e) => {
           console.warn(`[generate] deel ${d.soort} mislukt:`, e instanceof Error ? e.message.slice(0, 200) : e);
           return null;
         });
@@ -403,7 +327,7 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
     if (!b && (a?.vragen.length ?? 0) < 8) throw new Error("De AI-respons was onvolledig. Probeer opnieuw.");
     payload = voegDelenSamen(a, b);
   } else {
-    payload = await vraagPayload(system, basisPrompt, data.aantalVragen);
+    payload = await vraagPayload(system, basisPrompt, data.aantalVragen, deadline, kosten);
   }
   // Ruim meer vragen dan het doel (model negeerde het aantal): overschot eraf vóór het afwerken.
   if (k && data.lengteAuto && payload.vragen.length > data.aantalVragen + 3) {
@@ -414,33 +338,14 @@ async function genereerRuw(data: GenerateData): Promise<{ bron: string; payload:
   return { bron, payload };
 }
 
-/** Eén generatie-aanroep met één herkansing voor kapotte JSON. */
-async function vraagPayload(system: string, prompt: string, aantal: number, deadline?: number): Promise<GeneratedPayload> {
-  const messages = [
-    { role: "system", content: system },
-    { role: "user", content: prompt },
-  ];
-  const maxTok = tokensVoorAantalVragen(aantal);
-  const over = () => (deadline ? deadline - Date.now() : 180000);
-  let raw = await callGrok(messages, maxTok, over());
-  let parsed: unknown;
-  try {
-    parsed = parseAiJson(raw);
-  } catch (err) {
-    // Herkansing alleen als er nog tijd is (100 s-budget).
-    if (over() < 25000) throw err;
-    raw = await callGrok(
-      [
-        ...messages,
-        { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
-        { role: "user", content: "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object, zonder markdown. Kap niet af." },
-      ],
-      maxTok,
-      over(),
-    );
-    parsed = parseAiJson(raw);
-  }
-  return generatedPayloadSchema.parse(parsed);
+/** Eén schrijf-aanroep (rol "schrijven") met één herkansing voor kapotte JSON, binnen de deadline. */
+function vraagPayload(system: string, prompt: string, aantal: number, deadline: number, kosten: Kosten): Promise<GeneratedPayload> {
+  return vraagJson("schrijven", berichten(system, prompt), (u) => generatedPayloadSchema.parse(u), {
+    maxTokens: tokensVoorAantalVragen(aantal),
+    rest: () => deadline - Date.now(),
+    kosten,
+    herkansingMinRestMs: TIJD.herkansingMinRestMs,
+  });
 }
 
 class GebruikersFout extends Error {}
@@ -457,7 +362,8 @@ export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
 }
 
 /** Stap 2: afwerken (reparatie, punten, MC-hussel, kwaliteit) → complete toets. */
-async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload, budgetMs = 60_000): Promise<GegenereerdeToets> {
+async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload, budgetMs: number = TIJD.afwerkBudgetMs, kosten: Kosten = nieuweKosten()): Promise<GegenereerdeToets> {
+  data = metRttiDoel(data);
   const kal = kalibratieVoor(data, bron);
   data = metKalibratieLengte(data, kal);
   const examenCtx = CSE_CONTEXTEN.filter((c) => payload.examenContexten?.includes(c.id));
@@ -484,15 +390,8 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
           minGesloten: Math.max(0, kal.gesloten - 0.05),
         }
       : {}),
-    controleer: (prompt) => callControle(CONTROLE_SYSTEM, prompt).catch(() => null),
-    repair: (prompt) =>
-      callGrok(
-        [
-          { role: "system", content: REPAIR_SYSTEM },
-          { role: "user", content: prompt },
-        ],
-        Math.min(8000, Math.max(2000, Math.ceil(prompt.length / 3))),
-      ).catch(() => null),
+    controleer: controleAanroep(kosten),
+    repair: reparatieAanroep(kosten),
   });
   const leerdoelPlan = leerdoelPlanVoor(data, kal, bron);
   const gelabeld = kal ? herstelLeerdoelen(zonderDoelJargon(markeerExamenvragen(normaliseerVraagtypen(af.vragen), examenCtx)), leerdoelPlan) : { vragen: af.vragen, hersteld: [] };
@@ -524,6 +423,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
       versie: data.versie,
       moeilijkheid: data.moeilijkheid,
+      ...(data.rttiHandmatig ? { rttiHandmatig: true } : {}),
       extraTijd: payload.meta.extraTijd?.trim() || undefined,
     },
     vragen,
@@ -560,6 +460,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
     )),
   };
   if (af.controle) toets.controle = af.controle;
+  toets.kosten = kosten;
   if (leerdoelPlan) toets.leerdoelen = leerdoelPlan;
   const modus = plaatjesModus(data);
   toets.plaatjes = modus;
@@ -567,23 +468,14 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
   return toets;
 }
 
-export const generateToets = createServerFn({ method: "POST" })
-  .validator((input: unknown) => generateInputSchema.parse(input))
-  .handler(async ({ data }): Promise<{ ok: true; toets: GegenereerdeToets } | { ok: false; error: string }> => {
-    try {
-      const { bron, payload } = await genereerRuw(data);
-      return { ok: true, toets: await rondAf(data, bron, payload) };
-    } catch (err) {
-      return { ok: false, error: err instanceof GebruikersFout ? err.message : vriendelijkeAiFout(err) };
-    }
-  });
-
 /** Stap 1 los (voor de snelle route: figuren starten zodra de vragen er zijn). */
 export const generateVragenRuw = createServerFn({ method: "POST" })
   .validator((input: unknown) => generateInputSchema.parse(input))
-  .handler(async ({ data }): Promise<{ ok: true; bron: string; payload: GeneratedPayload } | { ok: false; error: string }> => {
+  .handler(async ({ data }): Promise<{ ok: true; bron: string; payload: GeneratedPayload; kosten: Kosten; duurMs: number } | { ok: false; error: string }> => {
+    const kosten = nieuweKosten();
+    const t0 = Date.now();
     try {
-      return { ok: true, ...(await genereerRuw(data)) };
+      return { ok: true, ...(await genereerRuw(data, kosten)), kosten, duurMs: Date.now() - t0 };
     } catch (err) {
       return { ok: false, error: err instanceof GebruikersFout ? err.message : vriendelijkeAiFout(err) };
     }
@@ -593,7 +485,7 @@ const afwerkInputSchema = z.object({
   input: generateInputSchema,
   bron: z.string().max(210000),
   payload: z.unknown(),
-  /** Tijd sinds de start van de generatie (client-klok), voor het afwerkbudget binnen 100 s. */
+  /** Tijd sinds de start (client-klok). Alleen informatief: het afwerkbudget is vast (config.TIJD), want stap 2 is een eigen Vercel-aanroep. */
   verstrekenMs: z.number().min(0).max(300_000).optional(),
 });
 
@@ -604,7 +496,10 @@ export const afwerkToets = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ ok: true; toets: GegenereerdeToets } | { ok: false; error: string }> => {
     try {
       const payload = generatedPayloadSchema.parse(data.payload);
-      return { ok: true, toets: await rondAf(data.input, data.bron, payload, afwerkBudget(data.verstrekenMs)) };
+      const t0 = Date.now();
+      const toets = await rondAf(data.input, data.bron, payload, TIJD.afwerkBudgetMs);
+      if (toets.kosten) toets.kosten.duurAfwerkenMs = Date.now() - t0;
+      return { ok: true, toets };
     } catch (err) {
       return { ok: false, error: vriendelijkeAiFout(err) };
     }
@@ -648,26 +543,12 @@ ${data.extraEisen?.trim() || "(geen)"}
 
 Bestaande toets:
 ${bron}`;
-      const messages = [
-        { role: "system", content: MATRIJS_SYSTEM },
-        { role: "user", content: user },
-      ];
-      let raw = await callGrok(messages, 8000);
-      let parsed: unknown;
-      try {
-        parsed = parseAiJson(raw);
-      } catch {
-        raw = await callGrok(
-          [
-            ...messages,
-            { role: "assistant", content: raw.slice(0, 4000) },
-            { role: "user", content: "Stuur hetzelfde resultaat opnieuw als één puur JSON-object." },
-          ],
-          6000,
-        );
-        parsed = parseAiJson(raw);
-      }
-      const payload = matrijsPayloadSchema.parse(parsed);
+      const t0 = Date.now();
+      const payload = await vraagJson("snel", berichten(MATRIJS_SYSTEM, user), (u) => matrijsPayloadSchema.parse(u), {
+        maxTokens: 8000,
+        rest: () => TIJD.losseAanroepMs - (Date.now() - t0),
+        herkansingTekst: "Stuur hetzelfde resultaat opnieuw als één puur JSON-object.",
+      });
       const vragen = payload.vragen.map((q, i) =>
         normaliseerVraagTekst({
           ...q,
@@ -822,31 +703,15 @@ Je volgt dit stuurdocument. Je voegt alleen extra vragen toe aan een bestaande t
 ${stuur}
 
 ${EXTRA_JSON_SCHEMA}`;
-        const messages = [
-          { role: "system", content: system },
-          { role: "user", content: extraUserPrompt(data, bron) },
-        ];
-        const maxTok = tokensVoorExtraVragen(data.count);
-        let raw = await callGrok(messages, maxTok);
-        let parsed: unknown;
-        try {
-          parsed = parseAiJson(raw);
-        } catch {
-          raw = await callGrok(
-            [
-              ...messages,
-              { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
-              {
-                role: "user",
-                content:
-                  "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object met alleen vragen en nakijkmodel, zonder markdown. Kap niet af.",
-              },
-            ],
-            maxTok,
-          );
-          parsed = parseAiJson(raw);
-        }
-        const payload = extraQuestionsPayloadSchema.parse(parsed);
+        const kosten = nieuweKosten();
+        const t0 = Date.now();
+        const rest = () => TIJD.losseAanroepMs - (Date.now() - t0);
+        const payload = await vraagJson("schrijven", berichten(system, extraUserPrompt(data, bron)), (u) => extraQuestionsPayloadSchema.parse(u), {
+          maxTokens: tokensVoorExtraVragen(data.count) + LIMIETEN.redeneerMarge,
+          rest,
+          kosten,
+          herkansingTekst: "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object met alleen vragen en nakijkmodel, zonder markdown. Kap niet af.",
+        });
         const start = data.startNummer;
         const vragenRaw = payload.vragen.slice(0, data.count).map((q, i) =>
           normaliseerVraagTekst({
@@ -879,14 +744,8 @@ ${EXTRA_JSON_SCHEMA}`;
           bron: data.bronmateriaal || "",
           vak: data.vak?.trim() || "",
           skipOrder: true,
-          repair: (prompt) =>
-            callGrok(
-              [
-                { role: "system", content: REPAIR_SYSTEM },
-                { role: "user", content: prompt },
-              ],
-              Math.min(8000, Math.max(1800, Math.ceil(prompt.length / 3))),
-            ).catch(() => null),
+          budgetMs: Math.max(20_000, rest()),
+          repair: reparatieAanroep(kosten, 1800),
         });
         const vragen = af.vragen;
         const nakijkmodel = af.nakijkmodel;
@@ -968,31 +827,15 @@ ${(data.bronmateriaal ?? "").trim().slice(0, 12000) || "(geen)"}
 
 Lever ALLE vragen + nakijkmodel terug (aangepast of ongewijzigd).`;
 
-        const messages = [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ];
-        const maxTok = Math.min(14000, Math.max(4000, 2000 + data.vragen.length * 400));
-        let raw = await callGrok(messages, maxTok);
-        let parsed: unknown;
-        try {
-          parsed = parseAiJson(raw);
-        } catch {
-          raw = await callGrok(
-            [
-              ...messages,
-              { role: "assistant", content: raw.slice(0, Math.min(raw.length, maxTok)) },
-              {
-                role: "user",
-                content:
-                  "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object met vragen, nakijkmodel en toelichting. Kap niet af.",
-              },
-            ],
-            maxTok,
-          );
-          parsed = parseAiJson(raw);
-        }
-        const payload = bijschavenPayloadSchema.parse(parsed);
+        const kosten = nieuweKosten();
+        const t0 = Date.now();
+        const rest = () => TIJD.losseAanroepMs - (Date.now() - t0);
+        const payload = await vraagJson("schrijven", berichten(system, user), (u) => bijschavenPayloadSchema.parse(u), {
+          maxTokens: Math.min(14000, Math.max(4000, 2000 + data.vragen.length * 400)) + LIMIETEN.redeneerMarge,
+          rest,
+          kosten,
+          herkansingTekst: "Stuur hetzelfde resultaat opnieuw als één compleet puur JSON-object met vragen, nakijkmodel en toelichting. Kap niet af.",
+        });
         const vragenRaw = payload.vragen.map((q, i) =>
           normaliseerVraagTekst({
             ...q,
@@ -1027,14 +870,8 @@ Lever ALLE vragen + nakijkmodel terug (aangepast of ongewijzigd).`;
           bron: data.bronmateriaal ?? "",
           vak: data.vak?.trim() || "",
           skipOrder: skipMcEerst,
-          repair: (prompt) =>
-            callGrok(
-              [
-                { role: "system", content: REPAIR_SYSTEM },
-                { role: "user", content: prompt },
-              ],
-              Math.min(8000, Math.max(1800, Math.ceil(prompt.length / 3))),
-            ).catch(() => null),
+          budgetMs: Math.max(20_000, rest()),
+          repair: reparatieAanroep(kosten, 1800),
         });
         return {
           ok: true,

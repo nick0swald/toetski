@@ -79,11 +79,10 @@ describe("ronde 1: lengte en afwerken", () => {
     assert.deepEqual(res.controle?.blijft, []);
     assert.deepEqual(res.controle?.vervangen, [1]);
   });
-  it("afwerkbudget past binnen 100 s", () => {
-    assert.equal(afwerkBudget(undefined), 60_000);
-    assert.equal(afwerkBudget(20_000), 60_000);
-    assert.equal(afwerkBudget(45_000), 45_000);
-    assert.equal(afwerkBudget(80_000), 30_000);
+  it("afwerkbudget is vast (eigen Vercel-aanroep), ook na trage vragen", () => {
+    assert.equal(afwerkBudget(undefined), 140_000);
+    assert.equal(afwerkBudget(20_000), 140_000);
+    assert.equal(afwerkBudget(80_000), 140_000);
   });
 });
 
@@ -96,10 +95,10 @@ describe("ronde 1: figuren", () => {
     assert.deepEqual(voorcheckNietTonen(spec, ["F1 = 8 N", "F2"]), []);
     assert.equal(voorcheckNietTonen(spec, ["F2 = 12 N"]).length, 1);
   });
-  it("eerste figuurronde krijgt minstens 40 s na trage vragen, binnen 84 s", () => {
-    assert.equal(eersteRondeEinde(0, 20_000), 72_000);
-    assert.equal(eersteRondeEinde(0, 40_000), 80_000);
-    assert.equal(eersteRondeEinde(0, 60_000), 84_000);
+  it("eerste figuurronde krijgt minstens 40 s na trage vragen, binnen het maximum − 16 s", () => {
+    assert.equal(eersteRondeEinde(0, 20_000), 180_000);
+    assert.equal(eersteRondeEinde(0, 150_000), 190_000);
+    assert.equal(eersteRondeEinde(0, 300_000), 314_000);
   });
   it("GHS-keuze van het model wijkt voor een bord als de tekst over gehoorbescherming gaat", () => {
     const q = v(5, "Welk veiligheidsbord hangt bij de machine waar je gehoorbescherming moet dragen?", { pictogram: "gezondheidsgevaar" as Vraag["pictogram"] });
