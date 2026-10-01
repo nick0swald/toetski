@@ -8,11 +8,13 @@ import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
 import { extractParagrafen } from "./leerdoelen";
-import { maakQuota, type PlanQuota } from "./bouwplan.ts";
-import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan, zonderDoelJargon } from "./leerdoelen-plan";
+import { maakBouwplan, maakQuota, type PlanItem, type PlanQuota } from "./bouwplan.ts";
+import { herstelBouwplan, openHard } from "./bouwplan-check.ts";
+import { ontdubbelNamen, planStukken, schrijfOpdracht, voegStukkenSamen } from "./plan-schrijven.ts";
+import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan, novaDoelenPerParagraaf, zonderDoelJargon } from "./leerdoelen-plan";
 import { bouwKwaliteit } from "./kwaliteit-check";
 import { LIMIETEN, PLAN, TIJD, metRttiDoel, tokensVoorAantalVragen } from "./config";
-import { berichten, nieuweKosten, vraagJson, vriendelijkeAiFout, xaiChat, type Kosten } from "./llm";
+import { CACHE_GRENS, berichten, nieuweKosten, vraagJson, vriendelijkeAiFout, xaiChat, type Kosten } from "./llm";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 import {
   annoteerKalibratie,
@@ -321,13 +323,29 @@ export function planQuotaVoor(v: Awaited<ReturnType<typeof bereidVoor>>): PlanQu
   if (!PLAN.aan || !k || data.feedback?.trim() || data.aantalVragen < PLAN.minVragen) return null;
   const koppen = extractParagrafen(bron, antwoorden);
   const paragrafen = koppen.length >= 2 ? koppen : novaParagrafen(data.titel ?? "", bron, k.leerjaar, k.leerweg);
-  return maakQuota({ bron, paragrafen, aantalVragen: data.aantalVragen, doelPunten: data.doelPunten, rttiDoel: normaliseer(data.rttiDoel), kal: k });
+  const quota = maakQuota({ bron, paragrafen, aantalVragen: data.aantalVragen, doelPunten: data.doelPunten, rttiDoel: normaliseer(data.rttiDoel), kal: k });
+  const doelen = novaDoelenPerParagraaf(paragrafen, { titel: data.titel, bron, leerjaar: k.leerjaar, leerweg: k.leerweg });
+  return Object.keys(doelen).length ? { ...quota, doelen } : quota;
 }
 
 /** Stap 1: lesstof ophalen + modelaanroep → ruwe vragen (nog niet afgewerkt). */
 async function genereerRuw(invoer: GenerateData, kosten: Kosten = nieuweKosten()): Promise<{ bron: string; payload: GeneratedPayload }> {
   const deadline = Date.now() + TIJD.vragenDeadlineMs;
-  const { data, bron, antwoorden, k, examen, plan, kal, system, basisPrompt } = await bereidVoor(invoer);
+  const voor = await bereidVoor(invoer);
+  const { data, bron, antwoorden, k, examen, plan, kal, system, basisPrompt } = voor;
+  // Plan-first: bouwplan → controle/herstel → parallel schrijven met het hele plan. Lukt het plan niet
+  // (fout, time-out, harde planfout), dan de oude route hieronder.
+  const quota = planQuotaVoor(voor);
+  if (quota) {
+    const viaPlan = await schrijfViaPlan({ system, basisPrompt, quota, deadline, kosten }).catch((e) => {
+      console.warn("[generate] plan-first mislukt, oude route:", e instanceof Error ? e.message.slice(0, 200) : e);
+      return null;
+    });
+    if (viaPlan) {
+      if (examen.length) viaPlan.examenContexten = examen.map((c) => c.id);
+      return { bron, payload: viaPlan };
+    }
+  }
   // Lange NaSk-toetsen: gesloten en open deel parallel (samen binnen TIJD.vragenDeadlineMs).
   const delen = k && !data.feedback?.trim() ? deelPlan(k, data.aantalVragen, data.doelPunten) : null;
   let payload: GeneratedPayload;
@@ -357,6 +375,34 @@ async function genereerRuw(invoer: GenerateData, kosten: Kosten = nieuweKosten()
   }
   if (examen.length) payload.examenContexten = examen.map((c) => c.id);
   return { bron, payload };
+}
+
+/** Plan-first route (zie bouwplan.ts, bouwplan-check.ts, plan-schrijven.ts). */
+async function schrijfViaPlan(o: { system: string; basisPrompt: string; quota: PlanQuota; deadline: number; kosten: Kosten }): Promise<GeneratedPayload | null> {
+  const ruwPlan = await maakBouwplan({ system: o.system, voorvoegsel: o.basisPrompt, quota: o.quota, rest: () => o.deadline - Date.now(), kosten: o.kosten });
+  const { plan, issues } = herstelBouwplan(ruwPlan, o.quota);
+  const hard = openHard(issues);
+  if (hard.length) {
+    console.warn("[generate] bouwplan heeft harde fouten:", hard.map((h) => h.detail).join("; "));
+    return null;
+  }
+  const stukken = planStukken(plan.items);
+  const schrijf = (stuk: PlanItem[]) =>
+    vraagPayload(o.system, `${o.basisPrompt}${CACHE_GRENS}${schrijfOpdracht(plan, stuk, o.quota)}`, stuk.length, o.deadline, o.kosten).catch((e) => {
+      console.warn(`[generate] schrijfstuk ${stuk[0]!.n}–${stuk[stuk.length - 1]!.n} mislukt:`, e instanceof Error ? e.message.slice(0, 200) : e);
+      return null;
+    });
+  const res = await Promise.all(stukken.map(schrijf));
+  // Eén herkansing voor mislukte stukken als er nog genoeg tijd is.
+  if (res.some((r) => !r) && o.deadline - Date.now() > TIJD.herkansingMinRestMs) {
+    await Promise.all(res.map(async (r, i) => (r ? r : (res[i] = await schrijf(stukken[i]!)))));
+  }
+  const geschreven = res.reduce((s, r) => s + (r?.vragen.length ?? 0), 0);
+  if (geschreven < Math.ceil(plan.items.length * 0.7)) throw new Error(`plan-first: maar ${geschreven} van ${plan.items.length} vragen geschreven`);
+  const samen = voegStukkenSamen(res, stukken, o.quota);
+  const namen = ontdubbelNamen(samen.vragen, samen.nakijkmodel);
+  if (namen.vervangen.length) console.info("[generate] namen ontdubbeld:", namen.vervangen.join("; "));
+  return { ...samen, vragen: namen.vragen, nakijkmodel: namen.nakijkmodel, bouwplan: { ...plan, issues } };
 }
 
 /** Eén schrijf-aanroep (rol "schrijven") met één herkansing voor kapotte JSON, binnen de deadline. */

@@ -6,7 +6,7 @@
 import type { Kwaliteitscheck, LeerdoelPlan, Leerweg, PlanLeerdoel, Vraag } from "./types";
 import { EINDTERMEN, KERNDOELEN, LEERDOELEN_BRON, NOVA_LEERDOEL_KOPPELING, ONDERWERP_KOPPELING, type LeerdoelData } from "./leerdoelen-data.ts";
 import { novaSerie, vindNovaHoofdstuk } from "./kalibratie.ts";
-import { NOVA_HOOFDSTUKKEN, VRAAGTYPEN } from "./kalibratie-data.ts";
+import { NOVA_HOOFDSTUKKEN, NOVA_LEERDOELEN, VRAAGTYPEN } from "./kalibratie-data.ts";
 import { extractParagrafen } from "./leerdoelen.ts";
 
 function kaal(s: string): string {
@@ -178,6 +178,45 @@ export function andereNovaHoofdstukken(input: Pick<PlanInput, "bron" | "antwoord
       if (pars.length >= Math.min(2, h.paragrafen.length) && pars.length > (beste?.pars.length ?? 0)) beste = { n: h.n, titel: h.titel, pars };
     }
     if (beste && beste.n !== behalve && !uit.some((u) => u.n === beste!.n)) uit.push({ serie, ...beste });
+  }
+  return uit;
+}
+
+/**
+ * Nova-leerdoelen per lesstofparagraaf (op titel gekoppeld, over alle hoofdstukken van de serie), voor het
+ * bouwplan: elke vraag kiest een ander leerdoel, kernstof eerst. Geen treffer → paragraaf zonder lijst.
+ */
+export function novaDoelenPerParagraaf(
+  paragrafen: { code: string; titel: string }[],
+  input: { titel?: string; bron: string; leerjaar: number; leerweg: Leerweg },
+  max = 6,
+): Record<string, string[]> {
+  const serie = novaSerie(input.leerjaar, input.leerweg);
+  if (!serie) return {};
+  const doelen = NOVA_LEERDOELEN[serie] ?? {};
+  const lijkt = (a: string, b: string) => a.length > 4 && b.length > 4 && (a === b || a.includes(b) || b.includes(a));
+  const hoofdstukken = NOVA_HOOFDSTUKKEN[serie];
+  // Per lesstofhoofdstuk het Nova-hoofdstuk: meeste titel-treffers, anders het herkende hoofdstuk (titel/lesstof).
+  const hit = vindNovaHoofdstuk(input.titel ?? "", input.bron, input.leerjaar, input.leerweg);
+  const perH = new Map<string, { code: string; titel: string }[]>();
+  for (const p of paragrafen) perH.set(p.code.split(".")[0]!, [...(perH.get(p.code.split(".")[0]!) ?? []), p]);
+  const uit: Record<string, string[]> = {};
+  for (const pars of perH.values()) {
+    let beste = hoofdstukken
+      .map((h) => ({ h, n: pars.filter((p) => h.paragrafen.some((np) => lijkt(kaal(p.titel), kaal(np.titel)))).length }))
+      .sort((x, y) => y.n - x.n)[0];
+    if (!beste?.n && hit && perH.size === 1) beste = { h: hit.hoofdstuk, n: 0 };
+    if (!beste || (!beste.n && !(hit && perH.size === 1))) continue;
+    const h = beste.h;
+    for (const p of pars) {
+      const np = h.paragrafen.find((x) => lijkt(kaal(p.titel), kaal(x.titel))) ?? h.paragrafen.find((x) => x.n === Number(p.code.split(".")[1]));
+      if (!np) continue;
+      const lijst = Object.entries(doelen)
+        .filter(([c]) => c.startsWith(`${h.n}.${np.n}.`))
+        .map(([, tekst]) => tekst.replace(/^Je kunt /, "").replace(/\.$/, ""))
+        .slice(0, max);
+      if (lijst.length) uit[p.code] = lijst;
+    }
   }
   return uit;
 }

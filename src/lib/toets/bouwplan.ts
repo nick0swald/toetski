@@ -64,6 +64,8 @@ export interface PlanQuota {
   rttiPunten: Record<Rtti, number>;
   vorm: Record<PlanVorm, number>;
   reserve: number;
+  /** Leerdoelen per paragraafcode (Nova, op titel gekoppeld); elke vraag kiest een ander doel. */
+  doelen?: Record<string, string[]>;
 }
 
 /** Grootste-restmethode: verdeel totaal naar gewicht, elk minstens min. */
@@ -145,6 +147,12 @@ export function bouwplanPrompt(q: PlanQuota): string {
   const parRegels = q.paragrafen.length
     ? q.paragrafen.map((p) => `${p.code} ${p.titel}: ${p.aantal} vragen`).join("; ")
     : "(geen paragraafkoppen: kies zelf domeinen uit de lesstof en spreid eerlijk)";
+  const doelRegels = q.doelen && Object.keys(q.doelen).length
+    ? `\nLeerdoelen per paragraaf (kernstof; verdeel de vragen van een paragraaf over VERSCHILLENDE leerdoelen, belangrijkste eerst):\n${q.paragrafen
+        .filter((p) => q.doelen![p.code]?.length)
+        .map((p) => `${p.code}: ${q.doelen![p.code]!.join(" | ")}`)
+        .join("\n")}`
+    : "";
   const vormRegels = PLAN_VORMEN.filter((v) => q.vorm[v] > 0)
     .map((v) => `${v} (${VORM_NAAM[v]}): ${q.vorm[v]}`)
     .join("; ");
@@ -152,14 +160,15 @@ export function bouwplanPrompt(q: PlanQuota): string {
 
 Vaste aantallen (verplicht, tel na):
 - ${q.aantal} vragen, samen ${q.punten} punten.
-- Per paragraaf: ${parRegels}.
+- Per paragraaf: ${parRegels}.${doelRegels}
 - Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt.
 - RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I}${q.rttiPunten.I ? " (I = nieuwe situatie, eigen redenering, 2–3 p)" : ""}.
 - Plus ${q.reserve} reservevragen (andere begrippen/situaties, verschillende paragrafen) in "reserve".
 
 Regels voor het plan:
-- Elk item toetst een ANDER kernbegrip (b). Zelfde begrip twee keer alleen als de vragen echt iets anders vragen (bijv. herkennen vs. berekenen), en dan nooit naast elkaar.
+- Elk item toetst een ANDER kernbegrip (b); binnen een paragraaf verschillende onderdelen van die paragraaf (geen varianten van dezelfde regel, zoals krachten optellen én aftrekken als twee vragen). Zelfde begrip twee keer alleen als de vragen echt iets anders vragen (bijv. herkennen vs. berekenen), en dan nooit naast elkaar.
 - Elke situatie (c) is anders: niet twee keer dezelfde plek, hetzelfde voorwerp of dezelfde activiteit (geen twee fietsers, geen twee concerten). Alledaags en realistisch voor een vmbo-leerling.
+- Kennisvragen (R) meestal zonder situatie en zonder persoon; hooguit de helft van de vragen heeft een persoon.
 - Persoon (w): kies uit ${VOORNAMEN.join(", ")}; elke naam hooguit één item (of één groep). Niet elke vraag heeft een persoon nodig. Nooit een schoolnaam.
 - Verwacht antwoord (a) in steekwoorden. Geen enkel ander item mag dat antwoord in zijn situatie of vraag noemen (geen weggevers): plan de vragen zo dat ze los van elkaar te maken zijn.
 - Groep (g): alleen als 2–4 vragen echt één doorlopende context delen (zelfde titel); die staan dan aaneen.
@@ -167,8 +176,9 @@ Regels voor het plan:
 - Rekenvragen: realistische getallen; g = 10 N/kg als zwaartekracht nodig is (één waarde voor g in de hele toets).
 - Tekenen (teken) alleen als het zonder plaatje kan: de leerling tekent in een leeg tekenvak (bijv. pijl, grafiek) of leest af uit een tabel in de vraag.
 
-Antwoord met ALLEEN dit JSON-object (korte sleutels, korte waarden; k ≤ 15 woorden):
-{"items":[{"n":1,"p":"<paragraafcode>","v":"<jn|mc|kort|invul|uitleg|reken|teken>","r":"<R|T1|T2|I>","pt":1,"b":"<kernbegrip>","c":"<situatie, ≤ 10 woorden, of leeg>","w":"<voornaam of leeg>","k":"<wat wordt gevraagd>","a":"<verwacht antwoord>","g":"<groepstitel of leeg>"}],"reserve":[ …zelfde vorm… ]}`;
+Antwoord met ALLEEN dit JSON-object. Elke vraag is één rij (array) met precies deze 10 velden in deze volgorde — kort houden (vraag ≤ 12 woorden, situatie ≤ 8 woorden):
+[paragraafcode, vorm (jn|mc|kort|invul|uitleg|reken|teken), rtti (R|T1|T2|I), punten, kernbegrip, situatie of "", voornaam of "", wat wordt gevraagd, verwacht antwoord, groepstitel of ""]
+{"items":[["11.1","mc","R",1,"wrijving","fietser op nat wegdek","Daan","welke kracht remt de fiets af","wrijvingskracht",""]],"reserve":[ …zelfde rijen… ]}`;
 }
 
 const RTTI_SET = new Set<Rtti>(["R", "T1", "T2", "I"]);
@@ -186,7 +196,14 @@ function vormVan(x: unknown): PlanVorm {
   return "kort";
 }
 
+/** Rij-formaat (compact, zie bouwplanPrompt) → objectvorm. */
+const RIJ = ["p", "v", "r", "pt", "b", "c", "w", "k", "a", "g"] as const;
+
 function itemVan(x: unknown, i: number): PlanItem | null {
+  if (Array.isArray(x)) {
+    const rij: unknown[] = x;
+    x = Object.fromEntries(RIJ.map((k, j) => [k, rij[j]]));
+  }
   if (!x || typeof x !== "object") return null;
   const o = x as Record<string, unknown>;
   const kern = s(o.k ?? o.kern, 200);

@@ -166,7 +166,22 @@ async function scoor(pad) {
   const toets = leesJson(pad);
   const c = caseInput(opt("case"));
   const input = { ...c.input };
-  const oordeel = opt("rechter", false) ? await rechter(toets, input) : undefined;
+  // --rechter [N]: N onafhankelijke rechter-aanroepen (standaard 3), gemiddeld — één oordeel schommelt ±0,75.
+  const r = opt("rechter", false);
+  const n = r === true ? 3 : Number(r) || 0;
+  let oordeel;
+  if (n > 0) {
+    const lijst = (await Promise.all(Array.from({ length: n }, () => rechter(toets, input)))).filter(Boolean);
+    if (lijst.length) {
+      const gem = (xs) => Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) / 100;
+      const punten = {};
+      for (const k of Object.keys(lijst[0].punten ?? {})) {
+        const sc = lijst.map((o) => o.punten?.[k]?.score).filter((x) => typeof x === "number");
+        punten[k] = { ...lijst[0].punten[k], score: sc.length ? gem(sc) : undefined };
+      }
+      oordeel = { ...lijst[0], punten, cijfer: gem(lijst.map((o) => o.cijfer ?? 0)), cijfers: lijst.map((o) => o.cijfer), kostenUsd: gem(lijst.map((o) => o.kostenUsd ?? 0)) * lijst.length, runs: lijst.length };
+    }
+  }
   const kaart = R.scoorToets(toets, input, oordeel);
   const uitPad = typeof opt("uit") === "string" ? opt("uit") : pad.replace(/\.json$/, ".scores.json");
   writeFileSync(uitPad, JSON.stringify({ ...kaart, rechter: oordeel ?? null, bestand: pad, case: c.case }, null, 1));
@@ -174,12 +189,12 @@ async function scoor(pad) {
   for (const x of kaart.criteria) console.log(`${String(x.punt).padStart(2)} ${x.score.toFixed(2)} ${x.naam.padEnd(46)} ${x.bron.padEnd(12)} ${x.detail}`);
   console.log("Harde criteria:");
   for (const h of kaart.hard) console.log(`  ${h.ok ? "OK  " : "FAIL"} ${h.naam} (${h.detail})`);
-  console.log(`Cijfer (rubriek) ${kaart.cijfer}${oordeel?.cijfer != null ? ` · rechter ${oordeel.cijfer}` : ""} · hard ${kaart.hardOk ? "100 %" : "NIET ok"}`);
+  console.log(`Cijfer (rubriek) ${kaart.cijfer}${oordeel?.cijfer != null ? ` · rechter ${oordeel.cijfer}${oordeel.cijfers ? ` (${oordeel.cijfers.join("/")})` : ""}` : ""} · hard ${kaart.hardOk ? "100 %" : "NIET ok"}`);
   if (oordeel?.topProblemen?.length) console.log(`Rechter top-problemen:\n- ${oordeel.topProblemen.join("\n- ")}`);
   const basisPad = opt("baseline");
   if (typeof basisPad === "string") {
     const basis = leesJson(basisPad);
-    const p = R.poort(kaart, basis);
+    const p = R.poort(kaart, basis, { nieuw: oordeel?.cijfer, baseline: basis.rechter?.cijfer });
     console.log(`\nPOORT: ${p.ok ? "GROEN" : "ROOD"}${p.redenen.length ? ` (${p.redenen.join("; ")})` : ""}`);
     for (const x of kaart.criteria) {
       const b = basis.criteria.find((y) => y.id === x.id);
@@ -191,7 +206,9 @@ async function scoor(pad) {
 
 async function poortCmd(nieuwPad, basisPad) {
   const R = await jiti.import(join(ROOT, "src/lib/toets/eval/rubric.ts"));
-  const p = R.poort(leesJson(nieuwPad), leesJson(basisPad));
+  const nieuw = leesJson(nieuwPad);
+  const basis = leesJson(basisPad);
+  const p = R.poort(nieuw, basis, { nieuw: nieuw.rechter?.cijfer, baseline: basis.rechter?.cijfer });
   console.log(p.ok ? "POORT GROEN" : `POORT ROOD: ${p.redenen.join("; ")}`);
   process.exit(p.ok ? 0 : 1);
 }

@@ -138,7 +138,12 @@ export function labelRtti(vragen: Vraag[]): Vraag[] {
   return vragen.map((q) => {
     // Alleen bij een vraagtype (NaSk-taxonomie); andere vakken houden het modellabel.
     if (!q.vraagtype?.trim()) return q;
-    const o = rttiVolgensRegels(q);
+    let o = rttiVolgensRegels(q);
+    // Gepland als I (bouwplan) en de regel zegt T2 bij een redeneer-/verklaaropdracht van ≥ 2 punten:
+    // het grensgeval valt naar het geplande I (nieuwe situatie + eigen redenering), anders verdwijnt elke I-vraag.
+    if (q.rtti === "I" && o.rtti === "T2" && (q.punten ?? 1) >= 2 && INZICHT.test(opdracht(q.stam ?? ""))) {
+      o = { rtti: "I", reden: `${o.reden}; gepland als I: redeneren in een nieuwe situatie` };
+    }
     const anders = q.rtti && q.rtti !== o.rtti ? ` (model: ${q.rtti})` : "";
     return { ...q, rtti: o.rtti, rttiUitleg: `${o.rtti}: ${o.reden}${anders}` };
   });

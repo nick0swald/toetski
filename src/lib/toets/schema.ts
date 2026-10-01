@@ -187,6 +187,21 @@ const kwaliteitSchema = z.object({
   ),
 });
 
+const planItemSchema = z.object({
+  n: z.number(),
+  par: z.string(),
+  vorm: z.enum(["jn", "mc", "kort", "invul", "uitleg", "reken", "teken"]),
+  rtti: rtti,
+  punten: z.number(),
+  begrip: z.string(),
+  context: z.string(),
+  persoon: z.string().optional(),
+  kern: z.string(),
+  antwoord: z.string(),
+  groep: z.string().optional(),
+  let: z.array(z.string()).optional(),
+});
+
 export const generatedPayloadSchema = z.object({
   meta: z.object({
     titel: z.string(),
@@ -203,6 +218,16 @@ export const generatedPayloadSchema = z.object({
   nakijkmodel: z.array(nakijkSchema).min(3),
   /** Ids van de echte examencontexten die voor het blok 'Examenvragen' zijn meegegeven (klas 4). */
   examenContexten: z.array(z.string()).nullish().transform((x) => x ?? undefined),
+  /** Plan-first: het (herstelde) bouwplan, incl. reservevragen en planbevindingen (gaat mee naar stap 2). */
+  bouwplan: z
+    .object({
+      versie: z.literal(1),
+      items: z.array(planItemSchema).max(80),
+      reserve: z.array(planItemSchema).max(20),
+      issues: z.array(z.object({ code: z.string(), detail: z.string(), ernst: z.string(), hersteld: z.boolean() })).max(80).optional(),
+    })
+    .nullish()
+    .transform((x) => x ?? undefined),
   cesuur: z.object({
     nTerm: z.coerce.number().default(1),
     cesuurPunten: z.coerce.number(),

@@ -116,11 +116,11 @@ export const PLAN = {
   reserve: 3,
   /** Vragen per parallelle schrijf-aanroep. */
   stukGrootte: 5,
-  /** Uitvoertokens per bouwplan-item (kort JSON) + vaste marge (incl. redeneren). */
-  tokensPerItem: 90,
+  /** Uitvoertokens per bouwplan-item (compacte rij) + vaste marge (incl. redeneren). */
+  tokensPerItem: 70,
   tokensMarge: 2500,
-  /** Bouwplan-aanroep duurt nooit langer dan dit (daarna oude route). */
-  timeoutMs: 60_000,
+  /** Bouwplan-aanroep duurt nooit langer dan dit (daarna oude route). Gemeten 25–45 s. */
+  timeoutMs: 70_000,
 } as const;
 
 /**

@@ -10,7 +10,7 @@ import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { rttiDoelVoor } from "../config.ts";
 import type { GegenereerdeToets, NakijkItem, RttiVerdeling, Vraag } from "../types";
 
-export const RUBRIEK_VERSIE = "2026-10-01.1";
+export const RUBRIEK_VERSIE = "2026-10-01.2";
 
 export interface EvalInput {
   titel?: string;
@@ -272,7 +272,9 @@ export function scoorToets(t: GegenereerdeToets, input: EvalInput, rechter?: Rec
   hard.push({ id: "H-dekking", naam: "Alle paragrafen gedekt", ok: leeg.length === 0, detail: leeg.join("; ") || "ok" });
 
   // 11. Figuur-/tabelverwijzingen kloppen (ook teken-/grafiekvragen)
-  const spook = V.filter((q) => /\b(figuur|afbeelding|tabel|diagram|grafiek|tekening)\b/i.test(`${q.context ?? ""} ${q.stam}`) && !heeftFiguurdata(q) && !/\b(teken|schets|maak een (tabel|grafiek|diagram))\b/i.test(q.stam)).map((q) => q.nummer);
+  // Alleen echte verwijzingen ("in de figuur", "deze tabel", "zie grafiek", "hieronder"), niet "een tekening" of "maak een grafiek".
+  const VERWIJS = /\b(?:de|deze|het|die|onderstaande|bovenstaande|zie|in|uit)\s+(?:figuur|afbeelding|tabel|diagram|grafiek|tekening)\b|\b(?:figuur|tabel|afbeelding)\s+\d|\b(?:hieronder|hiernaast|hierboven)\b/i;
+  const spook = V.filter((q) => VERWIJS.test(`${q.context ?? ""} ${q.stam}`) && !heeftFiguurdata(q) && !/\b(teken|schets|maak een (tabel|grafiek|diagram))\b/i.test(q.stam)).map((q) => q.nummer);
   crit.push({ punt: 11, id: "figuren", naam: "Geen verwijzing naar ontbrekende figuur/tabel", score: 1 - Math.min(1, spook.length / 2), bron: "code", detail: spook.length ? `vragen ${spook.join(", ")}` : "ok" });
   hard.push({ id: "H-figuur", naam: "Geen verwijzing naar een ontbrekende figuur/tabel", ok: spook.length === 0, detail: spook.join(", ") || "ok" });
 
@@ -324,10 +326,16 @@ export function scoorToets(t: GegenereerdeToets, input: EvalInput, rechter?: Rec
 }
 
 /** Go-live-poort: nieuw ≥ baseline en alle harde criteria ok. */
-export function poort(nieuw: Scorekaart, baseline?: Scorekaart): { ok: boolean; redenen: string[] } {
+/**
+ * Go-live-poort: harde criteria 100 % én rechtercijfer ≥ baseline (gemiddelde van de rechter-runs; Nick: de
+ * coderubriek alleen is te mild). Zonder rechtercijfers valt de poort terug op het rubriekcijfer.
+ */
+export function poort(nieuw: Scorekaart, baseline?: Scorekaart, rechter?: { nieuw?: number | null; baseline?: number | null }): { ok: boolean; redenen: string[] } {
   const redenen: string[] = [];
   if (!nieuw.hardOk) redenen.push(`harde criteria niet 100 %: ${nieuw.hard.filter((h) => !h.ok).map((h) => h.id).join(", ")}`);
-  if (baseline && nieuw.cijfer < baseline.cijfer) redenen.push(`cijfer ${nieuw.cijfer} < baseline ${baseline.cijfer}`);
+  if (rechter?.nieuw != null && rechter.baseline != null) {
+    if (rechter.nieuw < rechter.baseline) redenen.push(`rechter ${rechter.nieuw} < baseline ${rechter.baseline}`);
+  } else if (baseline && nieuw.cijfer < baseline.cijfer) redenen.push(`cijfer ${nieuw.cijfer} < baseline ${baseline.cijfer}`);
   return { ok: redenen.length === 0, redenen };
 }
 

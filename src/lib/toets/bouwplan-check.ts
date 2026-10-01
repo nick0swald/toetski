@@ -32,9 +32,33 @@ export function sleutelwoorden(t: string | undefined): string[] {
   ];
 }
 
+/** Onderwerpwoorden die in veel planregels staan (bijv. "kracht", "druk") zeggen niets over dubbeling. */
+function generiekeWoorden(items: PlanItem[]): Set<string> {
+  const tel = new Map<string, number>();
+  for (const it of items) for (const w of sleutelwoorden(`${it.begrip} ${it.kern}`)) tel.set(w, (tel.get(w) ?? 0) + 1);
+  return new Set([...tel.entries()].filter(([, n]) => n >= 3).map(([w]) => w));
+}
+
+let GENERIEK = new Set<string>();
+
+/** Strenger: woorden ≥ 6 letters, gestamd op 6 (voor weggevers: "groter" ≠ "grote"). */
+function sleutelwoordenLang(t: string | undefined): string[] {
+  return [
+    ...new Set(
+      (t ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length >= 6 && !STOP.has(w))
+        .map((w) => w.slice(0, 6)),
+    ),
+  ];
+}
+
 function lijkt(a: string, b: string, drempel: number): boolean {
-  const x = sleutelwoorden(a);
-  const y = new Set(sleutelwoorden(b));
+  const x = sleutelwoorden(a).filter((w) => !GENERIEK.has(w));
+  const y = new Set(sleutelwoorden(b).filter((w) => !GENERIEK.has(w)));
   if (!x.length || !y.size) return false;
   const gedeeld = x.filter((w) => y.has(w)).length;
   return gedeeld / Math.min(x.length, y.size) >= drempel && gedeeld >= 1;
@@ -42,7 +66,9 @@ function lijkt(a: string, b: string, drempel: number): boolean {
 
 const isGesloten = (it: PlanItem) => GESLOTEN.includes(it.vorm);
 const zelfdeGroep = (a: PlanItem, b: PlanItem) => Boolean(a.groep && a.groep === b.groep);
+/** Aanwijzing voor de schrijver; hooguit 3 per vraag (te veel aanwijzingen maken de opdracht onduidelijk). */
 const notitie = (it: PlanItem, tekst: string) => {
+  if ((it.let?.length ?? 0) >= 3) return;
   it.let = [...new Set([...(it.let ?? []), tekst])];
 };
 const SCHOOL_RE = /\b[A-Z][\w-]*(?:college|lyceum|school)\b|\b(?:college|lyceum|scholengemeenschap|mavo|havo|vwo)\b/i;
@@ -68,6 +94,7 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
   const codes = q.paragrafen.map((p) => p.code);
   const items: PlanItem[] = invoer.items.map((it) => ({ ...it, par: normPar(it.par, codes), let: it.let ? [...it.let] : undefined }));
   const reserve: PlanItem[] = invoer.reserve.map((it) => ({ ...it, par: normPar(it.par, codes) }));
+  GENERIEK = generiekeWoorden([...items, ...reserve]);
   const telPar = (c: string) => items.filter((it) => it.par === c).length;
   const quotaVan = (c: string) => q.paragrafen.find((p) => p.code === c)?.aantal ?? 0;
   const overschot = () =>
@@ -167,7 +194,7 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
     for (let j = 0; j < i; j++) {
       const a = items[j]!;
       const b = items[i]!;
-      if (zelfdeGroep(a, b)) continue;
+      if (zelfdeGroep(a, b) || a.begrip.startsWith("(") || b.begrip.startsWith("(")) continue;
       if (a.context && b.context && lijkt(a.context, b.context, 0.5)) {
         const ok = wissel(i, (r) => !items.some((x) => x.context && lijkt(x.context, r.context, 0.5)));
         if (!ok) {
@@ -175,8 +202,8 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
           items[i]!.context = "";
         }
         meld("context", `situatie "${b.context}" lijkt op "${a.context}"`, "zacht", true);
-      } else if (lijkt(a.begrip, b.begrip, 0.75) && a.vorm === b.vorm) {
-        const ok = wissel(i, (r) => !items.some((x) => lijkt(x.begrip, r.begrip, 0.75)));
+      } else if (lijkt(a.begrip, b.begrip, 0.5)) {
+        const ok = wissel(i, (r) => !items.some((x) => lijkt(x.begrip, r.begrip, 0.5)));
         if (!ok) notitie(items[i]!, `begrip "${a.begrip}" komt al aan bod: vraag vanuit een andere invalshoek (toepassen/verklaren i.p.v. herkennen)`);
         meld("begrip", `begrip "${b.begrip}" herhaalt "${a.begrip}"`, "zacht", true);
       }
@@ -184,12 +211,13 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
   }
 
   // 6. Weggevers: het verwachte antwoord van een vraag mag niet in de situatie/vraag van een andere staan.
+  const woorden6 = (t: string) => sleutelwoordenLang(t).filter((w) => !GENERIEK.has(w.slice(0, 5)));
   for (const a of items) {
-    const sleutels = sleutelwoorden(a.antwoord).filter((w) => w.length >= 5);
+    const sleutels = woorden6(a.antwoord);
     if (!sleutels.length) continue;
     for (const b of items) {
       if (a === b || zelfdeGroep(a, b)) continue;
-      const tekst = new Set(sleutelwoorden(`${b.context} ${b.kern}`));
+      const tekst = new Set(woorden6(`${b.context} ${b.kern}`));
       const hit = sleutels.filter((w) => tekst.has(w));
       if (hit.length && hit.length / sleutels.length >= 0.5) {
         notitie(b, `noem "${a.antwoord}" niet in de vraagtekst (dat is het antwoord op de vraag over "${a.begrip}")`);
@@ -213,7 +241,7 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
     if (kandidaat) {
       kandidaat.rtti = "I";
       kandidaat.punten = Math.max(2, kandidaat.punten);
-      notitie(kandidaat, "I-vraag: nieuwe, onbekende situatie waarin de leerling zelf een redenering opbouwt");
+      notitie(kandidaat, "I-vraag: nieuwe, onbekende situatie waarin de leerling zelf een redenering opbouwt (\"Beredeneer …\", \"Voorspel … en leg uit\")");
       meld("rtti", `geen I-vraag → "${kandidaat.begrip}" wordt I`, "zacht", true);
     }
   }
@@ -248,9 +276,11 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
   items.forEach((it, i) => {
     if (it.groep && !eerste.has(it.groep)) eerste.set(it.groep, i);
   });
+  // Een groep telt als gesloten alleen als al zijn vragen gesloten zijn; anders staat de hele groep bij de open vragen.
+  const klasse = (it: PlanItem) => (it.groep ? Number(items.some((x) => x.groep === it.groep && !isGesloten(x))) : Number(!isGesloten(it)));
   const geordend = items
     .map((it, i) => ({ it, i }))
-    .sort((a, b) => Number(!isGesloten(a.it)) - Number(!isGesloten(b.it)) || (a.it.groep ? eerste.get(a.it.groep)! : a.i) - (b.it.groep ? eerste.get(b.it.groep)! : b.i) || a.i - b.i)
+    .sort((a, b) => klasse(a.it) - klasse(b.it) || (a.it.groep ? eerste.get(a.it.groep)! : a.i) - (b.it.groep ? eerste.get(b.it.groep)! : b.i) || a.i - b.i)
     .map(({ it }, i) => ({ ...it, n: i + 1 }));
   return { plan: { versie: 1, items: geordend, reserve: reserve.map((it, i) => ({ ...it, n: geordend.length + i + 1 })) }, issues };
 }

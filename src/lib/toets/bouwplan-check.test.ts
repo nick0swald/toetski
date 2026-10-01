@@ -124,3 +124,24 @@ describe("leerdoelen: alle hoofdstukken uit de lesstof", () => {
     assert.ok(p.doelen.some((d) => /^K\/(6|9)\./.test(d.id)), "kracht/beweging");
   });
 });
+
+describe("bouwplan-check: groep met gesloten én open vragen", () => {
+  it("blijft aaneen (bij de open vragen)", () => {
+    const plan: Bouwplan = {
+      versie: 1,
+      items: [
+        item(1, { vorm: "mc", punten: 1, groep: "Brommers", par: "1.1" }),
+        item(2, { vorm: "mc", punten: 1, par: "1.2" }),
+        item(3, { groep: "Brommers", par: "1.1" }),
+        item(4, { vorm: "mc", punten: 1, par: "1.2" }),
+        item(5, { par: "1.3" }),
+        item(6, { par: "1.3" }),
+      ],
+      reserve: [],
+    };
+    const { plan: p } = herstelBouwplan(plan, quota);
+    const g = p.items.map((x, i) => (x.groep === "Brommers" ? i : -1)).filter((i) => i >= 0);
+    assert.equal(g[1]! - g[0]!, 1);
+    assert.deepEqual(p.items.slice(0, 2).map((x) => x.vorm), ["mc", "mc"]);
+  });
+});
