@@ -27,6 +27,7 @@ import {
   novaPrompt,
   vraagtypenPrompt,
   type Kalibratie,
+  lengteDoelVoor,
 } from "./kalibratie";
 import { CSE_CONTEXTEN } from "./cse-contexten";
 import { herstelGroepen } from "./context-groepen";
@@ -51,10 +52,7 @@ function kalibratieVoor(data: { vak?: string; titel?: string; extraEisen?: strin
 }
 
 /** Zette de docent niets vast, dan volgen aantal vragen en punten de kalibratie (alleen NaSk). */
-function metKalibratieLengte<T extends { lengteAuto?: boolean; mcVragen?: number; openVragen?: number; aantalVragen: number; doelPunten: number }>(data: T, k: Kalibratie | null): T {
-  if (!k || !data.lengteAuto || data.mcVragen != null || data.openVragen != null) return data;
-  return { ...data, aantalVragen: k.items, doelPunten: k.punten };
-}
+const metKalibratieLengte = lengteDoelVoor;
 
 /** Trim context/stam; lege context wordt weggelaten. Volgorde (inleiding→vraag) wordt via prompts afgedwongen. */
 function normaliseerVraagTekst<T extends { context?: string; stam: string }>(q: T): T {

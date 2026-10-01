@@ -48,7 +48,7 @@ function reparatiePrompt(vragen: Vraag[], nakijk: NakijkItem[], issues: ItemIssu
   return `Lesstof (kader, niet kopiëren):\n${bron.slice(0, LIMIETEN.reparatieLesstof)}${CACHE_GRENS}Verbeter alleen deze vragen. Houd het nummer. Lever ze compleet terug.\n\n${blok}`;
 }
 
-/** Contexttitel, bronvermelding en vraagtype blijven bij een reparatie staan (het model laat ze vaak weg). */
+/** Contexttitel, bronvermelding, vraagtype en plan-RTTI blijven bij een reparatie staan (het model laat ze vaak weg). */
 function behoudGroep(oud: Vraag, nieuw: Vraag): Vraag {
   return {
     ...nieuw,
@@ -56,6 +56,7 @@ function behoudGroep(oud: Vraag, nieuw: Vraag): Vraag {
     bronvermelding: oud.bronvermelding ?? nieuw.bronvermelding,
     vraagtype: nieuw.vraagtype ?? oud.vraagtype,
     leerdoelId: nieuw.leerdoelId ?? oud.leerdoelId,
+    rttiPlan: oud.rttiPlan ?? nieuw.rttiPlan,
   };
 }
 

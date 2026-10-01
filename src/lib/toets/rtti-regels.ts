@@ -144,6 +144,11 @@ export function labelRtti(vragen: Vraag[]): Vraag[] {
     if (q.rtti === "I" && o.rtti === "T2" && (q.punten ?? 1) >= 2 && INZICHT.test(opdracht(q.stam ?? ""))) {
       o = { rtti: "I", reden: `${o.reden}; gepland als I: redeneren in een nieuwe situatie` };
     }
+    // Plan-first: het bouwplan verdeelt de RTTI over de toets (klasdoel). De regel overschrijft dat
+    // alleen bij een duidelijke tegenspraak (≥ 2 stappen, bv. gepland I maar het is een R-feitvraag).
+    if (q.rttiPlan && q.rttiPlan !== o.rtti && Math.abs(RTTI_VOLGORDE.indexOf(q.rttiPlan) - RTTI_VOLGORDE.indexOf(o.rtti)) <= 1) {
+      o = { rtti: q.rttiPlan, reden: `${o.reden}; volgens bouwplan ${q.rttiPlan} (regel: ${o.rtti})` };
+    }
     const anders = q.rtti && q.rtti !== o.rtti ? ` (model: ${q.rtti})` : "";
     return { ...q, rtti: o.rtti, rttiUitleg: `${o.rtti}: ${o.reden}${anders}` };
   });

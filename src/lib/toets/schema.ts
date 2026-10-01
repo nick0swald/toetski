@@ -108,6 +108,8 @@ export const vraagSchema = z.object({
     .string()
     .nullish()
     .transform((s) => (s?.trim() ? s.trim().slice(0, 24) : undefined)),
+  /** Plan-first: RTTI uit het bouwplan; herlabelen houdt dit aan tenzij de regel ≥ 2 stappen afwijkt. */
+  rttiPlan: rtti.nullish().transform((r) => r ?? undefined),
   rttiUitleg: z
     .string()
     .nullish()

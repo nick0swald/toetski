@@ -90,6 +90,15 @@ function opbouwVoor(leerjaar: number, leerweg: Leerweg, examen: boolean): Opbouw
 
 const r = (n: number) => Math.round(n);
 
+/**
+ * Lengtedoel bij "automatische lengte": de kalibratie-richtwaarde (echte schooltoetsen). Eén bron voor de
+ * app (planner-quota, schrijvers) én de eval-rubriek (die leest dezelfde richtwaarde uit de kwaliteitscheck).
+ */
+export function lengteDoelVoor<T extends { lengteAuto?: boolean; mcVragen?: number; openVragen?: number; aantalVragen: number; doelPunten: number }>(data: T, k: Pick<Kalibratie, "items" | "punten"> | null): T {
+  if (!k || !data.lengteAuto || data.mcVragen != null || data.openVragen != null) return data;
+  return { ...data, aantalVragen: k.items, doelPunten: k.punten };
+}
+
 /** Gekalibreerde defaults voor een NaSk-toets van `minuten` minuten. */
 export function kalibratie(
   leerjaar: number,

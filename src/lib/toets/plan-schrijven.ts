@@ -6,6 +6,7 @@
 import type { Bouwplan, PlanItem, PlanQuota, PlanVorm } from "./bouwplan.ts";
 import { planRegel } from "./bouwplan.ts";
 import { PLAN, VOORNAMEN } from "./config.ts";
+import type { Rtti } from "./types";
 
 export const VORM_TYPE: Record<PlanVorm, string> = {
   jn: "juist-onjuist",
@@ -65,13 +66,37 @@ Regels:
 }
 
 interface MiniPayload {
-  vragen: { nummer: number; domein?: string; contextTitel?: string }[];
-  nakijkmodel: { nummer: number }[];
+  vragen: { nummer: number; domein?: string; contextTitel?: string; punten?: number; rtti?: Rtti; rttiPlan?: Rtti }[];
+  nakijkmodel: { nummer: number; puntenverdeling?: { punt: number; criterium: string }[] }[];
+}
+
+/**
+ * Punten van één vraag omlaag naar `max` (nooit omhoog: daar is geen nakijkcriterium voor). De
+ * puntenverdeling krimpt mee: laatste criterium eerst een punt minder, anders samengevoegd met het vorige.
+ */
+export function kapPunten<V extends { punten?: number }, N extends { puntenverdeling?: { punt: number; criterium: string }[] }>(v: V, n: N | undefined, max: number): { v: V; n: N | undefined } {
+  const doel = Math.max(1, Math.round(max));
+  if ((v.punten ?? 1) <= doel) return { v, n };
+  const pv = (n?.puntenverdeling ?? []).map((c) => ({ ...c }));
+  let som = pv.reduce((s, c) => s + c.punt, 0);
+  while (som > doel && pv.length) {
+    const laatst = pv[pv.length - 1]!;
+    if (laatst.punt > 1) laatst.punt -= 1;
+    else if (pv.length > 1) {
+      pv.pop();
+      const vorige = pv[pv.length - 1]!;
+      vorige.criterium = `${vorige.criterium}; ${laatst.criterium}`;
+    } else break;
+    som -= 1;
+  }
+  return { v: { ...v, punten: doel }, n: n && n.puntenverdeling?.length ? { ...n, puntenverdeling: pv } : n };
 }
 
 /**
  * Stukken samenvoegen in planvolgorde en doornummeren. Komt een stuk met precies het geplande aantal vragen
- * terug, dan krijgt elke vraag het domein (paragraaf) en de groep uit het plan, ook als de schrijver afweek.
+ * terug, dan krijgt elke vraag het domein (paragraaf), de groep en de RTTI uit het plan (`rttiPlan`, zodat
+ * herlabelen het niet overschrijft) en nooit meer punten dan gepland. Daarna: totaal hoger dan het
+ * puntendoel → de grootste open vragen (eerst die zonder planmatch) één punt omlaag tot het doel.
  */
 export function voegStukkenSamen<P extends MiniPayload>(stukken: (P | null)[], plan: PlanItem[][], q: PlanQuota): P {
   const ok = stukken.map((p, i) => ({ p, s: plan[i]! })).filter((x): x is { p: P; s: PlanItem[] } => Boolean(x.p?.vragen.length));
@@ -79,19 +104,35 @@ export function voegStukkenSamen<P extends MiniPayload>(stukken: (P | null)[], p
   const titel = (code: string) => q.paragrafen.find((p) => p.code === code)?.titel ?? "";
   const vragen: P["vragen"] = [];
   const nakijk: P["nakijkmodel"] = [];
+  const opPlanNrs = new Set<number>();
   for (const { p, s } of ok) {
     const opPlan = p.vragen.length === s.length;
     for (const [i, v] of p.vragen.entries()) {
       const nr = vragen.length + 1;
       const it = opPlan ? s[i]! : undefined;
+      const n0 = p.nakijkmodel.find((x) => x.nummer === v.nummer) ?? p.nakijkmodel[i];
+      const { v: v1, n: n1 } = it ? kapPunten(v, n0, it.punten) : { v, n: n0 };
+      if (it) opPlanNrs.add(nr);
       vragen.push({
-        ...v,
+        ...v1,
         nummer: nr,
-        ...(it ? { domein: `${it.par}${titel(it.par) ? ` ${titel(it.par)}` : ""}`, ...(it.groep ? { contextTitel: it.groep } : {}) } : {}),
+        ...(it ? { domein: `${it.par}${titel(it.par) ? ` ${titel(it.par)}` : ""}`, rtti: it.rtti, rttiPlan: it.rtti, ...(it.groep ? { contextTitel: it.groep } : {}) } : {}),
       });
-      const n = p.nakijkmodel.find((x) => x.nummer === v.nummer) ?? p.nakijkmodel[i];
-      if (n) nakijk.push({ ...n, nummer: nr });
+      if (n1) nakijk.push({ ...n1, nummer: nr });
     }
+  }
+  let over = vragen.reduce((t, v) => t + (v.punten ?? 1), 0) - q.punten;
+  while (over > 0) {
+    const kandidaat = vragen
+      .filter((v) => (v.punten ?? 1) > 1)
+      .sort((a, b) => Number(opPlanNrs.has(a.nummer)) - Number(opPlanNrs.has(b.nummer)) || (b.punten ?? 1) - (a.punten ?? 1))[0];
+    if (!kandidaat) break;
+    const i = vragen.indexOf(kandidaat);
+    const ni = nakijk.findIndex((n) => n.nummer === kandidaat.nummer);
+    const { v, n } = kapPunten(kandidaat, ni >= 0 ? nakijk[ni] : undefined, (kandidaat.punten ?? 1) - 1);
+    vragen[i] = v;
+    if (n && ni >= 0) nakijk[ni] = n;
+    over -= 1;
   }
   return { ...ok[ok.length - 1]!.p, vragen, nakijkmodel: nakijk };
 }

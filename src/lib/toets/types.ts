@@ -184,6 +184,8 @@ export interface Vraag {
   leerdoelId?: string;
   /** Korte uitleg van het RTTI-label (regel: type → basis, bijgesteld op opdracht/stappen/context). */
   rttiUitleg?: string;
+  /** Plan-first: RTTI uit het bouwplan (blijft staan tenzij de regel ≥ 2 stappen afwijkt). */
+  rttiPlan?: Rtti;
   /** Bronvermelding bij een bewerkte examenvraag, bijv. "naar: examen 2019 tijdvak 1". */
   bronvermelding?: string;
   /** Vraagtekst: bij lege context eerst inleiding, daarna vraagzin — nooit omgekeerd. */
