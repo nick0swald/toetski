@@ -1,4 +1,5 @@
 import { RTTI_ORDER } from "./constants.ts";
+import { rttiDoelVoor } from "./config.ts";
 import type { GegenereerdeToets, Rtti, RttiVerdeling, Toetsmatrijs, Vraag } from "./types";
 
 export function somVerdeling(v: RttiVerdeling): number {
@@ -49,7 +50,7 @@ export function bouwMatrijs(vragen: Vraag[], doel: RttiVerdeling): Toetsmatrijs 
 export function herbouwMatrijs(toets: GegenereerdeToets): GegenereerdeToets {
   return {
     ...toets,
-    matrijs: bouwMatrijs(toets.vragen, toets.matrijs?.doelverdeling ?? { R: 25, T1: 25, T2: 25, I: 25 }),
+    matrijs: bouwMatrijs(toets.vragen, toets.matrijs?.doelverdeling ?? rttiDoelVoor(toets.meta?.leerjaar ?? 2, toets.meta?.moeilijkheid)),
   };
 }
 

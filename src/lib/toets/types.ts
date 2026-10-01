@@ -125,6 +125,8 @@ export interface ToetsMeta {
    * Leeg/undefined = invullijn op het Word-voorblad (niet hard "Ja").
    */
   extraTijd?: string;
+  /** Docent koos zelf een RTTI-doel (anders het standaarddoel per klas). */
+  rttiHandmatig?: boolean;
 }
 
 export interface VraagOptie {
@@ -376,6 +378,8 @@ export interface GegenereerdeToets {
   plaatjes?: PlaatjesModus;
   /** Verplichte inhoudscontrole (berekend): wat gevonden, gerepareerd of vervangen is. */
   controle?: ControleLog;
+  /** Tokens en kosten (USD) van alle modelaanroepen voor deze toets (stap 1 + stap 2). */
+  kosten?: ToetsKosten;
   /** Officiële leerdoelen van deze toets (vooraf gekoppeld, deterministisch) met richtpunten. */
   leerdoelen?: LeerdoelPlan;
 }
@@ -444,6 +448,8 @@ export interface GenerateInput {
   /** Leeg/undefined = auto. */
   openVragen?: number;
   rttiDoel: RttiVerdeling;
+  /** Docent schoof zelf aan het RTTI-doel; anders geldt rttiDoelVoor(leerjaar, moeilijkheid) uit config.ts. */
+  rttiHandmatig?: boolean;
   bronmateriaal: string;
   extraEisen: string;
   bronUrl?: string;
@@ -508,3 +514,17 @@ export const PICTOGRAM_BESCHRIJVING: Record<GhsSymbool, string> = {
   "verbod-roken": "een brandende sigaret met een rode streep erdoor in een rode cirkel",
   "verbod-open-vuur": "een lucifer met vlam met een rode streep erdoor in een rode cirkel",
 };
+
+/** Kostenoverzicht per toets (zie llm.ts). */
+export interface ToetsKosten {
+  usd: number;
+  tokensIn: number;
+  tokensCache: number;
+  tokensUit: number;
+  tokensRedeneren: number;
+  aanroepen: number;
+  mislukt: number;
+  perRol: Record<string, { usd: number; aanroepen: number; tokensIn: number; tokensUit: number; ms: number }>;
+  duurVragenMs?: number;
+  duurAfwerkenMs?: number;
+}

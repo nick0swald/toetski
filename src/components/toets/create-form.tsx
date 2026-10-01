@@ -13,9 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   LEERWEGEN,
   MOEILIJKHEDEN,
-  RTTI_PRESETS,
-  presetVoorLeerjaar,
-  rttiVoorMoeilijkheid,
+  isHandmatigRtti,
+  rttiDoelVoor,
 } from "@/lib/toets/constants";
 import { bewaarPlaatjesModus, leesPlaatjesModus, maakToets, type Voortgang } from "@/lib/toets/maak-toets";
 import type { PlaatjesModus } from "@/lib/toets/types";
@@ -106,7 +105,7 @@ export function CreateForm() {
   const [mcTekst, setMcTekst] = useState("");
   const [openTekst, setOpenTekst] = useState("");
   const [rtti, setRtti] = useState<RttiVerdeling>(
-    rttiVoorMoeilijkheid(RTTI_PRESETS.onderbouw.verdeling, "normaal"),
+    rttiDoelVoor(2, "normaal"),
   );
   const [cijferNorm, setCijferNorm] = useState<CijferNorm>(DEFAULT_CIJFER);
   const [stukken, setStukken] = useState<Stuk[]>([]);
@@ -128,7 +127,7 @@ export function CreateForm() {
     !lezend;
 
   function rttiVoorJaar(jaar: 1 | 2 | 3 | 4, m: Moeilijkheid) {
-    return rttiVoorMoeilijkheid(RTTI_PRESETS[presetVoorLeerjaar(jaar)].verdeling, m);
+    return rttiDoelVoor(jaar, m);
   }
 
   function ctxVan(list: Stuk[]) {
@@ -309,6 +308,7 @@ export function CreateForm() {
       mcVragen: mcN,
       openVragen: openN,
       rttiDoel: rtti,
+      rttiHandmatig: isHandmatigRtti(rtti, leerjaar, moeilijkheid),
       bronmateriaal: v.bron,
       extraEisen: v.extra,
       bronUrl: v.url.trim() || undefined,

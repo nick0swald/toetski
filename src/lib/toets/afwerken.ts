@@ -13,6 +13,8 @@ import { extractParagrafen, paragraafDekking, type Paragraaf } from "./leerdoele
 import { rttiHerschrijfPlan } from "./rtti-balans.ts";
 import { groepIntro, herstelGroepen, type Volgorde } from "./context-groepen.ts";
 import { labelRtti } from "./rtti-regels.ts";
+import { LIMIETEN, TIJD } from "./config.ts";
+import { CACHE_GRENS } from "./llm.ts";
 
 const REPAIR_SYSTEM = `Je verbetert ALLEEN de aangewezen VMBO-vragen. Antwoord met één JSON-object:
 { "vragen": [ volledige vraagobjecten van alleen de aangewezen nummers ], "nakijkmodel": [ bijbehorende nakijkregels ], "toelichting": "kort" }
@@ -42,7 +44,8 @@ function reparatiePrompt(vragen: Vraag[], nakijk: NakijkItem[], issues: ItemIssu
       return `Vraag ${nr}\n${waarom}\n${JSON.stringify({ vraag: q, nakijk: n, ...(groep ? { gedeeldeContext: `${groep.titel}: ${groep.intro}` } : {}) })}`;
     })
     .join("\n\n");
-  return `Verbeter alleen deze vragen. Houd het nummer. Lever ze compleet terug.\n\nLesstof (kader, niet kopiëren):\n${bron.slice(0, 4000)}\n\n${blok}`;
+  // Lesstof vooraan als vast (gecachet) voorvoegsel; de vragen erna wisselen per stukje.
+  return `Lesstof (kader, niet kopiëren):\n${bron.slice(0, LIMIETEN.reparatieLesstof)}${CACHE_GRENS}Verbeter alleen deze vragen. Houd het nummer. Lever ze compleet terug.\n\n${blok}`;
 }
 
 /** Contexttitel, bronvermelding en vraagtype blijven bij een reparatie staan (het model laat ze vaak weg). */
@@ -109,7 +112,7 @@ function herlabel(vragen: Vraag[], oordelen: ControleOordeel[]): Vraag[] {
 /** Codes waarbij een vraag niet op het blad mag blijven (geen/verkeerde sleutel, niet oplosbaar). */
 export const ONBRUIKBAAR = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt"]);
 
-/** Onafhankelijke controle, parallel in stukjes van 4 vragen (sneller, minder lange uitvoer). */
+/** Onafhankelijke controle, parallel in stukjes van LIMIETEN.stukGrootte vragen. */
 async function controleerVragen(
   vragen: Vraag[],
   nakijk: NakijkItem[],
@@ -117,7 +120,7 @@ async function controleerVragen(
   controleer: Repair,
   alle: Vraag[] = vragen,
 ): Promise<{ oordelen: ControleOordeel[]; gelukt: number }> {
-  const stukken = inStukken(vragen, 3);
+  const stukken = inStukken(vragen, LIMIETEN.stukGrootte);
   const res = await Promise.all(
     stukken.map(async (st) => {
       const raw = await controleer(controlePrompt(st.map(figuurNaarVerwijzing), nakijk.filter((n) => st.some((q) => q.nummer === n.nummer)), bron, alle)).catch(() => null);
@@ -128,7 +131,7 @@ async function controleerVragen(
   return { oordelen, gelukt: new Set(oordelen.map((o) => o.nummer)).size };
 }
 
-/** Eén reparatieronde (parallel per stukje van 4 vragen). */
+/** Eén reparatieronde (parallel per stukje van LIMIETEN.stukGrootte vragen). */
 async function repareerRonde(
   vragen: Vraag[],
   nakijk: NakijkItem[],
@@ -142,7 +145,7 @@ async function repareerRonde(
   let n = nakijk;
   const gewijzigd: number[] = [];
   const res = await Promise.all(
-    inStukken(nummers, 3).map(async (st) => {
+    inStukken(nummers, LIMIETEN.stukGrootte).map(async (st) => {
       const sub = issues.filter((i) => st.includes(i.nummer));
       const extra = vervang
         ? "\n\nDeze vragen bleven na een reparatie fout. VERVANG elke vraag door een NIEUWE, eenvoudige en eenduidige vraag over hetzelfde leerdoel (zelfde type, punten en rtti), met een realistische situatie en alle gegevens in de tekst."
@@ -259,9 +262,9 @@ export async function werkVragenAf(input: {
   const bron = input.bron ?? "";
   const nu = input.nu ?? (() => Date.now());
   const t0 = nu();
-  const budget = input.budgetMs ?? 55_000;
+  const budget = input.budgetMs ?? TIJD.afwerkBudgetMs;
   const rest = () => budget - (nu() - t0);
-  // Elke modelaanroep krijgt hooguit het resterende budget (+6 s): het geheel blijft binnen ~100 s.
+  // Elke modelaanroep krijgt hooguit het resterende budget (+6 s): het geheel blijft binnen de Vercel-limiet.
   const binnenTijd = (f?: Repair): Repair | undefined =>
     f &&
     ((p) => {
@@ -304,7 +307,8 @@ export async function werkVragenAf(input: {
       const alle = [...heur, ...inhoud, ...dek, ...rtti, ...lengte];
       gevonden.push(...alle.map((i) => ({ nummer: i.nummer, code: i.code, uitleg: i.uitleg })));
       let open = alle;
-      if (alle.length && rest() > 12_000) {
+      // Gegarandeerd: controle ≤ TIJD.controleTimeoutMs, dus bij het standaardbudget is er altijd tijd voor ronde 1.
+      if (alle.length && rest() > TIJD.reparatieMinRestMs) {
         const r1 = await repareerRonde(vragen, nakijk, alle, bron, input.repair);
         const det = repareerItemsDeterministisch(r1.vragen, r1.nakijkmodel, bron);
         vragen = det.vragen;
@@ -314,7 +318,7 @@ export async function werkVragenAf(input: {
         const gewijzigd = [...new Set(r1.gewijzigd)];
         const nietGerepareerd = alle.filter((i) => !gewijzigd.includes(i.nummer));
         let hercontrole: ItemIssue[] = [];
-        if (gewijzigd.length && rest() > 6_000) {
+        if (gewijzigd.length && rest() > TIJD.hercontroleMinRestMs) {
           const tweede = await controleerVragen(vragen.filter((q) => gewijzigd.includes(q.nummer)), nakijk, bronW, input.controleer, vragen);
           vragen = herlabel(vragen, tweede.oordelen);
           hercontrole = controleIssues(vragen, nakijk, tweede.oordelen);
@@ -324,7 +328,7 @@ export async function werkVragenAf(input: {
         const heurNa = det.issues.filter((i) => INHOUD.has(i.code));
         open = [...nietGerepareerd.filter((i) => INHOUD.has(i.code)), ...hercontrole, ...heurNa];
         const ernstig = open.filter((i) => ERNSTIG.has(i.code));
-        if (ernstig.length && rest() > 3_000) {
+        if (ernstig.length && rest() > TIJD.vervangMinRestMs) {
           const r2 = await repareerRonde(vragen, nakijk, ernstig, bron, input.repair, true);
           const det2 = repareerItemsDeterministisch(r2.vragen, r2.nakijkmodel, bron);
           vragen = det2.vragen;

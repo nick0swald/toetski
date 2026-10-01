@@ -180,9 +180,10 @@ describe("voortgangsbalk", () => {
     assert.equal(berekenVoortgang(v, t, 60_000).restMs, 4_000);
     assert.equal(berekenVoortgang(v, t, 79_000).restMs, 1_000);
   });
-  it("tijdsbudget: 60 s doel, figuren ≥ 60 s na de vragen, hard max 100 s", () => {
-    assert.equal(figuurDeadline(0, 20_000), 80_000);
-    assert.equal(figuurDeadline(0, 55_000), 100_000);
-    assert.equal(figuurDeadline(0, 0), 60_000);
+  it("tijdsbudget: 180 s doel, figuren ≥ 60 s na de vragen, hard max 330 s", () => {
+    assert.equal(figuurDeadline(0, 20_000), 180_000);
+    assert.equal(figuurDeadline(0, 150_000), 210_000);
+    assert.equal(figuurDeadline(0, 300_000), 330_000);
+    assert.equal(figuurDeadline(0, 0), 180_000);
   });
 });

@@ -42,6 +42,8 @@ export const generateInputSchema = z.object({
     T2: z.coerce.number(),
     I: z.coerce.number(),
   }),
+  /** Docent schoof zelf aan het RTTI-doel; anders geldt rttiDoelVoor uit config.ts. */
+  rttiHandmatig: z.boolean().optional(),
   bronmateriaal: z.string().max(100000).optional().default(""),
   extraEisen: z.string().max(4000).optional().default(""),
   bronUrl: z.string().max(500).optional(),
