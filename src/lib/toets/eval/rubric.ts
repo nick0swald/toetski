@@ -10,7 +10,7 @@ import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { rttiDoelVoor } from "../config.ts";
 import type { GegenereerdeToets, NakijkItem, RttiVerdeling, Vraag } from "../types";
 
-export const RUBRIEK_VERSIE = "2026-10-01.2";
+export const RUBRIEK_VERSIE = "2026-10-01.3";
 
 export interface EvalInput {
   titel?: string;
@@ -289,13 +289,14 @@ export function scoorToets(t: GegenereerdeToets, input: EvalInput, rechter?: Rec
   hard.push({ id: "H-nakijk", naam: "Nakijkmodel compleet en punten kloppen", ok: nkFout.length === 0, detail: nkFout.join(", ") || "ok" });
 
   // 13. Lengte (punten en vragen voor deze toetsduur)
-  const doelP = input.doelPunten;
+  const lengteDoel = effectiefDoel(t, input);
+  const doelP = lengteDoel.punten;
   const ratio = tot / Math.max(1, doelP);
   const puntScore = ratio >= 0.9 && ratio <= 1.15 ? 1 : Math.max(0, 1 - Math.abs(ratio < 0.9 ? 0.9 - ratio : ratio - 1.15) * 4);
-  const vr = V.length / Math.max(1, input.aantalVragen);
+  const vr = V.length / Math.max(1, lengteDoel.vragen);
   const vraagScore = vr >= 0.85 ? 1 : Math.max(0, 1 - (0.85 - vr) * 4);
   const c13 = Math.min(puntScore, vraagScore);
-  crit.push({ punt: 13, id: "lengte", naam: "Lengte past bij de toetsduur", score: c13, bron: "code", detail: `${V.length} vragen / ${tot} p tegen doel ${input.aantalVragen} / ${doelP}` });
+  crit.push({ punt: 13, id: "lengte", naam: "Lengte past bij de toetsduur", score: c13, bron: "code", detail: `${V.length} vragen / ${tot} p tegen doel ${lengteDoel.vragen} / ${doelP}${lengteDoel.bron === "kalibratie" ? " (automatische lengte)" : ""}` });
   hard.push({ id: "H-lengte", naam: "Punten binnen 85–120 % van het doel", ok: ratio >= 0.85 && ratio <= 1.2, detail: `${tot}/${doelP} = ${Math.round(ratio * 100)} %` });
 
   // Hard: geen schoolnamen en geen onbruikbare vragen meer
@@ -330,6 +331,19 @@ export function scoorToets(t: GegenereerdeToets, input: EvalInput, rechter?: Rec
  * Go-live-poort: harde criteria 100 % én rechtercijfer ≥ baseline (gemiddelde van de rechter-runs; Nick: de
  * coderubriek alleen is te mild). Zonder rechtercijfers valt de poort terug op het rubriekcijfer.
  */
+/**
+ * Doel-lengte: bij "automatische lengte" (lengteAuto) kiest de app de lengte uit de kalibratie (echte
+ * schooltoetsen); dan telt die richtwaarde, niet het standaardgetal uit het formulier.
+ */
+export function effectiefDoel(t: GegenereerdeToets, input: EvalInput): { vragen: number; punten: number; bron: "invoer" | "kalibratie" } {
+  if ((input as { lengteAuto?: boolean }).lengteAuto) {
+    const k = t.kwaliteit?.punten?.find((p) => /kalibratie/i.test(p.criterium));
+    const m = k?.toelichting.match(/richtwaarde[^:]*:\s*(\d+)\s*vragen\s*\/\s*(\d+)\s*punten/i);
+    if (m) return { vragen: Number(m[1]), punten: Number(m[2]), bron: "kalibratie" };
+  }
+  return { vragen: input.aantalVragen, punten: input.doelPunten, bron: "invoer" };
+}
+
 export function poort(nieuw: Scorekaart, baseline?: Scorekaart, rechter?: { nieuw?: number | null; baseline?: number | null }): { ok: boolean; redenen: string[] } {
   const redenen: string[] = [];
   if (!nieuw.hardOk) redenen.push(`harde criteria niet 100 %: ${nieuw.hard.filter((h) => !h.ok).map((h) => h.id).join(", ")}`);
@@ -359,7 +373,8 @@ Scoor elk punt 0 (slecht), 1 (matig) of 2 (goed):
 Antwoord ALLEEN met JSON: { "punten": { "1": {"score": 0|1|2, "opmerking": string}, … "13": {…} }, "cijfer": number (1–10), "topProblemen": [string, string, string] }`;
 
 export function rechterPrompt(t: GegenereerdeToets, input: EvalInput): string {
-  return `LESSTOF:\n${input.bronmateriaal.slice(0, 20000)}\n\nTOETS (doel: ${input.leerweg} klas ${input.leerjaar}, ${input.duurMinuten} min, ± ${input.doelPunten} punten):\n${toetsAlsTekst(t)}`;
+  const d = effectiefDoel(t, input);
+  return `LESSTOF:\n${input.bronmateriaal.slice(0, 20000)}\n\nTOETS (doel: ${input.leerweg} klas ${input.leerjaar}, ${input.duurMinuten} min, ± ${d.punten} punten${d.bron === "kalibratie" ? ", lengte automatisch volgens echte schooltoetsen van deze klas" : ""}):\n${toetsAlsTekst(t)}`;
 }
 
 export function parseRechter(raw: string): RechterOordeel | undefined {

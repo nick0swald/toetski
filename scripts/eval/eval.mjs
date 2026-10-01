@@ -134,7 +134,11 @@ async function planCmd(caseNaam) {
   if (check?.herstelBouwplan) {
     const h = check.herstelBouwplan(plan, quota);
     uitPlan = h.plan;
-    console.log("Plancontrole:", JSON.stringify(h.issues));
+    console.log("Plancontrole:", JSON.stringify(h.issues.map((i) => `${i.code}: ${i.detail}`)));
+    const t1 = Date.now();
+    const k = await B.kritiseerBouwplan({ system: v.system, voorvoegsel: v.basisPrompt, plan: uitPlan, rest: () => 120_000, kosten });
+    console.log(`Kritiek ${((Date.now() - t1) / 1000).toFixed(1)} s:`, k.vervangen);
+    if (k.vervangen.length) uitPlan = check.herstelBouwplan(k.plan, quota).plan;
   }
   for (const it of uitPlan.items) console.log(B.planRegel(it));
   console.log("reserve:");

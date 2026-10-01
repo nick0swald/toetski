@@ -8,7 +8,7 @@ import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
 import { extractParagrafen } from "./leerdoelen";
-import { maakBouwplan, maakQuota, type PlanItem, type PlanQuota } from "./bouwplan.ts";
+import { kritiseerBouwplan, maakBouwplan, maakQuota, type PlanItem, type PlanQuota } from "./bouwplan.ts";
 import { herstelBouwplan, openHard } from "./bouwplan-check.ts";
 import { ontdubbelNamen, planStukken, schrijfOpdracht, voegStukkenSamen } from "./plan-schrijven.ts";
 import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan, novaDoelenPerParagraaf, zonderDoelJargon } from "./leerdoelen-plan";
@@ -380,7 +380,14 @@ async function genereerRuw(invoer: GenerateData, kosten: Kosten = nieuweKosten()
 /** Plan-first route (zie bouwplan.ts, bouwplan-check.ts, plan-schrijven.ts). */
 async function schrijfViaPlan(o: { system: string; basisPrompt: string; quota: PlanQuota; deadline: number; kosten: Kosten }): Promise<GeneratedPayload | null> {
   const ruwPlan = await maakBouwplan({ system: o.system, voorvoegsel: o.basisPrompt, quota: o.quota, rest: () => o.deadline - Date.now(), kosten: o.kosten });
-  const { plan, issues } = herstelBouwplan(ruwPlan, o.quota);
+  let { plan, issues } = herstelBouwplan(ruwPlan, o.quota);
+  if (PLAN.kritiek && o.deadline - Date.now() > 100_000) {
+    const k = await kritiseerBouwplan({ system: o.system, voorvoegsel: o.basisPrompt, plan, rest: () => o.deadline - Date.now(), kosten: o.kosten });
+    if (k.vervangen.length) {
+      console.info("[generate] bouwplan-kritiek:", k.vervangen.join("; "));
+      ({ plan, issues } = herstelBouwplan(k.plan, o.quota));
+    }
+  }
   const hard = openHard(issues);
   if (hard.length) {
     console.warn("[generate] bouwplan heeft harde fouten:", hard.map((h) => h.detail).join("; "));

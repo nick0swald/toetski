@@ -255,10 +255,69 @@ export async function maakBouwplan(opts: {
   rest: () => number;
   kosten?: Kosten;
 }): Promise<Bouwplan> {
-  return vraagJson("plannen", berichten(opts.system, `${opts.voorvoegsel}${CACHE_GRENS}${bouwplanPrompt(opts.quota)}`), parseBouwplan, {
-    maxTokens: planTokens(opts.quota),
-    rest: () => Math.min(opts.rest(), PLAN.timeoutMs),
-    kosten: opts.kosten,
-    herkansingMinRestMs: 10 ** 9, // geen herkansing: bij een kapot plan valt de app terug op de oude route
-  });
+  const msgs = berichten(opts.system, `${opts.voorvoegsel}${CACHE_GRENS}${bouwplanPrompt(opts.quota)}`);
+  try {
+    return await vraagJson("plannen", msgs, parseBouwplan, {
+      maxTokens: planTokens(opts.quota),
+      rest: () => Math.min(opts.rest(), PLAN.timeoutMs),
+      kosten: opts.kosten,
+      herkansingMinRestMs: 10 ** 9,
+    });
+  } catch (e) {
+    // grok-4.5 is soms traag (gemeten 21–30 s, uitschieters > 70 s): dan het snelle model voor het plan,
+    // zodat het schrijven (wel grok-4.5) op tijd kan starten. Lukt ook dat niet → oude route.
+    if (opts.rest() < PLAN.reserveTimeoutMs + 60_000) throw e;
+    console.warn("[bouwplan] plan-aanroep mislukt, snel model:", e instanceof Error ? e.message.slice(0, 120) : e);
+    return vraagJson("snel", msgs, parseBouwplan, {
+      maxTokens: planTokens(opts.quota),
+      rest: () => Math.min(opts.rest(), PLAN.reserveTimeoutMs),
+      kosten: opts.kosten,
+      herkansingMinRestMs: 10 ** 9,
+    });
+  }
+}
+
+/** Plan als compacte rijen (zelfde formaat als de plan-aanroep), voor de kritiek-aanroep. */
+export function planAlsRijen(plan: Bouwplan): string {
+  return plan.items.map((it) => `${it.n}: ${JSON.stringify([it.par, it.vorm, it.rtti, it.punten, it.begrip, it.context, it.persoon ?? "", it.kern, it.antwoord, it.groep ?? ""])}`).join("\n");
+}
+
+export function kritiekPrompt(plan: Bouwplan): string {
+  return `OPDRACHT NU: controleer dit BOUWPLAN streng op dubbelingen (rijformaat: [paragraaf, vorm, rtti, punten, kernbegrip, situatie, persoon, vraag, antwoord, groep]):
+${planAlsRijen(plan)}
+
+Zoek rijen die hetzelfde toetsen als een eerdere rij: hetzelfde begrip of dezelfde regel/redenering (ook in andere woorden, bijv. "Fres = 0 → stilstand" en "evenwicht"), hetzelfde soort situatie, of een rij die het antwoord van een andere rij verklapt. Vervang telkens de LAATSTE rij van zo'n paar door een nieuwe rij uit DEZELFDE paragraaf over een ander onderdeel/leerdoel uit de lesstof dat nog niet getoetst wordt (zelfde vorm, rtti en punten; nieuwe situatie; persoon uit de namenlijst die nog niet gebruikt is, of leeg).
+Geen dubbelingen gevonden: lege lijst. Antwoord met ALLEEN JSON: {"vervang":[{"n":<rijnummer>,"waarom":"<kort>","rij":[…10 velden…]}]}`;
+}
+
+/** Vervangingen uit de kritiek toepassen (alleen geldige rijen; paragraaf blijft gelijk). */
+export function pasKritiekToe(plan: Bouwplan, u: unknown): { plan: Bouwplan; vervangen: string[] } {
+  const lijst = (u && typeof u === "object" && Array.isArray((u as { vervang?: unknown }).vervang) ? (u as { vervang: unknown[] }).vervang : []).slice(0, Math.ceil(plan.items.length / 3));
+  const items = [...plan.items];
+  const vervangen: string[] = [];
+  for (const v of lijst) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as { n?: unknown; waarom?: unknown; rij?: unknown };
+    const i = items.findIndex((x) => x.n === Number(o.n));
+    const nieuw = itemVan(o.rij, i);
+    if (i < 0 || !nieuw) continue;
+    const oud = items[i]!;
+    items[i] = { ...nieuw, n: oud.n, par: oud.par, vorm: oud.vorm, rtti: oud.rtti, punten: oud.punten, groep: oud.groep };
+    vervangen.push(`${oud.n} (${oud.begrip} → ${nieuw.begrip}): ${s(o.waarom, 80)}`);
+  }
+  return { plan: { ...plan, items }, vervangen };
+}
+
+/** Kritiek-aanroep: semantische dubbelingen die code niet ziet. Mislukt → plan ongewijzigd. */
+export async function kritiseerBouwplan(opts: { system: string; voorvoegsel: string; plan: Bouwplan; rest: () => number; kosten?: Kosten }): Promise<{ plan: Bouwplan; vervangen: string[] }> {
+  try {
+    return await vraagJson("plannen", berichten(opts.system, `${opts.voorvoegsel}${CACHE_GRENS}${kritiekPrompt(opts.plan)}`), (u) => pasKritiekToe(opts.plan, u), {
+      maxTokens: 2500,
+      rest: () => Math.min(opts.rest(), PLAN.kritiekTimeoutMs),
+      kosten: opts.kosten,
+      herkansingMinRestMs: 10 ** 9,
+    });
+  } catch {
+    return { plan: opts.plan, vervangen: [] };
+  }
 }
