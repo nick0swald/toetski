@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { LIMIETEN, MODELLEN, RTTI_EXAMEN, TIJD, UX_TIJD, isHandmatigRtti, metRttiDoel, rttiDoelVoor, tokensVoorAantalVragen } from "./config.ts";
+import { LIMIETEN, MODELLEN, PLAN, RTTI_EXAMEN, TIJD, UX_TIJD, isHandmatigRtti, metRttiDoel, rttiDoelVoor, tokensVoorAantalVragen } from "./config.ts";
 import { afwerkBudget } from "./voortgang.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..", "..");
@@ -26,6 +26,12 @@ describe("config: modellen (Nick, 1 okt 2026)", () => {
     assert.equal(MODELLEN.repareren, "grok-4.5");
     assert.equal(MODELLEN.controle, "grok-4.5");
     assert.equal(MODELLEN.visie, "grok-4.5");
+    assert.equal(MODELLEN.plannen, "grok-4.5");
+  });
+
+  it("plan-first: bouwplan past ruim binnen de schrijfdeadline", () => {
+    assert.ok(PLAN.timeoutMs <= TIJD.vragenDeadlineMs - 60_000, "na het plan moet er ≥ 60 s over zijn om te schrijven");
+    assert.ok(PLAN.stukGrootte >= 3 && PLAN.stukGrootte <= 8);
   });
 
   it("geen hardgecodeerde modelnamen buiten config.ts", () => {

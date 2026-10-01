@@ -2,7 +2,9 @@
 /**
  * Offline eval-harnas voor Toetski (zie scripts/eval/README.md).
  *
- *   node scripts/eval/eval.mjs genereer <case> [--naam N] [--base URL]     # 1 generatie (kost API-tokens)
+ *   node scripts/eval/eval.mjs genereer <case> [--naam N] [--base URL]     # 1 generatie via de site (kost API-tokens)
+ *   node scripts/eval/eval.mjs genereer <case> --lokaal [--naam N]         # zelfde stappen lokaal (code van deze checkout, XAI_API_KEY)
+ *   node scripts/eval/eval.mjs plan <case>                                 # alleen het bouwplan (1 goedkope aanroep)
  *   node scripts/eval/eval.mjs scoor <toets.json> --case <case> [--rechter] [--baseline scores.json]
  *   node scripts/eval/eval.mjs poort <scores-nieuw.json> <scores-baseline.json>
  *
@@ -55,13 +57,42 @@ async function genereer(caseNaam) {
   // Zoals het formulier: RTTI-doel = standaarddoel voor de klas (geen handmatige override).
   const input = { ...c.input, rttiDoel: rttiDoelVoor(c.input.leerjaar, c.input.moeilijkheid) };
   const F = "src/lib/toets/generate.ts";
+  const lokaal = opt("lokaal", false);
   const t0 = Date.now();
-  const ruw = await serverFn(base, fnId(F, "generateVragenRuw"), input);
+  let ruw, af;
+  if (lokaal) {
+    // Zelfde stappen als generateVragenRuw + afwerkToets, maar in dit proces (code van deze checkout).
+    const G = await jiti.import(join(ROOT, F));
+    const { generateInputSchema } = await jiti.import(join(ROOT, "src/lib/toets/schema.ts"));
+    const { nieuweKosten } = await jiti.import(join(ROOT, "src/lib/toets/llm.ts"));
+    const data = generateInputSchema.parse(input);
+    const k1 = nieuweKosten();
+    try {
+      const r = await G._intern.genereerRuw(data, k1);
+      ruw = { ok: true, ...r, kosten: k1, duurMs: Date.now() - t0 };
+    } catch (e) {
+      ruw = { ok: false, error: String(e?.message ?? e) };
+    }
+  } else {
+    ruw = await serverFn(base, fnId(F, "generateVragenRuw"), input);
+  }
   const tVragen = Date.now();
   console.log(`vragen ${((tVragen - t0) / 1000).toFixed(1)} s`, ruw?.ok ? "ok" : ruw?.error);
   if (!ruw?.ok) process.exit(1);
   const afInput = { ...input, bronmateriaal: "", bronUrl: undefined, antwoordenmateriaal: (input.antwoordenmateriaal ?? "").slice(0, 30000), stuurdocument: undefined };
-  const af = await serverFn(base, fnId(F, "afwerkToets"), { input: afInput, bron: ruw.bron, payload: ruw.payload, verstrekenMs: tVragen - t0 });
+  if (lokaal) {
+    const G = await jiti.import(join(ROOT, F));
+    const { generateInputSchema } = await jiti.import(join(ROOT, "src/lib/toets/schema.ts"));
+    const { nieuweKosten } = await jiti.import(join(ROOT, "src/lib/toets/llm.ts"));
+    const { TIJD } = await jiti.import(join(ROOT, "src/lib/toets/config.ts"));
+    const k2 = nieuweKosten();
+    const t = Date.now();
+    const toets = await G._intern.rondAf(generateInputSchema.parse(afInput), ruw.bron, ruw.payload, TIJD.afwerkBudgetMs, k2);
+    toets.kosten = { ...k2, duurAfwerkenMs: Date.now() - t };
+    af = { ok: true, toets };
+  } else {
+    af = await serverFn(base, fnId(F, "afwerkToets"), { input: afInput, bron: ruw.bron, payload: ruw.payload, verstrekenMs: tVragen - t0 });
+  }
   const tAf = Date.now();
   console.log(`afwerken ${((tAf - tVragen) / 1000).toFixed(1)} s`, af?.ok ? "ok" : af?.error);
   if (!af?.ok) process.exit(1);
@@ -76,10 +107,41 @@ async function genereer(caseNaam) {
   const { Packer } = await jiti.import("docx");
   const { pakketDocument } = await jiti.import(join(ROOT, "src/lib/toets/docx-export.ts"));
   writeFileSync(join(uit, `${caseNaam}.docx`), await Packer.toBuffer(await pakketDocument(toets)));
-  const meta = { case: caseNaam, base, naam, start: new Date(t0).toISOString(), tijden: toets.figuurRapport.tijden, kosten: toets.kosten ?? null, vragen: toets.vragen.length, punten: toets.vragen.reduce((s, q) => s + q.punten, 0) };
+  if (ruw.payload?.bouwplan) writeFileSync(join(uit, `${caseNaam}.bouwplan.json`), JSON.stringify(ruw.payload.bouwplan, null, 1));
+  const meta = { case: caseNaam, base: lokaal ? "lokaal" : base, naam, start: new Date(t0).toISOString(), tijden: toets.figuurRapport.tijden, kosten: toets.kosten ?? null, vragen: toets.vragen.length, punten: toets.vragen.reduce((s, q) => s + q.punten, 0) };
   writeFileSync(join(uit, `${caseNaam}.meta.json`), JSON.stringify(meta, null, 1));
   console.log(JSON.stringify(meta, null, 1));
   console.log(`→ ${join(uit, caseNaam)}.{json,docx,meta.json}`);
+}
+
+async function planCmd(caseNaam) {
+  const G = await jiti.import(join(ROOT, "src/lib/toets/generate.ts"));
+  const B = await jiti.import(join(ROOT, "src/lib/toets/bouwplan.ts"));
+  const { generateInputSchema } = await jiti.import(join(ROOT, "src/lib/toets/schema.ts"));
+  const { nieuweKosten } = await jiti.import(join(ROOT, "src/lib/toets/llm.ts"));
+  const { rttiDoelVoor } = await jiti.import(join(ROOT, "src/lib/toets/config.ts"));
+  const c = caseInput(caseNaam);
+  const v = await G.bereidVoor(generateInputSchema.parse({ ...c.input, rttiDoel: rttiDoelVoor(c.input.leerjaar, c.input.moeilijkheid) }));
+  const quota = G.planQuotaVoor(v);
+  if (!quota) throw new Error("geen plan-first voor deze invoer");
+  console.log(JSON.stringify(quota));
+  const kosten = nieuweKosten();
+  const t0 = Date.now();
+  const plan = await B.maakBouwplan({ system: v.system, voorvoegsel: v.basisPrompt, quota, rest: () => 120_000, kosten });
+  const ms = Date.now() - t0;
+  let uitPlan = plan;
+  const check = await jiti.import(join(ROOT, "src/lib/toets/bouwplan-check.ts")).catch(() => null);
+  if (check?.herstelBouwplan) {
+    const h = check.herstelBouwplan(plan, quota);
+    uitPlan = h.plan;
+    console.log("Plancontrole:", JSON.stringify(h.issues));
+  }
+  for (const it of uitPlan.items) console.log(B.planRegel(it));
+  console.log("reserve:");
+  for (const it of uitPlan.reserve) console.log(B.planRegel(it));
+  console.log(`plan ${(ms / 1000).toFixed(1)} s · $${kosten.usd.toFixed(4)} · uit ${kosten.tokensUit} tok (redeneren ${kosten.tokensRedeneren})`);
+  mkdirSync(join(ROOT, "eval-out"), { recursive: true });
+  writeFileSync(join(ROOT, "eval-out", `plan-${caseNaam}.json`), JSON.stringify({ quota, plan, hersteld: uitPlan, ms, kosten }, null, 1));
 }
 
 async function rechter(toets, input) {
@@ -137,6 +199,7 @@ async function poortCmd(nieuwPad, basisPad) {
 const [cmd, a1, a2] = args;
 if (cmd === "genereer" && a1) await genereer(a1);
 else if (cmd === "scoor" && a1) await scoor(a1);
+else if (cmd === "plan" && a1) await planCmd(a1);
 else if (cmd === "poort" && a1 && a2) await poortCmd(a1, a2);
 else {
   console.log("Gebruik: genereer <case> [--naam N] [--base URL] | scoor <toets.json> --case <case> [--rechter] [--baseline scores.json] | poort <nieuw> <baseline>");

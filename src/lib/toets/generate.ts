@@ -8,9 +8,10 @@ import { wilGemengdeOfOpenEerst } from "./vraag-volgorde";
 import { annoteerMcAandeel, mcShareDoelTekst, wilHogeMcShare } from "./mc-aandeel";
 import { CONTROLE_SYSTEM, REPAIR_SYSTEM, werkVragenAf } from "./afwerken";
 import { extractParagrafen } from "./leerdoelen";
+import { maakQuota, type PlanQuota } from "./bouwplan.ts";
 import { annoteerLeerdoelen, herstelLeerdoelen, leerdoelenPrompt, maakLeerdoelPlan, zonderDoelJargon } from "./leerdoelen-plan";
 import { bouwKwaliteit } from "./kwaliteit-check";
-import { LIMIETEN, TIJD, metRttiDoel, tokensVoorAantalVragen } from "./config";
+import { LIMIETEN, PLAN, TIJD, metRttiDoel, tokensVoorAantalVragen } from "./config";
 import { berichten, nieuweKosten, vraagJson, vriendelijkeAiFout, xaiChat, type Kosten } from "./llm";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
 import {
@@ -272,10 +273,14 @@ function leerdoelPlanVoor(data: GenerateData, k: Kalibratie | null, bron: string
 }
 type GeneratedPayload = z.infer<typeof generatedPayloadSchema>;
 
-/** Stap 1: lesstof ophalen + modelaanroep → ruwe vragen (nog niet afgewerkt). */
-async function genereerRuw(data: GenerateData, kosten: Kosten = nieuweKosten()): Promise<{ bron: string; payload: GeneratedPayload }> {
+class GebruikersFout extends Error {}
+
+/**
+ * Voorbereiding van stap 1 (zonder modelaanroep): lesstof, kalibratie, examencontexten, leerdoelen en het
+ * volledige toetsvoorvoegsel. Ook gebruikt door de plan-first-route en de offline eval (scripts/eval).
+ */
+export async function bereidVoor(data: GenerateData) {
   data = metRttiDoel(data);
-  const deadline = Date.now() + TIJD.vragenDeadlineMs;
   let bron = data.bronmateriaal ?? "";
   if (data.bronUrl?.trim()) {
     const extra = await fetchBronUrl(data.bronUrl.trim());
@@ -307,6 +312,22 @@ async function genereerRuw(data: GenerateData, kosten: Kosten = nieuweKosten()):
     : null;
   const system = bouwSystemPrompt(data.stuurdocument);
   const basisPrompt = userPrompt({ ...data, antwoordenmateriaal: antwoorden }, bron, kal);
+  return { data, bron, antwoorden, k, examen, plan, kal, system, basisPrompt };
+}
+
+/** Quota voor plan-first (alleen NaSk met kalibratie, genoeg vragen, geen feedbackronde); anders null. */
+export function planQuotaVoor(v: Awaited<ReturnType<typeof bereidVoor>>): PlanQuota | null {
+  const { data, bron, antwoorden, k } = v;
+  if (!PLAN.aan || !k || data.feedback?.trim() || data.aantalVragen < PLAN.minVragen) return null;
+  const koppen = extractParagrafen(bron, antwoorden);
+  const paragrafen = koppen.length >= 2 ? koppen : novaParagrafen(data.titel ?? "", bron, k.leerjaar, k.leerweg);
+  return maakQuota({ bron, paragrafen, aantalVragen: data.aantalVragen, doelPunten: data.doelPunten, rttiDoel: normaliseer(data.rttiDoel), kal: k });
+}
+
+/** Stap 1: lesstof ophalen + modelaanroep → ruwe vragen (nog niet afgewerkt). */
+async function genereerRuw(invoer: GenerateData, kosten: Kosten = nieuweKosten()): Promise<{ bron: string; payload: GeneratedPayload }> {
+  const deadline = Date.now() + TIJD.vragenDeadlineMs;
+  const { data, bron, antwoorden, k, examen, plan, kal, system, basisPrompt } = await bereidVoor(invoer);
   // Lange NaSk-toetsen: gesloten en open deel parallel (samen binnen TIJD.vragenDeadlineMs).
   const delen = k && !data.feedback?.trim() ? deelPlan(k, data.aantalVragen, data.doelPunten) : null;
   let payload: GeneratedPayload;
@@ -348,7 +369,6 @@ function vraagPayload(system: string, prompt: string, aantal: number, deadline: 
   });
 }
 
-class GebruikersFout extends Error {}
 
 /** Ruwe vragen uit de payload (genormaliseerd) — ook de basis voor de vroege beeldpijplijn. */
 export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
@@ -467,6 +487,9 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
   if (modus === "zonder") toets.metPlaatjes = false;
   return toets;
 }
+
+/** Alleen voor de offline eval (scripts/eval): dezelfde stappen als de server-functies, zonder HTTP. */
+export const _intern = { genereerRuw, rondAf };
 
 /** Stap 1 los (voor de snelle route: figuren starten zodra de vragen er zijn). */
 export const generateVragenRuw = createServerFn({ method: "POST" })
