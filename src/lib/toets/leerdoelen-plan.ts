@@ -5,8 +5,8 @@
  */
 import type { Kwaliteitscheck, LeerdoelPlan, Leerweg, PlanLeerdoel, Vraag } from "./types";
 import { EINDTERMEN, KERNDOELEN, LEERDOELEN_BRON, NOVA_LEERDOEL_KOPPELING, ONDERWERP_KOPPELING, type LeerdoelData } from "./leerdoelen-data.ts";
-import { vindNovaHoofdstuk } from "./kalibratie.ts";
-import { VRAAGTYPEN } from "./kalibratie-data.ts";
+import { novaSerie, vindNovaHoofdstuk } from "./kalibratie.ts";
+import { NOVA_HOOFDSTUKKEN, VRAAGTYPEN } from "./kalibratie-data.ts";
 import { extractParagrafen } from "./leerdoelen.ts";
 
 function kaal(s: string): string {
@@ -88,6 +88,13 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
     for (const n of pars) (koppeling[n] ?? []).forEach((id, i) => plus(id, i === 0 ? 1 : 0.6));
     herkomst = `Nova H${hit.hoofdstuk.n} ${hit.hoofdstuk.titel}${inBron.length && inBron.length < Object.keys(koppeling).length ? ` (§ ${pars.map((n) => `${hit.hoofdstuk.n}.${n}`).join(", ")})` : ""}`;
   }
+  // Lesstof met meer hoofdstukken (bijv. H11 + H13): elk ander Nova-hoofdstuk waarvan de koppen in de lesstof staan,
+  // telt mee naar rato van het aantal paragrafen — zo krijgt ook het tweede hoofdstuk zijn leerdoelen.
+  for (const extra of andereNovaHoofdstukken(input, hit?.hoofdstuk.n)) {
+    const k = NOVA_LEERDOEL_KOPPELING[`${extra.serie}:${extra.n}`]!;
+    for (const n of extra.pars) (k[n] ?? []).forEach((id, i) => plus(id, i === 0 ? 1 : 0.6));
+    herkomst = herkomst ? `${herkomst} + Nova H${extra.n} ${extra.titel}` : `Nova H${extra.n} ${extra.titel}`;
+  }
   if (!gewicht.size) {
     const kop = kaal(titel);
     const onderwerp = input.leerjaar >= 3 ? ONDERWERP_KOPPELING.find((o) => new RegExp(o.re, "i").test(kop) && o.doelen[input.leerweg]?.length) : undefined;
@@ -145,6 +152,34 @@ export function maakLeerdoelPlan(input: PlanInput): LeerdoelPlan | null {
     leerjaar: input.leerjaar,
     doelen,
   };
+}
+
+/**
+ * Nova-hoofdstukken (naast het al gevonden hoofdstuk) die echt in de lesstof staan. Per lesstofhoofdstuk
+ * (koppen n.x) zoeken we het Nova-hoofdstuk met de meeste overeenkomende paragraaftitels — op titel, niet op
+ * nummer, want edities nummeren anders (bijv. "Kracht en beweging" is H11 in de ene en H16 in de andere uitgave).
+ * pars = Nova-paragraafnummers die in de lesstof overeenkomen.
+ */
+export function andereNovaHoofdstukken(input: Pick<PlanInput, "bron" | "antwoorden" | "leerjaar" | "leerweg">, behalve?: number): { serie: string; n: number; titel: string; pars: number[] }[] {
+  const serie = novaSerie(input.leerjaar, input.leerweg);
+  if (!serie) return [];
+  const perHoofdstuk = new Map<string, string[]>();
+  for (const p of extractParagrafen(input.bron, input.antwoorden)) {
+    const h = p.code.split(".")[0]!;
+    perHoofdstuk.set(h, [...(perHoofdstuk.get(h) ?? []), kaal(p.titel)]);
+  }
+  const lijkt = (a: string, b: string) => a.length > 4 && b.length > 4 && (a.includes(b) || b.includes(a));
+  const uit: { serie: string; n: number; titel: string; pars: number[] }[] = [];
+  for (const titels of perHoofdstuk.values()) {
+    let beste: { n: number; titel: string; pars: number[] } | null = null;
+    for (const h of NOVA_HOOFDSTUKKEN[serie]) {
+      if (!NOVA_LEERDOEL_KOPPELING[`${serie}:${h.n}`]) continue;
+      const pars = h.paragrafen.filter((np) => titels.some((t) => lijkt(t, kaal(np.titel)))).map((np) => np.n);
+      if (pars.length >= Math.min(2, h.paragrafen.length) && pars.length > (beste?.pars.length ?? 0)) beste = { n: h.n, titel: h.titel, pars };
+    }
+    if (beste && beste.n !== behalve && !uit.some((u) => u.n === beste!.n)) uit.push({ serie, ...beste });
+  }
+  return uit;
 }
 
 /** Promptblok: de doelen met puntdoel; elk item krijgt precies één leerdoelId uit de lijst. */

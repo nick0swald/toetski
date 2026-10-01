@@ -1,0 +1,261 @@
+/**
+ * Plan-first, stap 2: deterministische controle en herstel van het bouwplan (geen modelaanroep).
+ * Controleert aantallen, paragraafdekking (eerlijke diepgang), unieke personen/situaties/begrippen, weggevers,
+ * punten en RTTI-mix, en herstelt wat zonder model kan (reserves inwisselen, namen vervangen, punten
+ * bijstellen, volgorde). Wat code niet kan herstellen, gaat als aanwijzing ("let") mee naar de schrijver.
+ */
+import type { Rtti } from "./types";
+import { VOORNAMEN } from "./config.ts";
+import { GESLOTEN, type Bouwplan, type PlanItem, type PlanQuota } from "./bouwplan.ts";
+
+export interface PlanIssue {
+  code: "aantal" | "dekking" | "diepgang" | "persoon" | "context" | "begrip" | "weggever" | "punten" | "rtti" | "vorm" | "school";
+  detail: string;
+  ernst: "hard" | "zacht";
+  hersteld: boolean;
+}
+
+const STOP = new Set("de het een en of van in op met voor naar bij aan uit door over als dat die dit deze is zijn wordt worden je jij hij zij ze we wat welke waarom hoe wie om te tot niet geen wel ook nog dan maar want".split(" "));
+
+/** Inhoudswoorden, grof gestamd (eerste 5 letters) zodat "fietser/fietsen" samenvallen. */
+export function sleutelwoorden(t: string | undefined): string[] {
+  return [
+    ...new Set(
+      (t ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length >= 4 && !STOP.has(w))
+        .map((w) => w.slice(0, 5)),
+    ),
+  ];
+}
+
+function lijkt(a: string, b: string, drempel: number): boolean {
+  const x = sleutelwoorden(a);
+  const y = new Set(sleutelwoorden(b));
+  if (!x.length || !y.size) return false;
+  const gedeeld = x.filter((w) => y.has(w)).length;
+  return gedeeld / Math.min(x.length, y.size) >= drempel && gedeeld >= 1;
+}
+
+const isGesloten = (it: PlanItem) => GESLOTEN.includes(it.vorm);
+const zelfdeGroep = (a: PlanItem, b: PlanItem) => Boolean(a.groep && a.groep === b.groep);
+const notitie = (it: PlanItem, tekst: string) => {
+  it.let = [...new Set([...(it.let ?? []), tekst])];
+};
+const SCHOOL_RE = /\b[A-Z][\w-]*(?:college|lyceum|school)\b|\b(?:college|lyceum|scholengemeenschap|mavo|havo|vwo)\b/i;
+const TEKEN_RE = /\bteken|\bschets|\bpijl|\bgrafiek|\blijn\b|\bgeef .*aan\b|\baangeven\b|\bkleur|\bomcirkel/i;
+
+/** Paragraafcode normaliseren naar een bekende code ("§11.1 Voortstuwen" → "11.1"). */
+function normPar(par: string, codes: string[]): string {
+  const m = par.match(/\d{1,2}\.\d{1,2}/);
+  const c = m ? `${Number(m[0].split(".")[0])}.${Number(m[0].split(".")[1])}` : par;
+  return !codes.length || codes.includes(c) ? c : codes[0]!;
+}
+
+export function rttiPuntenVan(items: PlanItem[]): Record<Rtti, number> {
+  const r: Record<Rtti, number> = { R: 0, T1: 0, T2: 0, I: 0 };
+  for (const it of items) r[it.rtti] += it.punten;
+  return r;
+}
+
+/** Controleer en herstel. Puur: het invoerplan wordt niet aangepast. */
+export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwplan; issues: PlanIssue[] } {
+  const issues: PlanIssue[] = [];
+  const meld = (code: PlanIssue["code"], detail: string, ernst: PlanIssue["ernst"], hersteld: boolean) => issues.push({ code, detail, ernst, hersteld });
+  const codes = q.paragrafen.map((p) => p.code);
+  const items: PlanItem[] = invoer.items.map((it) => ({ ...it, par: normPar(it.par, codes), let: it.let ? [...it.let] : undefined }));
+  const reserve: PlanItem[] = invoer.reserve.map((it) => ({ ...it, par: normPar(it.par, codes) }));
+  const telPar = (c: string) => items.filter((it) => it.par === c).length;
+  const quotaVan = (c: string) => q.paragrafen.find((p) => p.code === c)?.aantal ?? 0;
+  const overschot = () =>
+    [...codes].sort((a, b) => telPar(b) - quotaVan(b) - (telPar(a) - quotaVan(a)))[0];
+
+  // 1. Aantal vragen
+  if (items.length > q.aantal) {
+    while (items.length > q.aantal) {
+      const c = overschot();
+      const idx = c ? items.map((it) => it.par).lastIndexOf(c) : items.length - 1;
+      reserve.unshift(items.splice(idx >= 0 ? idx : items.length - 1, 1)[0]!);
+    }
+    meld("aantal", `te veel vragen in het plan → ${q.aantal}`, "zacht", true);
+  } else if (items.length < q.aantal) {
+    const voor = items.length;
+    while (items.length < q.aantal && reserve.length) {
+      const tekort = codes.find((c) => telPar(c) < quotaVan(c));
+      const ri = Math.max(0, reserve.findIndex((r) => r.par === tekort));
+      items.push(reserve.splice(ri, 1)[0]!);
+    }
+    meld("aantal", `${voor} vragen in het plan, aangevuld tot ${items.length} uit de reserve`, items.length < q.aantal ? "hard" : "zacht", items.length >= q.aantal);
+  }
+
+  // 2. Dekking en eerlijke diepgang: lege paragraaf = hard; ver onder quota = zacht.
+  for (const p of q.paragrafen) {
+    const tekort = (n: number) => (n === 0 ? 1 : n < p.aantal - 1 ? p.aantal - 1 - n : 0);
+    let nodig = tekort(telPar(p.code));
+    const wasLeeg = telPar(p.code) === 0;
+    while (nodig > 0) {
+      const van = overschot();
+      if (!van || van === p.code || telPar(van) <= Math.max(1, quotaVan(van) - 1)) break;
+      const vi = items.map((it) => it.par).lastIndexOf(van);
+      const ri = reserve.findIndex((r) => r.par === p.code);
+      if (ri >= 0) {
+        items[vi] = { ...reserve.splice(ri, 1)[0]! };
+      } else {
+        const oud = items[vi]!;
+        items[vi] = {
+          ...oud,
+          par: p.code,
+          begrip: `(kies een kernbegrip uit ${p.code} ${p.titel})`,
+          context: "",
+          persoon: undefined,
+          groep: undefined,
+          kern: `vraag over ${p.code} ${p.titel} (zelfde vorm, RTTI en punten)`,
+          antwoord: "",
+          let: [`nieuw te bedenken vraag over ${p.code} ${p.titel}; ander begrip en andere situatie dan de rest van het plan`],
+        };
+      }
+      nodig = tekort(telPar(p.code));
+    }
+    const n = telPar(p.code);
+    if (wasLeeg) meld("dekking", `${p.code} ${p.titel} had geen vraag${n ? " → aangevuld" : ""}`, "hard", n > 0);
+    else if (n < p.aantal - 1) meld("diepgang", `${p.code} ${p.titel}: ${n} van ${p.aantal} vragen`, "zacht", false);
+  }
+
+  // 3. Vorm "teken" zonder tekenopdracht → kort open; gesloten = 1 punt; open 1–4 (rekenen ≥ 2).
+  for (const it of items) {
+    if (it.vorm === "teken" && !TEKEN_RE.test(it.kern)) {
+      it.vorm = "kort";
+      meld("vorm", `"${it.begrip}": tekenen zonder tekenopdracht → kort open`, "zacht", true);
+    }
+    if (isGesloten(it)) it.punten = 1;
+    else it.punten = Math.max(it.vorm === "reken" ? 2 : 1, Math.min(4, Math.round(it.punten) || 2));
+  }
+
+  // 4. Personen: alleen namen uit de lijst, elke naam hooguit één vraag of één groep.
+  const gebruikt = new Map<string, string>(); // naam → groep/itemsleutel
+  const vrij = () => VOORNAMEN.find((n) => !gebruikt.has(n) && !items.some((it) => it.persoon === n));
+  for (const it of items) {
+    if (!it.persoon) continue;
+    const sleutel = it.groep ?? `#${it.n}-${it.begrip}`;
+    const naam = it.persoon.split(/\s+/)[0]!;
+    const inLijst = (VOORNAMEN as readonly string[]).includes(naam);
+    const dubbel = gebruikt.has(naam) && gebruikt.get(naam) !== sleutel;
+    if (!inLijst || dubbel) {
+      const nieuw = (it.groep && [...gebruikt.entries()].find(([, s]) => s === sleutel)?.[0]) || vrij();
+      if (nieuw) {
+        const oud = it.persoon;
+        it.persoon = nieuw;
+        it.context = it.context.replaceAll(oud, nieuw);
+        it.kern = it.kern.replaceAll(oud, nieuw);
+        meld("persoon", `${oud} ${dubbel ? "dubbel" : "niet in de namenlijst"} → ${nieuw}`, "zacht", true);
+      }
+    }
+    gebruikt.set(it.persoon!, sleutel);
+  }
+
+  // 5. Situaties en begrippen uniek (buiten dezelfde groep). Eerst reserve inwisselen, anders een aanwijzing.
+  const wissel = (i: number, waarom: (r: PlanItem) => boolean): boolean => {
+    const ri = reserve.findIndex((r) => r.par === items[i]!.par && isGesloten(r) === isGesloten(items[i]!) && waarom(r));
+    if (ri < 0) return false;
+    items[i] = { ...reserve.splice(ri, 1)[0]! };
+    return true;
+  };
+  for (let i = 0; i < items.length; i++) {
+    for (let j = 0; j < i; j++) {
+      const a = items[j]!;
+      const b = items[i]!;
+      if (zelfdeGroep(a, b)) continue;
+      if (a.context && b.context && lijkt(a.context, b.context, 0.5)) {
+        const ok = wissel(i, (r) => !items.some((x) => x.context && lijkt(x.context, r.context, 0.5)));
+        if (!ok) {
+          notitie(items[i]!, `kies een duidelijk andere situatie dan "${a.context}" (die staat al in de toets)`);
+          items[i]!.context = "";
+        }
+        meld("context", `situatie "${b.context}" lijkt op "${a.context}"`, "zacht", true);
+      } else if (lijkt(a.begrip, b.begrip, 0.75) && a.vorm === b.vorm) {
+        const ok = wissel(i, (r) => !items.some((x) => lijkt(x.begrip, r.begrip, 0.75)));
+        if (!ok) notitie(items[i]!, `begrip "${a.begrip}" komt al aan bod: vraag vanuit een andere invalshoek (toepassen/verklaren i.p.v. herkennen)`);
+        meld("begrip", `begrip "${b.begrip}" herhaalt "${a.begrip}"`, "zacht", true);
+      }
+    }
+  }
+
+  // 6. Weggevers: het verwachte antwoord van een vraag mag niet in de situatie/vraag van een andere staan.
+  for (const a of items) {
+    const sleutels = sleutelwoorden(a.antwoord).filter((w) => w.length >= 5);
+    if (!sleutels.length) continue;
+    for (const b of items) {
+      if (a === b || zelfdeGroep(a, b)) continue;
+      const tekst = new Set(sleutelwoorden(`${b.context} ${b.kern}`));
+      const hit = sleutels.filter((w) => tekst.has(w));
+      if (hit.length && hit.length / sleutels.length >= 0.5) {
+        notitie(b, `noem "${a.antwoord}" niet in de vraagtekst (dat is het antwoord op de vraag over "${a.begrip}")`);
+        meld("weggever", `"${b.begrip}" verklapt het antwoord van "${a.begrip}"`, "zacht", true);
+      }
+    }
+  }
+
+  // 7. School(namen) uit situaties.
+  for (const it of items) {
+    if (SCHOOL_RE.test(`${it.context} ${it.kern}`)) {
+      it.context = it.context.replace(SCHOOL_RE, "").trim();
+      notitie(it, "noem geen school of schoolnaam");
+      meld("school", `schoolnaam in "${it.begrip}"`, "hard", true);
+    }
+  }
+
+  // 8. RTTI: minstens één I-vraag als het doel dat vraagt; daarna punten op het doel brengen.
+  if (q.rttiPunten.I > 0 && !items.some((it) => it.rtti === "I")) {
+    const kandidaat = items.find((it) => !isGesloten(it) && it.rtti === "T2" && (it.vorm === "uitleg" || it.vorm === "kort")) ?? items.find((it) => !isGesloten(it) && it.rtti === "T2");
+    if (kandidaat) {
+      kandidaat.rtti = "I";
+      kandidaat.punten = Math.max(2, kandidaat.punten);
+      notitie(kandidaat, "I-vraag: nieuwe, onbekende situatie waarin de leerling zelf een redenering opbouwt");
+      meld("rtti", `geen I-vraag → "${kandidaat.begrip}" wordt I`, "zacht", true);
+    }
+  }
+  const verschil = q.punten - items.reduce((s, it) => s + it.punten, 0);
+  if (verschil !== 0) {
+    const rang: Record<Rtti, number> = { I: 0, T2: 1, T1: 2, R: 3 };
+    const open = items.filter((it) => !isGesloten(it));
+    let rest = verschil;
+    const kandidaten = (plus: boolean) =>
+      open
+        .filter((it) => (plus ? it.punten < (it.vorm === "reken" || it.rtti !== "R" ? 4 : 2) : it.punten > (it.vorm === "reken" ? 2 : 1)))
+        .sort((a, b) => {
+          const meerstaps = (x: PlanItem) => (x.vorm === "reken" || x.vorm === "uitleg" ? 0 : 1);
+          return (plus ? meerstaps(a) - meerstaps(b) || rang[a.rtti] - rang[b.rtti] : rang[b.rtti] - rang[a.rtti] || meerstaps(b) - meerstaps(a)) || (plus ? a.punten - b.punten : b.punten - a.punten);
+        });
+    for (let ronde = 0; rest !== 0 && ronde < 3; ronde++) {
+      for (const it of kandidaten(rest > 0)) {
+        if (rest === 0) break;
+        it.punten += rest > 0 ? 1 : -1;
+        rest += rest > 0 ? -1 : 1;
+      }
+    }
+    meld("punten", `plan had ${q.punten - verschil} punten → ${q.punten - rest} (doel ${q.punten})`, Math.abs(rest) > 2 ? "hard" : "zacht", Math.abs(rest) <= 2);
+  }
+  const r = rttiPuntenVan(items);
+  const tot = Math.max(1, q.punten);
+  const afw = (["R", "T1", "T2", "I"] as Rtti[]).map((l) => Math.abs(r[l] - q.rttiPunten[l]) / tot);
+  if (Math.max(...afw) > 0.12) meld("rtti", `RTTI-punten R ${r.R}/T1 ${r.T1}/T2 ${r.T2}/I ${r.I} vs doel ${q.rttiPunten.R}/${q.rttiPunten.T1}/${q.rttiPunten.T2}/${q.rttiPunten.I}`, "zacht", false);
+
+  // 9. Volgorde: gesloten eerst, groepen aaneen; daarna doornummeren.
+  const eerste = new Map<string, number>();
+  items.forEach((it, i) => {
+    if (it.groep && !eerste.has(it.groep)) eerste.set(it.groep, i);
+  });
+  const geordend = items
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => Number(!isGesloten(a.it)) - Number(!isGesloten(b.it)) || (a.it.groep ? eerste.get(a.it.groep)! : a.i) - (b.it.groep ? eerste.get(b.it.groep)! : b.i) || a.i - b.i)
+    .map(({ it }, i) => ({ ...it, n: i + 1 }));
+  return { plan: { versie: 1, items: geordend, reserve: reserve.map((it, i) => ({ ...it, n: geordend.length + i + 1 })) }, issues };
+}
+
+/** Harde problemen die na herstel overblijven (dan valt de app terug op de oude route). */
+export function openHard(issues: PlanIssue[]): PlanIssue[] {
+  return issues.filter((i) => i.ernst === "hard" && !i.hersteld);
+}
