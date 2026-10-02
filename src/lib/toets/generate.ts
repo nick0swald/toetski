@@ -379,6 +379,7 @@ async function genereerRuw(invoer: GenerateData, kosten: Kosten = nieuweKosten()
 /** Plan-first route (zie bouwplan.ts, bouwplan-check.ts, plan-schrijven.ts). */
 async function schrijfViaPlan(o: { system: string; basisPrompt: string; quota: PlanQuota; deadline: number; kosten: Kosten }): Promise<GeneratedPayload | null> {
   const ruwPlan = await maakBouwplan({ system: o.system, voorvoegsel: o.basisPrompt, quota: o.quota, rest: () => o.deadline - Date.now(), kosten: o.kosten });
+  console.info(`[generate] bouwplan via ${ruwPlan.route ?? "plan-model"}`);
   let { plan, issues } = herstelBouwplan(ruwPlan, o.quota);
   if (PLAN.kritiek && o.deadline - Date.now() > 100_000) {
     const k = await kritiseerBouwplan({ system: o.system, voorvoegsel: o.basisPrompt, plan, rest: () => o.deadline - Date.now(), kosten: o.kosten });
@@ -408,7 +409,7 @@ async function schrijfViaPlan(o: { system: string; basisPrompt: string; quota: P
   const samen = voegStukkenSamen(res, stukken, o.quota);
   const namen = ontdubbelNamen(samen.vragen, samen.nakijkmodel);
   if (namen.vervangen.length) console.info("[generate] namen ontdubbeld:", namen.vervangen.join("; "));
-  return { ...samen, vragen: namen.vragen, nakijkmodel: namen.nakijkmodel, bouwplan: { ...plan, issues } };
+  return { ...samen, vragen: namen.vragen, nakijkmodel: namen.nakijkmodel, bouwplan: { ...plan, issues, ...(ruwPlan.route ? { route: ruwPlan.route } : {}) } };
 }
 
 /** Eén schrijf-aanroep (rol "schrijven") met één herkansing voor kapotte JSON, binnen de deadline. */

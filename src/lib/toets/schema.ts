@@ -243,6 +243,7 @@ export const generatedPayloadSchema = z.object({
       items: z.array(planItemSchema).max(80),
       reserve: z.array(planItemSchema).max(20),
       issues: z.array(z.object({ code: z.string(), detail: z.string(), ernst: z.string(), hersteld: z.boolean() })).max(80).optional(),
+      route: z.string().max(40).optional(),
     })
     .nullish()
     .transform((x) => x ?? undefined),
