@@ -1,0 +1,44 @@
+{
+ "titel": "Natuur- en scheikunde 1 · voorbeeldtoets stap 0",
+ "ondertitel": "12 vaste specs uit de 62 voorbeeldvragen (15 vragen)",
+ "minuten": 90,
+ "nTerm": 1.0,
+ "vragen": [
+  "se41-bloempot",
+  "se41-boomstam",
+  "se41-krat",
+  "se41-bakfiets",
+  "se42-sleutelhanger",
+  "se42-toongenerator",
+  "se43-stoelverwarming",
+  "se43-afzuigkap",
+  "se43-sanne",
+  "se44-tram",
+  "se44-skeeler",
+  "alg-lampje"
+ ],
+ "delen": [
+  {
+   "naam": "Deel A",
+   "vragen": [
+    "se41-bloempot",
+    "se41-boomstam",
+    "se41-krat",
+    "se41-bakfiets",
+    "se42-sleutelhanger",
+    "se42-toongenerator"
+   ]
+  },
+  {
+   "naam": "Deel B",
+   "vragen": [
+    "se43-stoelverwarming",
+    "se43-afzuigkap",
+    "se43-sanne",
+    "se44-tram",
+    "se44-skeeler",
+    "alg-lampje"
+   ]
+  }
+ ]
+}

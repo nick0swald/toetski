@@ -1,0 +1,117 @@
+{
+ "soort": "vraag",
+ "id": "se44-tram",
+ "vraagtype": {
+  "nr": 36,
+  "code": "B-ACC",
+  "naam": "Versnelling berekenen (a = Δv/Δt)",
+  "cse": [
+   2,
+   0,
+   19
+  ]
+ },
+ "se": "SE4.4",
+ "hoofdstuk": "Versnelling (a = Δv / Δt)",
+ "niveau": "vooral GT",
+ "punten": 3,
+ "leerdoel": "K/8.3 versnelling bepalen uit een (v,t)-diagram",
+ "context": [
+  "Een tram vertrekt bij een halte. In het (v,t)-diagram zie je de snelheid van de tram in de eerste 14 seconden."
+ ],
+ "figuur": {
+  "type": "grafiek",
+  "x": {
+   "label": "t (s)",
+   "min": 0,
+   "max": 14,
+   "stap": 1
+  },
+  "y": {
+   "label": "v (m/s)",
+   "min": 0,
+   "max": 16,
+   "stap": 2
+  },
+  "reeksen": [
+   {
+    "punten": [
+     [
+      0,
+      0
+     ],
+     [
+      8,
+      12
+     ],
+     [
+      14,
+      12
+     ]
+    ],
+    "vorm": "lijn"
+   }
+  ],
+  "breedteCm": 11.0,
+  "controle": [
+   {
+    "meting": "y@8",
+    "parameter": "v1"
+   },
+   {
+    "meting": "y@0",
+    "verwacht": 0
+   },
+   {
+    "meting": "y@14",
+    "parameter": "v1"
+   }
+  ]
+ },
+ "stam": "Bepaal met het diagram de versnelling van de tram in de eerste 8 seconden.",
+ "antwoordregels": 4,
+ "antwoordmodel": {
+  "regels": [
+   "a = 1,5 m/s²",
+   "uitwerking: Δv = 12 − 0 = 12 m/s; Δt = 8,0 s; a = Δv / Δt = 12 / 8,0 = 1,5 m/s²"
+  ]
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "aflezen van Δv (12 m/s) en Δt (8 s)",
+   "punten": 1
+  },
+  {
+   "omschrijving": "gebruik van a = Δv / Δt",
+   "punten": 1
+  },
+  {
+   "omschrijving": "rest van de berekening juist",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "v1",
+   "waarde": 12,
+   "bron": "figuur",
+   "eenheid": "m/s"
+  },
+  {
+   "naam": "t1",
+   "waarde": 8,
+   "bron": "tekst",
+   "eenheid": "s"
+  }
+ ],
+ "berekeningen": [
+  {
+   "naam": "a",
+   "formule": "v1 / t1",
+   "waarde": 1.5,
+   "eenheid": "m/s²",
+   "afgerond": "1,5"
+  }
+ ]
+}

@@ -7,7 +7,6 @@ import {
   Packer,
   PageBreak,
   TableLayoutType,
-  PageNumber,
   Paragraph,
   Table,
   TableCell,
@@ -15,8 +14,6 @@ import {
   TextRun,
   WidthType,
   HeightRule,
-  Header,
-  Footer,
   VerticalAlign,
 } from "docx";
 import { RTTI_META, RTTI_ORDER } from "./constants";
@@ -28,6 +25,7 @@ import { blokkenVoorVraag, tekenvakMaat } from "./blad-volgorde";
 import { figuurIsGeldig } from "./figuren/bevriezing";
 import type { CijferNorm, GegenereerdeToets, GoedgekeurdeFiguur, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
+import { PAGE_A4, PAGE_MARGINS, pageNumberChrome } from "./docx-pagina";
 import { startGroep } from "./context-groepen";
 import { leerdoelDekking } from "./leerdoelen-plan";
 
@@ -42,8 +40,6 @@ const FONT = "Arial";
 const BODY_SIZE = 24; // 12pt
 const SMALL_SIZE = 20; // 10pt
 /** ~2.5cm / 2cm in twips (1cm ≈ 567). */
-const PAGE_MARGINS = { top: 1418, right: 1418, bottom: 1134, left: 1418 };
-const PAGE_A4 = { width: 11906, height: 16838 };
 
 type DocChild = Paragraph | Table;
 
@@ -328,25 +324,6 @@ function metaPair(label: string, value: string) {
 }
 
 
-function pageNumberChrome() {
-  return {
-    headers: {
-      default: new Header({ children: [new Paragraph({ children: [] })] }),
-    },
-    footers: {
-      default: new Footer({
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: SMALL_SIZE, color: MUTED }),
-            ],
-          }),
-        ],
-      }),
-    },
-  };
-}
 
 /** Voorblad-cel: label + waarde (of invullijn). */
 function voorbladCel(

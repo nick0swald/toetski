@@ -38,3 +38,13 @@ Zonder rechtercijfers valt `poort` (per case) terug op het rubriekcijfer. Zelfde
 Verhoog `RUBRIEK_VERSIE` bij elke rubriekwijziging en scoor de baseline opnieuw.
 
 `baselines/` bevat de vaste baseline-toets (productie 8079c92) die ook `rubric.test.ts` gebruikt.
+
+## Waakhond (timeout, hang-detectie, kostenlog)
+
+Draai lange runs via `scripts/eval/waakhond.mjs`, bijvoorbeeld:
+
+```
+node scripts/eval/waakhond.mjs --timeout 900 --stil 180 --max-usd 2 -- node scripts/eval/met-plaatjes.mjs ...
+```
+
+Na `--timeout` seconden, of na `--stil` seconden zonder uitvoer/hartslag (`$WAAKHOND_HARTSLAG`), wordt het kind afgebroken (exitcode 124). Elke run komt als één regel in `eval-out/kosten.jsonl` (duur, status, reden, geschatte kosten uit de `$`-bedragen in de uitvoer). Het kind krijgt alleen `XAI_API_KEY = TOETSKI_XAI_API_KEY`.

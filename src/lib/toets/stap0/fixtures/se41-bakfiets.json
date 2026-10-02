@@ -1,0 +1,110 @@
+{
+ "soort": "vraag",
+ "id": "se41-bakfiets",
+ "vraagtype": {
+  "nr": 21,
+  "code": "K-DRUK",
+  "naam": "Druk berekenen met p = F/A",
+  "cse": [
+   6,
+   12,
+   15
+  ]
+ },
+ "se": "SE4.1",
+ "hoofdstuk": "Druk (p = F/A)",
+ "ookIn": "SE4.4",
+ "niveau": "BB/KB/GT",
+ "punten": 3,
+ "leerdoel": "K/9.4 druk berekenen met p = F/A",
+ "context": [
+  "Bram vervoert zijn hond en boodschappen in een bakfiets met drie wielen. De bakfiets met lading en Bram heeft samen een massa van 180 kg. Elke band raakt de weg met een oppervlakte van 12 cm².",
+  "Gebruik g = 10 N/kg."
+ ],
+ "stam": "Bereken de druk van de banden op de weg in N/cm².",
+ "antwoordregels": 4,
+ "antwoordmodel": {
+  "regels": [
+   "p = 50 N/cm² (= 5,0·10<sup>5</sup> Pa)",
+   "uitwerking: F<sub>z</sub> = m · g = 180 · 10 = 1800 N; A = 3 · 12 = 36 cm²; p = F / A = 1800 / 36 = 50 N/cm²"
+  ],
+  "opmerking": "Als met de oppervlakte van één band is gerekend (p = 150 N/cm²), maximaal 2 scorepunten toekennen."
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "berekenen van de zwaartekracht (1800 N)",
+   "punten": 1
+  },
+  {
+   "omschrijving": "gebruik van p = F / A met de totale oppervlakte van drie banden (36 cm²)",
+   "punten": 1
+  },
+  {
+   "omschrijving": "rest van de berekening juist",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "m",
+   "waarde": 180,
+   "bron": "tekst",
+   "eenheid": "kg"
+  },
+  {
+   "naam": "g",
+   "waarde": 10,
+   "bron": "tekst",
+   "eenheid": "N/kg"
+  },
+  {
+   "naam": "n",
+   "waarde": 3,
+   "bron": "tekst",
+   "weergave": "drie"
+  },
+  {
+   "naam": "A1",
+   "waarde": 12,
+   "bron": "tekst",
+   "eenheid": "cm²"
+  }
+ ],
+ "berekeningen": [
+  {
+   "naam": "Fz",
+   "formule": "m * g",
+   "waarde": 1800,
+   "eenheid": "N",
+   "afgerond": "1800"
+  },
+  {
+   "naam": "A",
+   "formule": "n * A1",
+   "waarde": 36,
+   "eenheid": "cm²",
+   "afgerond": "36"
+  },
+  {
+   "naam": "p",
+   "formule": "Fz / A",
+   "waarde": 50,
+   "eenheid": "N/cm²",
+   "afgerond": "50"
+  },
+  {
+   "naam": "pPa",
+   "formule": "p * 10000",
+   "waarde": 500000,
+   "eenheid": "Pa"
+  },
+  {
+   "naam": "pFout",
+   "formule": "Fz / A1",
+   "waarde": 150,
+   "eenheid": "N/cm²",
+   "afgerond": "150"
+  }
+ ]
+}

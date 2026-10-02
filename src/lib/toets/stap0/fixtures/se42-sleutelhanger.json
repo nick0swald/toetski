@@ -1,0 +1,130 @@
+{
+ "soort": "vraag",
+ "id": "se42-sleutelhanger",
+ "vraagtype": {
+  "nr": 5,
+  "code": "W-DICHT",
+  "naam": "Dichtheid/massa/volume berekenen (ρ = m/V)",
+  "cse": [
+   9,
+   14,
+   30
+  ]
+ },
+ "se": "SE4.2",
+ "hoofdstuk": "Materie: dichtheid berekenen + Binas",
+ "niveau": "BB/KB/GT",
+ "punten": 3,
+ "leerdoel": "K/4.2 dichtheid bepalen met maatcilinder en ρ = m/V",
+ "context": [
+  "Lisa vindt een metalen sleutelhanger. Ze wil weten van welk metaal hij is gemaakt. De massa is 63,0 g. Ze bepaalt het volume met een maatcilinder met water (zie figuur)."
+ ],
+ "figuur": {
+  "type": "maatcilinder",
+  "cilinders": [
+   {
+    "niveau": 30,
+    "label": "vóór"
+   },
+   {
+    "niveau": 38,
+    "label": "ná",
+    "voorwerp": true
+   }
+  ],
+  "max": 50,
+  "streep": 1,
+  "getalElke": 10,
+  "breedteCm": 6.5,
+  "controle": [
+   {
+    "meting": "niveau1",
+    "parameter": "V1"
+   },
+   {
+    "meting": "niveau2",
+    "parameter": "V2"
+   }
+  ]
+ },
+ "stam": "Bereken de dichtheid van de sleutelhanger en noteer met behulp van Binas van welk metaal hij gemaakt kan zijn.",
+ "antwoordregels": 4,
+ "antwoordmodel": {
+  "regels": [
+   "ρ = 7,9 g/cm³ (7,88 g/cm³) → ijzer (Binas: 7,87 g/cm³)",
+   "uitwerking: V = 38 − 30 = 8,0 mL = 8,0 cm³; ρ = m / V = 63,0 / 8,0 = 7,9 g/cm³"
+  ]
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "aflezen van het volume (8,0 cm³)",
+   "punten": 1
+  },
+  {
+   "omschrijving": "gebruik van ρ = m / V",
+   "punten": 1
+  },
+  {
+   "omschrijving": "rest van de berekening juist en conclusie ijzer (of staal)",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "m",
+   "waarde": 63.0,
+   "bron": "tekst",
+   "eenheid": "g",
+   "weergave": "63,0"
+  },
+  {
+   "naam": "V1",
+   "waarde": 30,
+   "bron": "figuur",
+   "eenheid": "mL"
+  },
+  {
+   "naam": "V2",
+   "waarde": 38,
+   "bron": "figuur",
+   "eenheid": "mL"
+  },
+  {
+   "naam": "rhoIJzer",
+   "waarde": 7.87,
+   "bron": "binas",
+   "eenheid": "g/cm³"
+  }
+ ],
+ "berekeningen": [
+  {
+   "naam": "V",
+   "formule": "V2 - V1",
+   "waarde": 8,
+   "eenheid": "cm³",
+   "afgerond": "8,0"
+  },
+  {
+   "naam": "rho",
+   "formule": "m / V",
+   "waarde": 7.875,
+   "eenheid": "g/cm³",
+   "afgerond": "7,9"
+  },
+  {
+   "naam": "rhoExact",
+   "formule": "m / V",
+   "waarde": 7.875,
+   "eenheid": "g/cm³",
+   "afgerond": "7,88"
+  },
+  {
+   "naam": "verschil",
+   "formule": "abs(rho - rhoIJzer)",
+   "waarde": 0.005,
+   "eenheid": "g/cm³",
+   "tolerantie": 1e-06
+  }
+ ]
+}

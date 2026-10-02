@@ -1,0 +1,210 @@
+{
+ "soort": "vraag",
+ "id": "alg-lampje",
+ "vraagtype": {
+  "nr": 12,
+  "code": "S-GRAF",
+  "naam": "Grafiek tekenen uit meetgegevens",
+  "cse": [
+   6,
+   13,
+   24
+  ]
+ },
+ "se": "ALG",
+ "hoofdstuk": "Vaardigheid: grafiek tekenen (context SE4.3)",
+ "ookIn": "SE4.3",
+ "niveau": "BB/KB/GT",
+ "punten": 3,
+ "leerdoel": "V/2.3 grafiek tekenen uit een tabel",
+ "context": [
+  "Eva meet de stroomsterkte door een lampje bij verschillende spanningen. Haar metingen staan in de tabel."
+ ],
+ "tabel": [
+  [
+   "U (V)",
+   "0",
+   "1,0",
+   "2,0",
+   "3,0",
+   "4,0",
+   "5,0",
+   "6,0"
+  ],
+  [
+   "I (mA)",
+   "0",
+   "60",
+   "95",
+   "120",
+   "140",
+   "158",
+   "172"
+  ]
+ ],
+ "figuur": {
+  "type": "grafiek",
+  "x": {
+   "label": "U (V)",
+   "min": 0,
+   "max": 7,
+   "stap": 1,
+   "fijn": 0.5
+  },
+  "y": {
+   "label": "I (mA)",
+   "min": 0,
+   "max": 10,
+   "stap": 1,
+   "fijn": 0.5,
+   "zonderGetallen": true
+  },
+  "reeksen": [],
+  "breedteCm": 10.5,
+  "controle": [
+   {
+    "meting": "reeksen",
+    "verwacht": 0
+   }
+  ]
+ },
+ "stam": "Deel de verticale as in, zet alle meetpunten in het diagram en teken de grafiek.",
+ "antwoordregels": 0,
+ "antwoordmodel": {
+  "regels": [
+   "verticale as bijvoorbeeld in stappen van 20 mA per groot hokje (0–200 mA); 7 meetpunten; vloeiende, steeds minder steile lijn door (0,0) (zie figuur)."
+  ],
+  "verbergLeerlingFiguur": true,
+  "figuur": {
+   "type": "grafiek",
+   "x": {
+    "label": "U (V)",
+    "min": 0,
+    "max": 7,
+    "stap": 1,
+    "fijn": 0.5
+   },
+   "y": {
+    "label": "I (mA)",
+    "min": 0,
+    "max": 200,
+    "stap": 20,
+    "fijn": 10
+   },
+   "reeksen": [
+    {
+     "punten": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       60
+      ],
+      [
+       2,
+       95
+      ],
+      [
+       3,
+       120
+      ],
+      [
+       4,
+       140
+      ],
+      [
+       5,
+       158
+      ],
+      [
+       6,
+       172
+      ]
+     ],
+     "vorm": "punten"
+    },
+    {
+     "punten": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       60
+      ],
+      [
+       2,
+       95
+      ],
+      [
+       3,
+       120
+      ],
+      [
+       4,
+       140
+      ],
+      [
+       5,
+       158
+      ],
+      [
+       6,
+       172
+      ]
+     ],
+     "vorm": "vloeiend",
+     "rood": true
+    }
+   ],
+   "breedteCm": 10.5,
+   "controle": [
+    {
+     "meting": "y@3",
+     "parameter": "I3"
+    },
+    {
+     "meting": "y@6",
+     "parameter": "I6"
+    },
+    {
+     "meting": "y@0",
+     "verwacht": 0
+    }
+   ]
+  },
+  "opmerking": "Een rechte lijn of ‘punt-tot-punt’-lijn: het derde scorepunt niet toekennen."
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "verticale as gelijkmatig ingedeeld (met getallen)",
+   "punten": 1
+  },
+  {
+   "omschrijving": "alle meetpunten juist gezet",
+   "punten": 1
+  },
+  {
+   "omschrijving": "vloeiende lijn door de punten en door de oorsprong",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "I3",
+   "waarde": 120,
+   "bron": "tekst",
+   "eenheid": "mA"
+  },
+  {
+   "naam": "I6",
+   "waarde": 172,
+   "bron": "tekst",
+   "eenheid": "mA"
+  }
+ ]
+}

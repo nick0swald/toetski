@@ -19,10 +19,11 @@
     "test": "npm run test:scripts && npm run test:app",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:scripts": "node --test scripts/brand-check.test.mjs scripts/browser-smoke-verdict.test.mjs scripts/check-auth-invariant.test.mjs scripts/preview.test.mjs scripts/sign-out-plan.test.mjs scripts/with-app-env.test.mjs scripts/write-atomic.test.mjs scripts/eval/docx-tekenvak.test.mjs",
+    "test:scripts": "node --test scripts/brand-check.test.mjs scripts/browser-smoke-verdict.test.mjs scripts/check-auth-invariant.test.mjs scripts/preview.test.mjs scripts/sign-out-plan.test.mjs scripts/with-app-env.test.mjs scripts/write-atomic.test.mjs scripts/eval/docx-tekenvak.test.mjs scripts/eval/waakhond.test.mjs",
     "test:app": "node --experimental-strip-types --no-warnings --test 'src/**/*.test.ts'",
     "test:platform": "node --test scripts/grok-pwa-plugin.test.mjs scripts/migration-plan.test.mjs",
-    "eval": "node scripts/eval/eval.mjs"
+    "eval": "node scripts/eval/eval.mjs",
+    "stap0:render": "node --experimental-strip-types --no-warnings scripts/stap0/render.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
@@ -55,6 +56,7 @@
     "@tanstack/react-start": "^1.168.60",
     "@tanstack/react-table": "^8.21.0",
     "@tanstack/router-plugin": "^1.168.0",
+    "ajv": "^8.20.0",
     "better-auth": "~1.6.30",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -67,6 +69,7 @@
     "lucide-react": "^0.510.0",
     "mammoth": "^1.12.2",
     "pdfjs-dist": "^6.3.289",
+    "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
@@ -86,6 +89,7 @@
   "devDependencies": {
     "@eslint/js": "^9.20.0",
     "@types/node": "^22.16.5",
+    "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

@@ -1,0 +1,136 @@
+{
+ "soort": "vraag",
+ "id": "se43-stoelverwarming",
+ "vraagtype": {
+  "nr": 60,
+  "code": "E-RV",
+  "naam": "Vervangingsweerstand serie/parallel berekenen",
+  "cse": [
+   0,
+   2,
+   5
+  ]
+ },
+ "se": "SE4.3",
+ "hoofdstuk": "Vervangingsweerstand",
+ "niveau": "vooral GT",
+ "punten": 2,
+ "leerdoel": "K/6.5 vervangingsweerstand van een parallelschakeling berekenen",
+ "context": [
+  "In een stoelverwarming van een auto zitten twee verwarmingsdraden die parallel zijn geschakeld (zie schakelschema)."
+ ],
+ "figuur": {
+  "type": "schakelschema",
+  "bron": {
+   "soort": "cel",
+   "label": "12 V"
+  },
+  "takken": [
+   {
+    "onderdelen": [
+     {
+      "soort": "weerstand",
+      "label": "R1 = 40 Ω"
+     }
+    ]
+   },
+   {
+    "onderdelen": [
+     {
+      "soort": "weerstand",
+      "label": "R2 = 120 Ω"
+     }
+    ]
+   }
+  ],
+  "breedteCm": 9.0,
+  "controle": [
+   {
+    "meting": "R1",
+    "parameter": "R1"
+   },
+   {
+    "meting": "R2",
+    "parameter": "R2"
+   },
+   {
+    "meting": "U",
+    "parameter": "U"
+   },
+   {
+    "meting": "stippen",
+    "verwacht": 2
+   }
+  ]
+ },
+ "stam": "Bereken de vervangingsweerstand van de twee verwarmingsdraden.",
+ "antwoordregels": 3,
+ "antwoordmodel": {
+  "regels": [
+   "R<sub>v</sub> = 30 Ω",
+   "uitwerking: 1/R<sub>v</sub> = 1/40 + 1/120 = 3/120 + 1/120 = 4/120 → R<sub>v</sub> = 30 Ω"
+  ],
+  "opmerking": "Ook goed: I<sub>1</sub> = 12/40 = 0,30 A; I<sub>2</sub> = 12/120 = 0,10 A; R<sub>v</sub> = 12 / 0,40 = 30 Ω."
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "gebruik van 1/R<sub>v</sub> = 1/R<sub>1</sub> + 1/R<sub>2</sub>",
+   "punten": 1
+  },
+  {
+   "omschrijving": "rest van de berekening juist",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "R1",
+   "waarde": 40,
+   "bron": "figuur",
+   "eenheid": "Ω"
+  },
+  {
+   "naam": "R2",
+   "waarde": 120,
+   "bron": "figuur",
+   "eenheid": "Ω"
+  },
+  {
+   "naam": "U",
+   "waarde": 12,
+   "bron": "figuur",
+   "eenheid": "V"
+  }
+ ],
+ "berekeningen": [
+  {
+   "naam": "Rv",
+   "formule": "1 / (1/R1 + 1/R2)",
+   "waarde": 30,
+   "eenheid": "Ω",
+   "afgerond": "30"
+  },
+  {
+   "naam": "I1",
+   "formule": "U / R1",
+   "waarde": 0.3,
+   "eenheid": "A",
+   "afgerond": "0,30"
+  },
+  {
+   "naam": "I2",
+   "formule": "U / R2",
+   "waarde": 0.1,
+   "eenheid": "A",
+   "afgerond": "0,10"
+  },
+  {
+   "naam": "RvViaI",
+   "formule": "U / (I1 + I2)",
+   "waarde": 30,
+   "eenheid": "Ω",
+   "afgerond": "30"
+  }
+ ]
+}

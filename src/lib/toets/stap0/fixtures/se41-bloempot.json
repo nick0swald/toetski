@@ -1,0 +1,140 @@
+{
+ "soort": "vraag",
+ "id": "se41-bloempot",
+ "vraagtype": {
+  "nr": 22,
+  "code": "K-VECT",
+  "naam": "Kracht tekenen met krachtenschaal",
+  "cse": [
+   7,
+   12,
+   14
+  ]
+ },
+ "se": "SE4.1",
+ "hoofdstuk": "Krachten tekenen (krachtenschaal)",
+ "niveau": "BB/KB/GT",
+ "punten": 3,
+ "leerdoel": "K/9.1 kracht als pijl op schaal tekenen",
+ "context": [
+  "Sophie hangt een bloempot met plant aan een haak in de veranda. De bloempot met aarde en plant heeft een massa van 6,0 kg. Z is het zwaartepunt van de bloempot.",
+  "Gebruik g = 10 N/kg. De krachtenschaal is 1 cm ≙ 20 N."
+ ],
+ "figuur": {
+  "type": "krachten",
+  "breedteCm": 7.0,
+  "hoogteCm": 9.0,
+  "schaalN": 20,
+  "voorwerp": "bloempot",
+  "punt": [
+   3.5,
+   4.9
+  ],
+  "puntLabel": "Z",
+  "pijlen": [],
+  "controle": [
+   {
+    "meting": "pijlen",
+    "verwacht": 0
+   },
+   {
+    "meting": "breedteCm",
+    "verwacht": 7.0
+   }
+  ]
+ },
+ "stam": "Teken in de figuur de zwaartekracht op de bloempot.",
+ "antwoordregels": 2,
+ "antwoordmodel": {
+  "regels": [
+   "F<sub>z</sub> = m · g = 6,0 · 10 = 60 N → pijl van 60 / 20 = 3,0 cm, vanuit Z recht omlaag (zie figuur)."
+  ],
+  "figuur": {
+   "type": "krachten",
+   "breedteCm": 7.0,
+   "hoogteCm": 9.0,
+   "schaalN": 20,
+   "voorwerp": "bloempot",
+   "punt": [
+    3.5,
+    4.9
+   ],
+   "puntLabel": "Z",
+   "pijlen": [
+    {
+     "naam": "Fz",
+     "grootteN": 60,
+     "hoek": 270,
+     "label": "F<sub>z</sub> = 60 N\n(3,0 cm)",
+     "rood": true
+    }
+   ],
+   "controle": [
+    {
+     "meting": "Fz.N",
+     "parameter": "Fz"
+    },
+    {
+     "meting": "Fz.lengteCm",
+     "parameter": "lengte"
+    },
+    {
+     "meting": "Fz.hoek",
+     "verwacht": 270
+    }
+   ]
+  }
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "berekenen van F<sub>z</sub> = 60 N",
+   "punten": 1
+  },
+  {
+   "omschrijving": "pijl begint in Z en wijst verticaal omlaag",
+   "punten": 1
+  },
+  {
+   "omschrijving": "lengte van de pijl 3,0 cm (marge 0,1 cm)",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "m",
+   "waarde": 6.0,
+   "bron": "tekst",
+   "eenheid": "kg",
+   "weergave": "6,0"
+  },
+  {
+   "naam": "g",
+   "waarde": 10,
+   "bron": "tekst",
+   "eenheid": "N/kg"
+  },
+  {
+   "naam": "schaal",
+   "waarde": 20,
+   "bron": "tekst",
+   "eenheid": "N/cm"
+  }
+ ],
+ "berekeningen": [
+  {
+   "naam": "Fz",
+   "formule": "m * g",
+   "waarde": 60,
+   "eenheid": "N",
+   "afgerond": "60"
+  },
+  {
+   "naam": "lengte",
+   "formule": "Fz / schaal",
+   "waarde": 3.0,
+   "eenheid": "cm",
+   "afgerond": "3,0"
+  }
+ ]
+}

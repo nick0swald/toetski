@@ -1,0 +1,138 @@
+{
+ "soort": "vraag",
+ "id": "se43-afzuigkap",
+ "vraagtype": {
+  "nr": 14,
+  "code": "E-SCHEMA",
+  "naam": "Schakelschema tekenen/aanvullen",
+  "cse": [
+   6,
+   10,
+   25
+  ]
+ },
+ "se": "SE4.3",
+ "hoofdstuk": "Schakelschema tekenen",
+ "niveau": "BB/KB/GT",
+ "punten": 2,
+ "leerdoel": "K/6.2 schakelschema met NEN-symbolen aanvullen",
+ "context": [
+  "Een afzuigkap boven het fornuis heeft een lamp en een motor (ventilator). De lamp en de motor kunnen elk apart worden aan- en uitgezet. Op beide staat een spanning van 230 V. Hieronder zie je een deel van het schakelschema."
+ ],
+ "figuur": {
+  "type": "schakelschema",
+  "bron": {
+   "soort": "wisselbron",
+   "label": "230 V"
+  },
+  "takken": [
+   {
+    "onderdelen": [
+     {
+      "soort": "schakelaar",
+      "label": "S1"
+     },
+     {
+      "soort": "lamp",
+      "label": "lamp"
+     }
+    ]
+   }
+  ],
+  "vrijeRuimte": true,
+  "breedteCm": 6.0,
+  "controle": [
+   {
+    "meting": "U",
+    "parameter": "U"
+   },
+   {
+    "meting": "aantal.lamp",
+    "verwacht": 1
+   },
+   {
+    "meting": "stippen",
+    "verwacht": 0
+   }
+  ]
+ },
+ "stam": "Maak het schakelschema compleet met de motor en een schakelaar S2 voor de motor. Gebruik de juiste symbolen.",
+ "antwoordregels": 0,
+ "antwoordmodel": {
+  "regels": [
+   "motor (cirkel met M) met schakelaar S2 (open contact) in serie, samen parallel aan de tak met S1 en de lamp (zie figuur)."
+  ],
+  "figuur": {
+   "type": "schakelschema",
+   "bron": {
+    "soort": "wisselbron",
+    "label": "230 V"
+   },
+   "takken": [
+    {
+     "onderdelen": [
+      {
+       "soort": "schakelaar",
+       "label": "S1"
+      },
+      {
+       "soort": "lamp",
+       "label": "lamp"
+      }
+     ]
+    },
+    {
+     "rood": true,
+     "onderdelen": [
+      {
+       "soort": "schakelaar",
+       "label": "S2"
+      },
+      {
+       "soort": "motor"
+      }
+     ]
+    }
+   ],
+   "breedteCm": 6.6,
+   "controle": [
+    {
+     "meting": "aantal.motor",
+     "verwacht": 1
+    },
+    {
+     "meting": "aantal.schakelaar",
+     "verwacht": 2
+    },
+    {
+     "meting": "takken",
+     "verwacht": 2
+    },
+    {
+     "meting": "stippen",
+     "verwacht": 2
+    }
+   ]
+  },
+  "opmerking": "Als de motor in serie met de lamp staat, geen scorepunten toekennen."
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "juiste symbolen voor motor en schakelaar, S2 in serie met de motor",
+   "punten": 1
+  },
+  {
+   "omschrijving": "motor-tak parallel aan de lamp-tak (gesloten stroomkring)",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "U",
+   "waarde": 230,
+   "bron": "tekst",
+   "eenheid": "V"
+  }
+ ]
+}
