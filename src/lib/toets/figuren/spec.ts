@@ -509,8 +509,8 @@ function woorden(s: string): string[] {
  * vraag bevat: ongeveer even lang, en de vraagzin (laatste zin) en getallen van de oude stam staan erin.
  * Anders blijft de oude stam staan (bijv. planner gaf alleen "Bekijk de grafiek.").
  */
-export function veiligeNieuweStam(oud: string, nieuw: string | undefined): string | undefined {
-  const n = nieuw?.trim();
+export function veiligeNieuweStam(oud: string, nieuw: string | undefined, context?: string): string | undefined {
+  const n = zonderContext(nieuw?.trim(), context);
   if (!n || n === oud.trim()) return undefined;
   if (n.length < Math.min(oud.trim().length * 0.6, oud.trim().length - 10)) return undefined;
   const zinnen = oud.trim().split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -521,4 +521,14 @@ export function veiligeNieuweStam(oud: string, nieuw: string | undefined): strin
   const getallen = oud.match(/\d+(?:[.,]\d+)?/g) ?? [];
   if (getallen.some((g) => !n.includes(g))) return undefined;
   return n;
+}
+
+/** De planner zet de context soms vóór de nieuwe stam; die staat al boven de vraag en mag niet dubbel. */
+function zonderContext(stam: string | undefined, context: string | undefined): string | undefined {
+  const c = context?.trim();
+  if (!stam || !c) return stam;
+  let s = stam;
+  if (s.startsWith(c)) s = s.slice(c.length);
+  else for (const zin of c.split(/(?<=[.?!])\s+/).filter((z) => z.length > 25)) s = s.replace(zin, "");
+  return s.replace(/\s{2,}/g, " ").trim() || stam;
 }

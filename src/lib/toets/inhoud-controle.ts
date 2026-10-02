@@ -1,6 +1,7 @@
 import { findCorrectOptionIndex } from "./mc-balance.ts";
 import { groepIntro } from "./context-groepen.ts";
 import { LIMIETEN } from "./config.ts";
+import { lesstofVoorVragen } from "./lesstof-selectie.ts";
 import { CACHE_GRENS } from "./llm.ts";
 import type { ItemIssue } from "./item-kwaliteit";
 import type { NakijkItem, Rtti, Vraag } from "./types";
@@ -66,9 +67,9 @@ export function controlePrompt(
       nietToekennen: n?.nietToekennen,
     };
   });
-  const antw = bron.antwoorden?.trim() ? `\n\nANTWOORDENBOEK (bron van waarheid):\n${bron.antwoorden.trim().slice(0, LIMIETEN.controleAntwoorden)}` : "";
+  const antw = bron.antwoorden?.trim() ? `\n\nANTWOORDENBOEK (bron van waarheid):\n${lesstofVoorVragen(bron.antwoorden, vragen, LIMIETEN.controleAntwoorden)}` : "";
   // Lesstof + antwoordenboek vormen het vaste (gecachete) voorvoegsel; alleen VRAGEN verschilt per stukje.
-  return `LESSTOF (bron van waarheid):\n${bron.lesstof.trim().slice(0, LIMIETEN.controleLesstof) || "(geen)"}${antw}${CACHE_GRENS}VRAGEN:\n${JSON.stringify(items)}`;
+  return `LESSTOF (bron van waarheid):\n${lesstofVoorVragen(bron.lesstof, vragen, LIMIETEN.controleLesstof) || "(geen)"}${antw}${CACHE_GRENS}VRAGEN:\n${JSON.stringify(items)}`;
 }
 
 /** Beschrijving van de figuurgegevens die de leerling ziet (geen beelddata). */

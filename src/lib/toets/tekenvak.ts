@@ -6,7 +6,7 @@ import type { Tekenvak, Vraag } from "./types";
  * een (bevroren) figuur of grafiek tekent in die figuur en krijgt geen tekenvak.
  */
 
-const TEKEN_OPDRACHT = /(?:^|[.!?:]\s*|\n)\s*(?:teken|schets)\b|\bteken\s+(?:de|een|het|in)\b/i;
+export const TEKEN_OPDRACHT = /(?:^|[.!?:]\s*|\n)\s*(?:teken|schets)\b|\bteken\s+(?:de|een|het|in)\b/i;
 const SCHAAL_RE = /1\s*cm\s*(?:≙|=|≡|komt overeen met|staat voor|is)\s*(\d+(?:[.,]\d+)?)\s*(N|newton|m\/s|m|km|kg)\b/i;
 
 export function isTekenvraag(q: Vraag): boolean {
@@ -46,13 +46,19 @@ export function tekenvakVoor(q: Vraag, groepTekst = ""): Tekenvak {
 }
 
 /** Zet een tekenvak bij elke tekenvraag die er nog geen heeft; haalt het weg als de vraag geen tekenvraag meer is. */
+/** Tekenopdracht voor een schakelschema/stroomkring: een figuur van de kring verklapt het antwoord. */
+export function tekentSchakeling(q: Pick<Vraag, "stam">): boolean {
+  return TEKEN_OPDRACHT.test(q.stam) && /schakel(?:schema|ing)|stroomkring|\bschema\b/i.test(q.stam);
+}
+
 export function zetTekenvakken(vragen: Vraag[]): Vraag[] {
   // Bij een doorlopende context staat de schaal vaak in de gedeelde inleiding (titel of eerste vraag).
   const groep = (q: Vraag) =>
     q.contextTitel?.trim() ? `${q.contextTitel} ${vragen.filter((x) => x.contextTitel === q.contextTitel && x.nummer <= q.nummer).map((x) => x.context ?? "").join(" ")}` : "";
   return vragen.map((q) => {
     if (isTekenvraag(q)) return q.tekenvak ? q : { ...q, tekenvak: tekenvakVoor(q, groep(q)) };
-    if (q.tekenvak && (q.opties?.length || q.figuur || q.figuurId)) {
+    // Ook een vraag die in afwerken is herschreven/vervangen en geen tekenopdracht meer is, verliest zijn oude tekenvak.
+    if (q.tekenvak && (q.opties?.length || q.figuur || q.figuurId || !TEKEN_OPDRACHT.test(q.stam))) {
       const { tekenvak: _t, ...rest } = q;
       return rest;
     }

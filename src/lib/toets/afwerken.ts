@@ -15,6 +15,7 @@ import { groepIntro, herstelGroepen, type Volgorde } from "./context-groepen.ts"
 import { labelRtti } from "./rtti-regels.ts";
 import { kapPunten } from "./plan-schrijven.ts";
 import { LIMIETEN, TIJD } from "./config.ts";
+import { lesstofVoorVragen } from "./lesstof-selectie.ts";
 import { controleerBerekeningen, gVoorToets } from "./reken-check.ts";
 import { dubbelsWeg, kernbegrippen, ontbrekendeKern, samenhangIssues, type Kernbegrip } from "./samenhang.ts";
 import { zetTekenvakken } from "./tekenvak.ts";
@@ -49,7 +50,7 @@ function reparatiePrompt(vragen: Vraag[], nakijk: NakijkItem[], issues: ItemIssu
     })
     .join("\n\n");
   // Lesstof vooraan als vast (gecachet) voorvoegsel; de vragen erna wisselen per stukje.
-  return `Lesstof (kader, niet kopiëren):\n${bron.slice(0, LIMIETEN.reparatieLesstof)}${CACHE_GRENS}Verbeter alleen deze vragen. Houd het nummer. Lever ze compleet terug.\n\n${blok}`;
+  return `Lesstof (kader, niet kopiëren):\n${lesstofVoorVragen(bron, vragen.filter((v) => nummers.includes(v.nummer)), LIMIETEN.reparatieLesstof)}${CACHE_GRENS}Verbeter alleen deze vragen. Houd het nummer. Lever ze compleet terug.\n\n${blok}`;
 }
 
 /**

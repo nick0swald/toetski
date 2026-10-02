@@ -13,6 +13,7 @@ import type {
 import { bewaakFiguren, diepBevriezen, figuurIsGeldig, zonderLegacyFiguren } from "./bevriezing.ts";
 import { vraagZonderFiguur, wijstOpTegenspraak } from "./fallback.ts";
 import type { FiguurOpdracht, FiguurUitkomst } from "./pijplijn.ts";
+import { tekentSchakeling } from "../tekenvak.ts";
 import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, heeftLegacyFiguur, isCodeFiguur, legacySpecs, veiligeNieuweStam } from "./spec.ts";
 
 export interface PlanAntwoord {
@@ -132,7 +133,12 @@ export async function verwerkFiguren(
       jobs.push({ nummer: q.nummer, vraag: licht(zonderLegacyFiguren(q)), nakijk: nakijkVan(q.nummer), spec, legacy: true, verwijst: true });
     }
 
-    const overslaan = vragen.filter((q) => !scope.has(q.nummer) || figuurIsGeldig(q.figuur) || jobs.some((j) => j.nummer === q.nummer)).map((q) => q.nummer);
+    // Niet (opnieuw) plannen: vragen buiten scope, met figuur of job, eerder afgekeurde figuren (de planner negeerde de
+    // hint en plande dezelfde kring opnieuw), en 'teken het schakelschema' (een figuur van de kring verklapt het antwoord).
+    const afgekeurd = new Set(opts.afgekeurd ?? []);
+    const overslaan = vragen
+      .filter((q) => !scope.has(q.nummer) || figuurIsGeldig(q.figuur) || jobs.some((j) => j.nummer === q.nummer) || afgekeurd.has(q.nummer) || tekentSchakeling(q))
+      .map((q) => q.nummer);
     // Planner krijgt hooguit wat er overblijft minus de tijd die een figuur minimaal nodig heeft.
     const plannerTijd = Math.min(20_000, rest() - MIN_FIGUUR_BUDGET_MS - 5_000);
     if (!opts.zonderPlanner && plannerTijd < 5_000 && scope.size) meldingen.push("Geen tijd meer om extra figuren te plannen (60 s-doel).");
@@ -164,7 +170,7 @@ export async function verwerkFiguren(
           if (f.spec.soort === "sfeerplaat" && sfeer >= MAX_SFEERPLATEN_PER_TOETS) continue;
           if (f.spec.soort === "sfeerplaat") sfeer++;
           totaal++;
-          jobs.push({ nummer: q.nummer, vraag: licht(q), nakijk: nakijkVan(q.nummer), spec: f.spec, legacy: false, verwijst: f.verwijst, nieuweStam: veiligeNieuweStam(q.stam, f.nieuweStam) });
+          jobs.push({ nummer: q.nummer, vraag: licht(q), nakijk: nakijkVan(q.nummer), spec: f.spec, legacy: false, verwijst: f.verwijst, nieuweStam: veiligeNieuweStam(q.stam, f.nieuweStam, q.context) });
         }
       } catch (err) {
         meldingen.push(`Figuurplanner mislukt (${err instanceof Error ? err.message.slice(0, 120) : "fout"}).`);
@@ -202,7 +208,7 @@ export async function verwerkFiguren(
       if (!q) return;
       if (u.status === "go" && figuurIsGeldig(u.figuur)) {
         const figuur = diepBevriezen(u.figuur);
-        const nieuw: Vraag = zonderLegacyFiguren({ ...q, stam: veiligeNieuweStam(q.stam, u.nieuweStam) ?? q.stam, figuur });
+        const nieuw: Vraag = zonderLegacyFiguren({ ...q, stam: veiligeNieuweStam(q.stam, u.nieuweStam, q.context) ?? q.stam, figuur });
         delete nieuw.figuurId;
         vragen = vragen.map((v) => (v.nummer === job.nummer ? nieuw : v));
         items.push({ nummer: job.nummer, soort: figuur.soort, bron, status: "go", pogingen: u.pogingen, redenen: figuur.keuring.redenen.slice(0, 3), figuurId: figuur.id, ...(u.uitBank ? { uitBank: true } : {}) });
