@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { GegenereerdeToets } from "../types.ts";
-import { parseRechter, poort, scoorToets } from "./rubric.ts";
+import { parseRechter, poort, poortGemiddeld, scoorToets } from "./rubric.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..", "..", "..");
 const lees = (p: string) => JSON.parse(readFileSync(join(ROOT, p), "utf8"));
@@ -50,5 +50,18 @@ describe("eval-rubriek (vaste baseline 8079c92, energie+geluid 4GT)", () => {
     assert.ok(o);
     const k = scoorToets(baseline, kaseEG.input, o);
     assert.equal(k.criteria.find((c) => c.id === "weggevers")!.bron, "code+rechter");
+  });
+});
+
+describe("poortGemiddeld (mean over 5 cases)", () => {
+  const c = (naam: string, r: number, b: number, hardOk = true) => ({ case: naam, hardOk, rechter: r, baselineRechter: b });
+  it("groen als het gemiddelde ≥ baseline, ook als één case lager is", () => {
+    const p = poortGemiddeld([c("a", 7.67, 7), c("b", 6.5, 7.07), c("c", 6.33, 6.17), c("d", 7, 7), c("e", 7.67, 5.17)]);
+    assert.equal(p.ok, true, p.redenen.join("; "));
+  });
+  it("rood bij een harde fout in één case, bij lager gemiddelde, of bij minder dan 5 cases", () => {
+    assert.equal(poortGemiddeld([c("a", 9, 7), c("b", 9, 7), c("c", 9, 7), c("d", 9, 7), c("e", 9, 7, false)]).ok, false);
+    assert.equal(poortGemiddeld([c("a", 6, 7), c("b", 6, 7), c("c", 6, 7), c("d", 6, 7), c("e", 9, 7)]).ok, false);
+    assert.equal(poortGemiddeld([c("a", 9, 7)]).ok, false);
   });
 });

@@ -110,6 +110,8 @@ export const vraagSchema = z.object({
     .transform((s) => (s?.trim() ? s.trim().slice(0, 24) : undefined)),
   /** Plan-first: RTTI uit het bouwplan; herlabelen houdt dit aan tenzij de regel ≥ 2 stappen afwijkt. */
   rttiPlan: rtti.nullish().transform((r) => r ?? undefined),
+  /** Plan-first: geplande punten; na reparatie/normalisatie nooit meer punten dan dit. */
+  puntenPlan: z.coerce.number().int().min(1).max(6).nullish().transform((n) => n ?? undefined),
   rttiUitleg: z
     .string()
     .nullish()

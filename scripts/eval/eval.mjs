@@ -217,12 +217,34 @@ async function poortCmd(nieuwPad, basisPad) {
   process.exit(p.ok ? 0 : 1);
 }
 
+/**
+ * Poort over alle cases: `poort5 <case>=<nieuw.scores.json> … --baseline-dir <map>` (baseline-bestand per case:
+ * <map>/<case>.scores.json). Groen als het gemiddelde rechtercijfer ≥ gemiddelde baseline en elke case hard 100 %.
+ */
+async function poort5Cmd(paren) {
+  const R = await jiti.import(join(ROOT, "src/lib/toets/eval/rubric.ts"));
+  const dir = opt("baseline-dir");
+  if (typeof dir !== "string") throw new Error("--baseline-dir ontbreekt");
+  const cases = paren.map((p) => {
+    const [naam, pad] = p.split("=");
+    const n = leesJson(pad);
+    const b = leesJson(join(dir, `${naam}.scores.json`));
+    return { case: naam, pad, hardOk: n.hardOk, hardFout: n.hard.filter((h) => !h.ok).map((h) => h.id), rechter: n.rechter?.cijfer, baselineRechter: b.rechter?.cijfer };
+  });
+  for (const c of cases) console.log(`${c.case.padEnd(20)} rechter ${String(c.rechter).padEnd(5)} baseline ${String(c.baselineRechter).padEnd(5)} hard ${c.hardOk ? "OK" : "FAIL"}  ${c.pad}`);
+  const p = R.poortGemiddeld(cases);
+  console.log(`Gemiddeld: ${p.gemiddeld} vs baseline ${p.baseline}`);
+  console.log(p.ok ? "POORT GROEN" : `POORT ROOD: ${p.redenen.join("; ")}`);
+  process.exit(p.ok ? 0 : 1);
+}
+
 const [cmd, a1, a2] = args;
 if (cmd === "genereer" && a1) await genereer(a1);
 else if (cmd === "scoor" && a1) await scoor(a1);
 else if (cmd === "plan" && a1) await planCmd(a1);
 else if (cmd === "poort" && a1 && a2) await poortCmd(a1, a2);
+else if (cmd === "poort5" && a1) await poort5Cmd(args.slice(1).filter((x) => x.includes("=") && !x.startsWith("--")));
 else {
-  console.log("Gebruik: genereer <case> [--naam N] [--base URL] | scoor <toets.json> --case <case> [--rechter] [--baseline scores.json] | poort <nieuw> <baseline>");
+  console.log("Gebruik: genereer <case> [--naam N] [--base URL] | scoor <toets.json> --case <case> [--rechter] [--baseline scores.json] | poort <nieuw> <baseline> (per case, indicatief) | poort5 <case>=<scores.json> … --baseline-dir <map> (go-live-poort)");
   process.exit(2);
 }

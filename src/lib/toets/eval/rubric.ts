@@ -353,6 +353,33 @@ export function poort(nieuw: Scorekaart, baseline?: Scorekaart, rechter?: { nieu
   return { ok: redenen.length === 0, redenen };
 }
 
+export interface PoortCase {
+  case: string;
+  hardOk: boolean;
+  hardFout?: string[];
+  rechter: number | null | undefined;
+  baselineRechter: number | null | undefined;
+}
+
+/**
+ * Go-live-poort (Nick, 2 okt 2026): gemiddeld rechtercijfer over ALLE eval-cases ≥ gemiddelde van hun
+ * baselines, plus per case alle harde criteria 100 %. Eén rechter-run varieert ±0,75 en één generatie
+ * nog meer, dus per case vergelijken is ruis; het gemiddelde over 5 cases is de maat.
+ */
+export function poortGemiddeld(cases: PoortCase[], minCases = 5): { ok: boolean; gemiddeld: number; baseline: number; redenen: string[] } {
+  const redenen: string[] = [];
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const gem = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  if (cases.length < minCases) redenen.push(`maar ${cases.length} van ${minCases} cases`);
+  const zonder = cases.filter((c) => c.rechter == null || c.baselineRechter == null).map((c) => c.case);
+  if (zonder.length) redenen.push(`geen rechtercijfer voor ${zonder.join(", ")}`);
+  for (const c of cases) if (!c.hardOk) redenen.push(`${c.case}: harde criteria niet 100 %${c.hardFout?.length ? ` (${c.hardFout.join(", ")})` : ""}`);
+  const gemiddeld = r2(gem(cases.map((c) => c.rechter ?? 0)));
+  const baseline = r2(gem(cases.map((c) => c.baselineRechter ?? 0)));
+  if (gemiddeld < baseline) redenen.push(`gemiddeld rechtercijfer ${gemiddeld} < baseline ${baseline}`);
+  return { ok: redenen.length === 0, gemiddeld, baseline, redenen };
+}
+
 /** Vaste rechter-prompt (versie hoort bij RUBRIEK_VERSIE). */
 export const RECHTER_VERSIE = "rechter-2026-10-01.1";
 export const RECHTER_SYSTEM = `Je bent een strenge NaSk-docent (vmbo) die een gegenereerde toets beoordeelt met een VASTE rubriek. Wees consequent en kritisch; geef geen punten uit beleefdheid.

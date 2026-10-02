@@ -186,6 +186,8 @@ export interface Vraag {
   rttiUitleg?: string;
   /** Plan-first: RTTI uit het bouwplan (blijft staan tenzij de regel ≥ 2 stappen afwijkt). */
   rttiPlan?: Rtti;
+  /** Plan-first: geplande punten (bovengrens na reparatie en puntennormalisatie). */
+  puntenPlan?: number;
   /** Bronvermelding bij een bewerkte examenvraag, bijv. "naar: examen 2019 tijdvak 1". */
   bronvermelding?: string;
   /** Vraagtekst: bij lege context eerst inleiding, daarna vraagzin — nooit omgekeerd. */

@@ -156,32 +156,45 @@ export function bouwplanPrompt(q: PlanQuota): string {
   const vormRegels = PLAN_VORMEN.filter((v) => q.vorm[v] > 0)
     .map((v) => `${v} (${VORM_NAAM[v]}): ${q.vorm[v]}`)
     .join("; ");
+  const gesloten = q.vorm.mc + q.vorm.jn;
+  const blokken = contextBlokkenDoel(q);
   return `OPDRACHT NU: maak nog GEEN vragen, maar eerst het BOUWPLAN van de hele toets (JSON). Het plan wordt daarna door anderen uitgeschreven, dus elke regel moet op zichzelf duidelijk zijn.
 
 Vaste aantallen (verplicht, tel na):
 - ${q.aantal} vragen, samen ${q.punten} punten.
 - Per paragraaf: ${parRegels}.${doelRegels}
-- Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt.
+- Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt; nooit meer dan ${gesloten + 1} gesloten vragen${q.vorm.jn ? "" : ", geen juist/onjuist (jn)"}.
+- Contextblokken: ${blokken} groepen (g) van 2–3 open vragen bij één situatie, zoals in een schooltoets: eerst een berekening in die situatie (reken; of toepassen als er niets te rekenen valt), daarna een redeneer-/uitlegvraag (uitleg, T2 of I) die op dezelfde situatie voortbouwt. Zelfde groepstitel, aaneen.
 - RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I}${q.rttiPunten.I ? " (I = nieuwe situatie, eigen redenering, 2–3 p)" : ""}.
 - Plus ${q.reserve} reservevragen (andere begrippen/situaties, verschillende paragrafen) in "reserve".
 
 Regels voor het plan:
 - Elk item toetst een ANDER kernbegrip (b); binnen een paragraaf verschillende onderdelen van die paragraaf (geen varianten van dezelfde regel, zoals krachten optellen én aftrekken als twee vragen). Zelfde begrip twee keer alleen als de vragen echt iets anders vragen (bijv. herkennen vs. berekenen), en dan nooit naast elkaar.
 - Elke situatie (c) is anders: niet twee keer dezelfde plek, hetzelfde voorwerp of dezelfde activiteit (geen twee fietsers, geen twee concerten). Alledaags en realistisch voor een vmbo-leerling.
-- Kennisvragen (R) meestal zonder situatie en zonder persoon; hooguit de helft van de vragen heeft een persoon.
+- Ook gesloten en korte vragen krijgen bij voorkeur een korte, concrete situatie of gegeven (zoals in schooltoetsen), niet alleen "Wat is X?". Hooguit de helft van de vragen heeft een persoon.
 - Persoon (w): kies uit ${VOORNAMEN.join(", ")}; elke naam hooguit één item (of één groep). Niet elke vraag heeft een persoon nodig. Nooit een schoolnaam.
 - Verwacht antwoord (a) in steekwoorden. Geen enkel ander item mag dat antwoord in zijn situatie of vraag noemen (geen weggevers): plan de vragen zo dat ze los van elkaar te maken zijn.
 - Groep (g): alleen als 2–4 vragen echt één doorlopende context delen (zelfde titel); die staan dan aaneen.
 - Volgorde: eerst alle gesloten vragen (jn, mc), daarna open/berekening/tekenen; groepen aaneen.
 - Rekenvragen: realistische getallen; g = 10 N/kg als zwaartekracht nodig is (één waarde voor g in de hele toets).
-- Tekenen (teken) alleen als het zonder plaatje kan: de leerling tekent in een leeg tekenvak (bijv. pijl, grafiek) of leest af uit een tabel in de vraag.
+- Tekenen (teken): de leerling tekent zelf, zonder plaatje: bijv. een krachtpijl op schaal, een lijn in een diagram uit een tabel, een schakelschema. Zet in "wat wordt gevraagd" wat er getekend moet worden.
 
-Antwoord met ALLEEN dit JSON-object. Elke vraag is één rij (array) met precies deze 10 velden in deze volgorde — kort houden (vraag ≤ 12 woorden, situatie ≤ 8 woorden):
+Antwoord met ALLEEN dit JSON-object. Elke vraag is één rij (array) met precies deze 10 velden in deze volgorde. "Wat wordt gevraagd" is de bedoeling van de vraag in steekwoorden (wat de leerling moet doen/laten zien), niet de letterlijke vraagzin; de schrijver maakt er een volwaardige vraag van. Situatie kort en concreet.
 [paragraafcode, vorm (jn|mc|kort|invul|uitleg|reken|teken), rtti (R|T1|T2|I), punten, kernbegrip, situatie of "", voornaam of "", wat wordt gevraagd, verwacht antwoord, groepstitel of ""]
 {"items":[["11.1","mc","R",1,"wrijving","fietser op nat wegdek","Daan","welke kracht remt de fiets af","wrijvingskracht",""]],"reserve":[ …zelfde rijen… ]}`;
 }
 
+/** Aantal contextblokken (situatie → berekening → redeneren) dat het plan moet hebben: 2, bij ≥ 22 vragen 3. */
+export function contextBlokkenDoel(q: Pick<PlanQuota, "aantal">): number {
+  return q.aantal >= 22 ? 3 : 2;
+}
+
 const RTTI_SET = new Set<Rtti>(["R", "T1", "T2", "I"]);
+/** Vrij tekstveld zonder letter of cijfer (bijv. "],[" uit een kapotte rij) telt als leeg. */
+const tekstVeld = (x: unknown, max: number) => {
+  const t = s(x, max);
+  return /[\p{L}\p{N}]/u.test(t) && t !== "-" ? t : "";
+};
 const s = (x: unknown, max = 160) => (typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, max) : typeof x === "number" ? String(x) : "");
 
 function vormVan(x: unknown): PlanVorm {
@@ -212,8 +225,8 @@ function itemVan(x: unknown, i: number): PlanItem | null {
   const vorm = vormVan(o.v ?? o.vorm);
   const r = s(o.r ?? o.rtti).toUpperCase() as Rtti;
   const pt = Math.round(Number(o.pt ?? o.punten));
-  const persoon = s(o.w ?? o.persoon, 20);
-  const groep = s(o.g ?? o.groep, 60);
+  const persoon = tekstVeld(o.w ?? o.persoon, 20);
+  const groep = tekstVeld(o.g ?? o.groep, 60);
   return {
     n: Number(o.n) || i + 1,
     par: s(o.p ?? o.par, 12).replace(/^§\s*/, ""),
@@ -221,7 +234,7 @@ function itemVan(x: unknown, i: number): PlanItem | null {
     rtti: RTTI_SET.has(r) ? r : "T1",
     punten: GESLOTEN.includes(vorm) ? 1 : Number.isFinite(pt) && pt > 0 ? Math.min(5, pt) : 2,
     begrip,
-    context: s(o.c ?? o.context, 120),
+    context: tekstVeld(o.c ?? o.context, 120),
     ...(persoon && persoon !== "-" ? { persoon } : {}),
     kern,
     antwoord: s(o.a ?? o.antwoord, 120),
