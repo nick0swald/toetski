@@ -12,6 +12,14 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
 
+// Lokale betaalde aanroepen ALLEEN met de Toetski-sleutel (TOETSKI_XAI_API_KEY), nooit met een andere XAI_API_KEY op
+// deze machine. De app-code (src/) leest XAI_API_KEY (zo staat hij in Vercel); hier zetten we die lokaal gelijk.
+if (!process.env.TOETSKI_XAI_API_KEY) {
+  console.error("TOETSKI_XAI_API_KEY ontbreekt: lokale eval-aanroepen gebruiken alleen de Toetski-sleutel.");
+  process.exit(2);
+}
+process.env.XAI_API_KEY = process.env.TOETSKI_XAI_API_KEY;
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const jiti = createJiti(import.meta.url, { alias: { "@": join(ROOT, "src") } });
 const args = process.argv.slice(2);
@@ -32,6 +40,9 @@ globalThis.fetch = async (url, init) => {
   const u = String(url);
   if (!u.includes("api.x.ai")) return echteFetch(url, init);
   if (teller.usd >= maxUsd) throw new Error(`kostenplafond $${maxUsd} bereikt (${teller.usd.toFixed(3)})`);
+  const auth = new Headers(init?.headers).get("authorization") ?? "";
+  if (!auth.endsWith(process.env.TOETSKI_XAI_API_KEY)) throw new Error("xAI-aanroep zonder de Toetski-sleutel geweigerd");
+  teller.sleutelOk = (teller.sleutelOk ?? 0) + 1;
   const res = await echteFetch(url, init);
   teller.aanroepen++;
   const padNaam = u.replace(/^.*\/v1/, "");

@@ -13,7 +13,7 @@ import type {
 import { bewaakFiguren, diepBevriezen, figuurIsGeldig, zonderLegacyFiguren } from "./bevriezing.ts";
 import { vraagZonderFiguur, wijstOpTegenspraak } from "./fallback.ts";
 import type { FiguurOpdracht, FiguurUitkomst } from "./pijplijn.ts";
-import { tekentSchakeling } from "../tekenvak.ts";
+import { isTekenvraag, tekentSchakeling } from "../tekenvak.ts";
 import { MAX_FIGUREN_PER_TOETS, MAX_SFEERPLATEN_PER_TOETS, heeftLegacyFiguur, isCodeFiguur, legacySpecs, veiligeNieuweStam } from "./spec.ts";
 
 export interface PlanAntwoord {
@@ -134,10 +134,11 @@ export async function verwerkFiguren(
     }
 
     // Niet (opnieuw) plannen: vragen buiten scope, met figuur of job, eerder afgekeurde figuren (de planner negeerde de
-    // hint en plande dezelfde kring opnieuw), en 'teken het schakelschema' (een figuur van de kring verklapt het antwoord).
+    // hint en plande dezelfde kring opnieuw), 'teken het schakelschema' (een figuur van de kring verklapt het antwoord) en
+    // elke tekenvraag met tekenvak: nooit figuur + tekenvak bij dezelfde vraag.
     const afgekeurd = new Set(opts.afgekeurd ?? []);
     const overslaan = vragen
-      .filter((q) => !scope.has(q.nummer) || figuurIsGeldig(q.figuur) || jobs.some((j) => j.nummer === q.nummer) || afgekeurd.has(q.nummer) || tekentSchakeling(q))
+      .filter((q) => !scope.has(q.nummer) || figuurIsGeldig(q.figuur) || jobs.some((j) => j.nummer === q.nummer) || afgekeurd.has(q.nummer) || tekentSchakeling(q) || Boolean(q.tekenvak) || (!figuurIsGeldig(q.figuur) && isTekenvraag(q)))
       .map((q) => q.nummer);
     // Planner krijgt hooguit wat er overblijft minus de tijd die een figuur minimaal nodig heeft.
     const plannerTijd = Math.min(20_000, rest() - MIN_FIGUUR_BUDGET_MS - 5_000);

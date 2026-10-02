@@ -28,7 +28,7 @@ export function sleutelTekst(n?: NakijkItem): string {
 }
 
 const SPEC_UITLEG = `Een figuurspec is JSON:
-{ "soort": "lijngrafiek"|"staafdiagram"|"spreidingsdiagram"|"stroomkring"|"katrol"|"hefboom"|"krachtenschema"|"blokschema"|"maatcilinder"|"pictogram"|"sfeerplaat",
+{ "soort": "lijngrafiek"|"staafdiagram"|"spreidingsdiagram"|"stroomkring"|"katrol"|"hefboom"|"krachtenschema"|"blokschema"|"maatcilinder"|"oscilloscoop"|"pictogram"|"sfeerplaat",
   "titel": string (kort, mag leeg),
   "doel": string (wat de figuur laat zien en waarom de vraag hem nodig heeft),
   "verplichteElementen": string[], "labels": string[],
@@ -45,13 +45,14 @@ const SPEC_UITLEG = `Een figuurspec is JSON:
     krachtenschema: {"voorwerp":string,"krachten":[{"naam":"Fz","richting":"omhoog"|"omlaag"|"links"|"rechts","grootte":n,"eenheid":"N"}],"toonGrootte":bool,"schaal"?:n}
     blokschema: {"blokken":[string,...]}
     maatcilinder: {"maxMl":n,"standen":[{"label","ml":n}]}
+    oscilloscoop: {"hokjesX":10,"hokjesY":8,"signalen":[{"trillingstijdHokjes":n,"amplitudeHokjes":n,"naam"?}] (1–2 trillingen; trillingstijd en amplitude in hokjes, kloppend met de vraag),"tijdbasis"?: "2 ms/div","gevoeligheid"?: "5 mV/div"} — scherm met hokjesraster; tijdbasis/gevoeligheid alleen als de vraag ermee rekent (dan niet de uitkomst tonen)
     pictogram: {"symbool": ${GHS_SYMBOLEN.map((x) => `"${x}"`).join("|")}} (GHS-gevarensymbolen voor stoffen; gebod-/waarschuwing-/verbod- voor veiligheidsborden, bijv. gehoorbescherming bij lawaai = "gebod-gehoorbescherming")
     sfeerplaat: {"scene": string (Engelse beschrijving van een eenvoudige situatie/voorwerp, zonder tekst in beeld; de scene moet kloppen met ELK feit uit de vraag: afstanden, wie waar staat, wie wat vasthoudt)}
 Grafieken en schema's tekent de app zelf exact uit "data". Een sfeerplaat is alleen sfeer/situatie en mag nooit gegevens bevatten die nodig zijn voor het antwoord.`;
 
 export const PLANNER_SYSTEM = `Je bent beeldredacteur voor VMBO-toetsen (NaSk, methode Nova). Je bepaalt welke vragen een figuur NODIG hebben en schrijft per figuur eerst een precieze figuurspec. Je tekent niets.
 Regels:
-- Wees terughoudend. Alleen een figuur als die echt waarde toevoegt: de leerling moet iets aflezen of herkennen (grafiek, schakeling, krachten, maatcilinder), of de vraag is zonder figuur onduidelijk. Nooit "ter versiering". 0 figuren is een prima uitkomst: geef dan { "figuren": [] }. Meestal zijn 0–3 figuren genoeg; maximaal ${MAX_FIGUREN_PER_TOETS}, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten. Sfeerplaat alleen als de situatie zonder beeld echt onduidelijk is (zelden); nooit bij een vraag met afstanden, posities of tijden die het beeld zou kunnen tegenspreken. Bij twijfel: geen sfeerplaat.
+- Wees terughoudend. Alleen een figuur als die echt waarde toevoegt: de leerling moet iets aflezen of herkennen (grafiek, schakeling, krachten, maatcilinder, oscilloscoopbeeld), of de vraag is zonder figuur onduidelijk. Nooit "ter versiering". 0 figuren is een prima uitkomst: geef dan { "figuren": [] }. Meestal zijn 0–3 figuren genoeg; maximaal ${MAX_FIGUREN_PER_TOETS}, waarvan maximaal ${MAX_SFEERPLATEN_PER_TOETS} sfeerplaten. Sfeerplaat alleen als de situatie zonder beeld echt onduidelijk is (zelden); nooit bij een vraag met afstanden, posities of tijden die het beeld zou kunnen tegenspreken. Bij twijfel: geen sfeerplaat.
 - Sluit aan bij wat leerlingen in Nova NaSk (VMBO) zien: Nova-achtige opstellingen en symbolen, eenvoudige schema's, SI-eenheden met decimale komma.
 - Stroomkring (Nova): bron links; stroommeter (A) in serie; spanningsmeter (V) ALTIJD parallel over een lampje, weerstand of ander onderdeel — NOOIT over de spanningsbron of batterij (de bronspanning staat als label bij de bron). Bij parallelschakelingen mag een spanningsmeter over een onderdeel in een tak: "over": {"tak": t, "index": i}.
 - Getallen in de figuur moeten exact kloppen met de vraag en het nakijkmodel. Bereken het antwoord zelf na.
@@ -68,7 +69,7 @@ export function plannerUser(input: { vak: string; vragen: Vraag[]; nakijk: Nakij
     .join("\n\n");
   const min = input.minFiguren ?? 0;
   const verplicht = min > 0
-    ? `\nVERPLICHT (de docent koos "Met plaatjes"): plan MINIMAAL ${min} figuren — dit gaat vóór de terughoudendheidsregel. Kies de vragen die er het best bij passen (aflezen, schakeling, krachten, hefboom, maatcilinder, pictogram, grafiek bij gegevens uit de stam). Kies bij voorkeur code-figuren met eenvoudige, overzichtelijke specs (die worden het vaakst goedgekeurd); alleen een sfeerplaat als er niets beters is.${input.afgekeurd?.length ? ` Bij vraag ${input.afgekeurd.join(", ")} werd een figuur afgekeurd: kies liever andere vragen, of maak daar een duidelijk eenvoudiger spec.` : ""}\n`
+    ? `\nVERPLICHT (de docent koos "Met plaatjes"): plan MINIMAAL ${min} figuren — dit gaat vóór de terughoudendheidsregel. Kies de vragen die er het best bij passen (aflezen, schakeling, krachten, hefboom, maatcilinder, oscilloscoopbeeld bij toonhoogte/trillingstijd/amplitude, pictogram, grafiek bij gegevens uit de stam). Kies bij voorkeur code-figuren met eenvoudige, overzichtelijke specs (die worden het vaakst goedgekeurd); alleen een sfeerplaat als er niets beters is.${input.afgekeurd?.length ? ` Bij vraag ${input.afgekeurd.join(", ")} werd een figuur afgekeurd: kies liever andere vragen, of maak daar een duidelijk eenvoudiger spec.` : ""}\n`
     : "";
   return `Vak: ${input.vak || "NaSk"}\nVragen die al een figuur hebben (niet opnieuw plannen): ${input.overslaan.join(", ") || "geen"}${verplicht}\n\n${blok}`;
 }

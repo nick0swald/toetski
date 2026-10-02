@@ -238,6 +238,7 @@ export type FiguurSoort =
   | "blokschema"
   | "pictogram"
   | "maatcilinder"
+  | "oscilloscoop"
   | "sfeerplaat";
 
 /** JSON-waarde (serialiseerbaar over serverfuncties). */

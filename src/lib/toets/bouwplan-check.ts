@@ -7,7 +7,7 @@
 import type { Rtti } from "./types";
 import { VOORNAMEN } from "./config.ts";
 import { noemtKern, ontbrekendeTermen } from "./samenhang.ts";
-import { GESLOTEN, contextBlokkenDoel, type Bouwplan, type PlanItem, type PlanQuota } from "./bouwplan.ts";
+import { GESLOTEN, contextBlokkenDoel, netteTitel, type Bouwplan, type PlanItem, type PlanQuota } from "./bouwplan.ts";
 
 export interface PlanIssue {
   code: "aantal" | "dekking" | "diepgang" | "persoon" | "context" | "begrip" | "weggever" | "punten" | "rtti" | "vorm" | "school" | "kern" | "lengte";
@@ -309,7 +309,7 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
         tweede.antwoord = "";
       }
       const basis = (eerste.context || tweede.context || eerste.begrip).replace(/[.:;]+$/, "").slice(0, 40);
-      let titel = basis.charAt(0).toUpperCase() + basis.slice(1);
+      let titel = netteTitel(basis.charAt(0).toUpperCase() + basis.slice(1));
       if (groepen().has(titel)) titel = `${titel} (${code})`;
       eerste.groep = tweede.groep = titel;
       const [ie, it2] = [items.indexOf(eerste), items.indexOf(tweede)];
@@ -416,6 +416,26 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
     }
   }
 
+  // 7b. Eigennamen uit het boek (plaatsen, centrales, bedrijven) uit situaties en vragen.
+  for (const it of items) {
+    const hit = (q.eigennamen ?? []).find((n) => `${it.context} ${it.kern} ${it.groep ?? ""}`.includes(n));
+    if (!hit) continue;
+    notitie(it, `noem "${hit}" niet (eigennaam uit het boek); kies een algemene of verzonnen plek`);
+    meld("school", `eigennaam "${hit}" uit het boek in "${it.begrip}"`, "zacht", true);
+  }
+  // 7c. Tekenvragen buiten de lesstof (bijv. krachtpijl in een energietoets): geen tekenvraag.
+  if (q.tekenSoorten) {
+    const krachtOk = q.tekenSoorten.some((t) => /kracht/.test(t));
+    for (const it of items) {
+      if (it.vorm !== "teken") continue;
+      const buiten = !q.tekenSoorten.length || (!krachtOk && /\bkracht(?:pijl|en)?\b|krachtpijl|\bpijl\b|\bfz\b|zwaartekracht|newton/i.test(`${it.kern} ${it.begrip}`));
+      if (!buiten) continue;
+      it.vorm = "kort";
+      notitie(it, `geen tekenvraag (valt buiten de lesstof); toets "${it.begrip}" met een korte open vraag over de stof van ${it.par}`);
+      meld("vorm", `tekenvraag "${it.begrip}" valt buiten de lesstof → kort open`, "zacht", true);
+    }
+  }
+
   // 8. RTTI: minstens één I-vraag als het doel dat vraagt; daarna punten op het doel brengen.
   if (q.rttiPunten.I > 0 && !items.some((it) => it.rtti === "I")) {
     const kandidaat = items.find((it) => !isGesloten(it) && it.rtti === "T2" && (it.vorm === "uitleg" || it.vorm === "kort")) ?? items.find((it) => !isGesloten(it) && it.rtti === "T2");
@@ -463,10 +483,15 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
     }
     meld("punten", `plan had ${q.punten - verschil} punten → ${q.punten - rest} (doel ${q.punten})`, Math.abs(rest) > 2 ? "hard" : "zacht", Math.abs(rest) <= 2);
   }
+  // 8b. RTTI-punten naar het doel (klas 4: T2 liep weg naar T1): items één stap omlabelen, met een aanwijzing voor
+  // de schrijver wat dat niveau vraagt. Hooguit één stap per item; omhoog liefst rekenen/uitleggen/vervolgvragen.
+  const voor = rttiPuntenVan(items);
+  const omgelabeld = balanceerRtti(items, q.rttiPunten, q.punten);
   const r = rttiPuntenVan(items);
   const tot = Math.max(1, q.punten);
   const afw = (["R", "T1", "T2", "I"] as Rtti[]).map((l) => Math.abs(r[l] - q.rttiPunten[l]) / tot);
-  if (Math.max(...afw) > 0.12) meld("rtti", `RTTI-punten R ${r.R}/T1 ${r.T1}/T2 ${r.T2}/I ${r.I} vs doel ${q.rttiPunten.R}/${q.rttiPunten.T1}/${q.rttiPunten.T2}/${q.rttiPunten.I}`, "zacht", false);
+  if (omgelabeld) meld("rtti", `RTTI-punten R ${voor.R}/T1 ${voor.T1}/T2 ${voor.T2}/I ${voor.I} → R ${r.R}/T1 ${r.T1}/T2 ${r.T2}/I ${r.I} (doel ${q.rttiPunten.R}/${q.rttiPunten.T1}/${q.rttiPunten.T2}/${q.rttiPunten.I}; ${omgelabeld} items omgelabeld)`, "zacht", Math.max(...afw) <= 0.08);
+  else if (Math.max(...afw) > 0.12) meld("rtti", `RTTI-punten R ${r.R}/T1 ${r.T1}/T2 ${r.T2}/I ${r.I} vs doel ${q.rttiPunten.R}/${q.rttiPunten.T1}/${q.rttiPunten.T2}/${q.rttiPunten.I}`, "zacht", false);
 
   // 9. Volgorde: gesloten eerst, groepen aaneen; daarna doornummeren.
   const eerste = new Map<string, number>();
@@ -485,4 +510,55 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
 /** Harde problemen die na herstel overblijven (dan valt de app terug op de oude route). */
 export function openHard(issues: PlanIssue[]): PlanIssue[] {
   return issues.filter((i) => i.ernst === "hard" && !i.hersteld);
+}
+
+const RTTI_VOLGORDE: Rtti[] = ["R", "T1", "T2", "I"];
+const RTTI_UITLEG: Record<Rtti, string> = {
+  R: "R-vraag: een feit of begrip uit de lesstof reproduceren (noemen, herkennen), zonder rekenwerk",
+  T1: "T1-vraag: een geleerde regel of formule toepassen in een bekende situatie, in één stap",
+  T2: "T2-vraag: toepassen in een nieuwe situatie of in meer stappen (gegevens zelf kiezen, eerst omrekenen of aflezen en dan berekenen, of een gevolg afleiden en uitleggen)",
+  I: "I-vraag: nieuwe, onbekende situatie waarin de leerling zelf een redenering opbouwt (\"Beredeneer …\", \"Voorspel … en leg uit\")",
+};
+
+/**
+ * Breng de RTTI-punten van het plan naar het doel door items één stap om te labelen (R↔T1↔T2↔I). Een label met
+ * een overschot geeft een item af aan het buurlabel in de richting van het tekort. Omhoog krijgen open meerstaps-
+ * vragen (rekenen, uitleggen, vervolgvraag in een blok) voorrang, omlaag gesloten en korte vragen. Een I-vraag
+ * gaat nooit omlaag als dat de enige is. Geeft het aantal omgelabelde items terug.
+ */
+export function balanceerRtti(items: PlanItem[], doel: Record<Rtti, number>, punten: number): number {
+  const tol = Math.max(1, Math.round(punten * 0.05));
+  const gedaan = new Set<PlanItem>();
+  const idx = (l: Rtti) => RTTI_VOLGORDE.indexOf(l);
+  const afwijking = (r: Record<Rtti, number>) => RTTI_VOLGORDE.reduce((s, l) => s + Math.abs(r[l] - doel[l]), 0);
+  const meerstaps = (it: PlanItem) => (it.vorm === "reken" || it.vorm === "uitleg" ? 0 : it.groep ? 1 : isGesloten(it) ? 3 : 2);
+  let n = 0;
+  for (let ronde = 0; ronde < items.length; ronde++) {
+    const r = rttiPuntenVan(items);
+    if (RTTI_VOLGORDE.every((l) => Math.abs(r[l] - doel[l]) <= tol)) break;
+    const nu = afwijking(r);
+    const tekortAan = (vanaf: Rtti, richting: number) => RTTI_VOLGORDE.some((l) => (idx(l) - idx(vanaf)) * richting > 0 && doel[l] - r[l] > tol);
+    let beste: { it: PlanItem; naar: Rtti; delta: number; voorkeur: number } | undefined;
+    for (const it of items) {
+      if (gedaan.has(it)) continue;
+      for (const richting of [1, -1]) {
+        const naar = RTTI_VOLGORDE[idx(it.rtti) + richting];
+        if (!naar) continue;
+        if (naar === "I" && (isGesloten(it) || it.punten < 2)) continue;
+        if (it.rtti === "I" && items.filter((x) => x.rtti === "I").length <= 1) continue;
+        const r2 = { ...r, [it.rtti]: r[it.rtti] - it.punten, [naar]: r[naar] + it.punten } as Record<Rtti, number>;
+        const delta = afwijking(r2) - nu;
+        // Strikt beter, of neutraal maar op weg naar een tekort verderop (R → T1 → T2).
+        if (delta > 0 || (delta === 0 && !tekortAan(naar, richting))) continue;
+        const voorkeur = richting > 0 ? meerstaps(it) : 3 - meerstaps(it);
+        if (!beste || delta < beste.delta || (delta === beste.delta && voorkeur < beste.voorkeur)) beste = { it, naar, delta, voorkeur };
+      }
+    }
+    if (!beste) break;
+    beste.it.rtti = beste.naar;
+    gedaan.add(beste.it);
+    notitie(beste.it, RTTI_UITLEG[beste.naar]);
+    n++;
+  }
+  return n;
 }

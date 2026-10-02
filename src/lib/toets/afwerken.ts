@@ -17,7 +17,7 @@ import { kapPunten } from "./plan-schrijven.ts";
 import { LIMIETEN, TIJD } from "./config.ts";
 import { lesstofVoorVragen } from "./lesstof-selectie.ts";
 import { controleerBerekeningen, gVoorToets } from "./reken-check.ts";
-import { dubbelsWeg, kernbegrippen, ontbrekendeKern, samenhangIssues, type Kernbegrip } from "./samenhang.ts";
+import { boekEigennamen, boeknaamIssues, dubbelsWeg, kernbegrippen, ontbrekendeKern, samenhangIssues, type Kernbegrip } from "./samenhang.ts";
 import { zetTekenvakken } from "./tekenvak.ts";
 import { CACHE_GRENS } from "./llm.ts";
 
@@ -112,7 +112,7 @@ function mergeOpNummer(
 
 type Repair = (prompt: string) => Promise<string | null>;
 
-const INHOUD = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "realisme", "onhelder", "rubriek", "vage-verwijzing", "figuur-ontbreekt", "schoolnaam"]);
+const INHOUD = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "realisme", "onhelder", "rubriek", "vage-verwijzing", "figuur-ontbreekt", "schoolnaam", "boeknaam"]);
 const ERNSTIG = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "realisme"]);
 
 function inStukken<T>(lijst: T[], grootte: number): T[][] {
@@ -350,7 +350,8 @@ export async function werkVragenAf(input: {
       if (eerste.gelukt) vragen = herlabel(vragen, eerste.oordelen);
       // Regel-RTTI (type → basis, bijgesteld op opdracht/stappen/context) is leidend voor de balans.
       vragen = labelRtti(vragen);
-      const heur = stap.issues;
+      // Eigennamen uit lesboek/antwoordenboek (Nick: niets uit het boek overnemen) → laten vervangen.
+      const heur = [...stap.issues, ...boeknaamIssues(vragen, boekEigennamen(`${bron}\n${input.antwoorden ?? ""}`)).filter((i) => !stap.issues.some((x) => x.nummer === i.nummer && x.code === i.code))];
       const bezet0 = new Set([...controleIssues(vragen, nakijk, eerste.oordelen), ...heur].map((i) => i.nummer));
       // Herhaling en weggevers (deterministisch): de dubbele vraag wordt vervangen, liefst door een ontbrekend kernbegrip.
       const sam = samenhangIssues(vragen, nakijk, { kern, vermijd: bezet0 });

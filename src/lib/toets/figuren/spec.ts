@@ -13,6 +13,7 @@ export const FIGUUR_SOORTEN: FiguurSoort[] = [
   "blokschema",
   "pictogram",
   "maatcilinder",
+  "oscilloscoop",
   "sfeerplaat",
 ];
 
@@ -32,6 +33,7 @@ const soortSchema = z
   .string()
   .transform((s) => s.toLowerCase().trim().replace(/\s+/g, ""))
   .transform((s) => {
+    if (/oscillo|scoop|scope/.test(s)) return "oscilloscoop";
     if (/lijn|grafiek/.test(s) && !/staaf|spreid/.test(s)) return "lijngrafiek";
     if (/staaf|bar/.test(s)) return "staafdiagram";
     if (/spreid|scatter|punten/.test(s)) return "spreidingsdiagram";
@@ -183,6 +185,27 @@ const dataSchemas = {
   maatcilinder: z.object({
     maxMl: num.refine((n) => n > 0),
     standen: z.array(z.object({ label: tekst(30), ml: num })).min(1).max(4),
+  }),
+  /** Oscilloscoopscherm (Nova 4GT H13): raster van hokjes (div) met 1–2 sinusvormige trillingen. */
+  oscilloscoop: z.object({
+    hokjesX: z.coerce.number().int().min(6).max(12).default(10),
+    hokjesY: z.coerce.number().int().min(4).max(10).default(8),
+    signalen: z
+      .array(
+        z.object({
+          /** Trillingstijd in hokjes (horizontaal). */
+          trillingstijdHokjes: num.refine((n) => n >= 0.5 && n <= 12, "trillingstijd 0,5–12 hokjes"),
+          /** Amplitude in hokjes (verticaal, vanaf de middenlijn). */
+          amplitudeHokjes: num.refine((n) => n > 0 && n <= 5, "amplitude 0–5 hokjes"),
+          naam: tekst(20).optional(),
+        }),
+      )
+      .min(1)
+      .max(2),
+    /** Bijv. "2 ms/div"; alleen tonen als de vraag ermee rekent. */
+    tijdbasis: tekst(20).optional(),
+    /** Bijv. "5 mV/div". */
+    gevoeligheid: tekst(20).optional(),
   }),
   sfeerplaat: z.object({
     /** Scènebeschrijving voor het beeldmodel (liefst Engels). */
@@ -490,6 +513,7 @@ export function altTekst(spec: FiguurSpec): string {
     blokschema: "Blokschema",
     pictogram: "Gevarensymbool",
     maatcilinder: "Maatcilinder",
+    oscilloscoop: "Oscilloscoopbeeld",
     sfeerplaat: "Illustratie",
   };
   return spec.titel ? `${naam[spec.soort]}: ${spec.titel}` : naam[spec.soort];

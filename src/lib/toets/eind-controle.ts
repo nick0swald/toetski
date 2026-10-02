@@ -37,6 +37,8 @@ export function eindControle(toets0: GegenereerdeToets): GegenereerdeToets {
     const kopie = { ...q, opties: q.opties?.map((o) => ({ ...o })) };
     repareerSchoolnamen(kopie, nk.find((n) => n.nummer === q.nummer));
     const h = herstelZinsbreuk(kopie);
+    // Nooit figuur + tekenvak: een geplaatste figuur blijft onaangetast, het tekenvak vervalt.
+    if (h.figuur && h.tekenvak) delete h.tekenvak;
     return { ...h, context: hoofdletterNaPunt(h.context), stam: hoofdletterNaPunt(h.stam) ?? h.stam };
   });
   const toets = { ...toets0, vragen: vr, nakijkmodel: nk };

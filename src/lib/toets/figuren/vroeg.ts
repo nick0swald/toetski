@@ -5,6 +5,7 @@ import { diepBevriezen, figuurIsGeldig, zonderLegacyFiguren } from "./bevriezing
 import { vraagZonderFiguur } from "./fallback.ts";
 import { heeftLegacyFiguur, legacySpecs } from "./spec.ts";
 import { verwerkFiguren, type VerwerkDeps } from "./verwerk.ts";
+import { isTekenvraag } from "../tekenvak.ts";
 
 /**
  * Vroege beeldpijplijn: figuren worden al gemaakt en gekeurd op de RUWE vragen, parallel aan het
@@ -67,6 +68,20 @@ export async function koppelVroegeFiguren(
       gebruikt.add(R.nummer);
       const hoofd = its.find((i) => i.status === "go") ?? its[0]!;
       items.push(...its.map((i) => ({ ...i, nummer: F.nummer })));
+      // Nooit figuur + tekenvak bij dezelfde vraag: is de afgewerkte vraag een tekenvraag, dan vervalt de figuur (niet plaatsen).
+      // Uitzondering: een code-figuur waarin de leerling zelf tekent ("teken in de grafiek …") vervangt het tekenvak.
+      const tekentInFiguur = P.figuur?.soort !== "sfeerplaat" && /\bin (?:de|het) (?:figuur|grafiek|diagram|scherm|oscilloscoopbeeld)\b/i.test(P.stam);
+      if (hoofd.status === "go" && figuurIsGeldig(P.figuur) && tekentInFiguur && F.tekenvak) {
+        const { tekenvak: _t, ...rest } = F;
+        const nieuw: Vraag = zonderLegacyFiguren({ ...rest, stam: P.stam !== R.stam ? P.stam : F.stam, figuur: diepBevriezen(P.figuur) } as Vraag);
+        delete nieuw.figuurId;
+        return nieuw;
+      }
+      if (hoofd.status === "go" && figuurIsGeldig(P.figuur) && (F.tekenvak || isTekenvraag(F))) {
+        items.splice(items.length - its.length, its.length, ...its.map((i) => ({ ...i, nummer: F.nummer, ...(i === hoofd ? { status: "gedropt" as const, redenen: [...(i.redenen ?? []), "tekenvraag met tekenvak: geen figuur bij dezelfde vraag"] } : {}) })));
+        meldingen.push(`Figuur bij vraag ${F.nummer} niet geplaatst: de vraag heeft een tekenvak.`);
+        return F;
+      }
       if (hoofd.status === "go" && figuurIsGeldig(P.figuur)) {
         const nieuw: Vraag = zonderLegacyFiguren({ ...F, stam: P.stam !== R.stam ? P.stam : F.stam, figuur: diepBevriezen(P.figuur) });
         delete nieuw.figuurId;
