@@ -5,7 +5,8 @@
  */
 import type { Kwaliteitscheck, LeerdoelPlan, Leerweg, PlanLeerdoel, Vraag } from "./types";
 import { EINDTERMEN, KERNDOELEN, LEERDOELEN_BRON, NOVA_LEERDOEL_KOPPELING, ONDERWERP_KOPPELING, type LeerdoelData } from "./leerdoelen-data.ts";
-import { novaSerie, vindNovaHoofdstuk } from "./kalibratie.ts";
+import { doelInLesstof, inhoudsWoorden, novaSerie, vindNovaHoofdstuk } from "./kalibratie.ts";
+export { doelInLesstof } from "./kalibratie.ts";
 import { NOVA_HOOFDSTUKKEN, NOVA_LEERDOELEN, VRAAGTYPEN } from "./kalibratie-data.ts";
 import { extractParagrafen } from "./leerdoelen.ts";
 
@@ -186,23 +187,6 @@ export function andereNovaHoofdstukken(input: Pick<PlanInput, "bron" | "antwoord
  * Nova-leerdoelen per lesstofparagraaf (op titel gekoppeld, over alle hoofdstukken van de serie), voor het
  * bouwplan: elke vraag kiest een ander leerdoel, kernstof eerst. Geen treffer → paragraaf zonder lijst.
  */
-const DOEL_STOP = new Set(["uitleggen", "beschrijven", "noemen", "benoemen", "verschil", "tussen", "voorbeelden", "geven", "enkele", "manieren", "bepalen", "berekenen", "verband", "aantal", "welke", "waarom", "hoeveel", "gebruiken", "herkennen", "toepassen", "daarbij", "vanaf", "regelmatig", "langdurig", "factoren"]);
-/**
- * Een Nova-doel telt alleen als de lesstof het behandelt: minstens 60 % van de inhoudswoorden (≥ 6 letters,
- * geen doe-woorden) komt (op stam van 5 letters) in de lesstof voor. Zo komen "absorberen/weerkaatsen" of
- * "pijngrens" niet in het plan als de geplakte lesstof ze niet noemt.
- */
-function inhoudsWoorden(doel: string): string[] {
-  return [...new Set((doel.toLowerCase().match(/\p{L}{6,}/gu) ?? []).filter((w) => !DOEL_STOP.has(w)))];
-}
-export function doelInLesstof(doel: string, bron: string): boolean {
-  const woorden = inhoudsWoorden(doel);
-  if (!woorden.length) return true;
-  const tekst = bron.toLowerCase();
-  const raak = woorden.filter((w) => tekst.includes(w.slice(0, 5))).length;
-  return raak / woorden.length >= 0.6;
-}
-
 /** Tekst van één lesstofparagraaf: van de kop "code titel" tot de volgende kop (leeg als de kop niet gevonden wordt). */
 export function paragraafTekst(bron: string, p: { code: string; titel: string }, alle: { code: string; titel: string }[]): string {
   const kop = (x: { code: string; titel: string }) => {

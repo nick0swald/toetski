@@ -5,6 +5,7 @@ import type { Bouwplan, PlanItem, PlanQuota } from "./bouwplan.ts";
 import { bouwplanPrompt, contextBlokkenDoel, parseBouwplan } from "./bouwplan.ts";
 import { deelAantal, herstelBouwplan, openHard } from "./bouwplan-check.ts";
 import { doelInLesstof, novaDoelenPerParagraaf } from "./leerdoelen-plan.ts";
+import { novaPrompt } from "./kalibratie.ts";
 import { houdPlanPunten } from "./afwerken.ts";
 import type { NakijkItem, Vraag } from "./types";
 
@@ -65,7 +66,7 @@ describe("planner-vorm: herstel", () => {
     assert.ok(plan.items.filter((x) => x.vorm === "mc" || x.vorm === "jn").length <= 6);
     const teken = plan.items.find((x) => x.begrip === "krachtpijl")!;
     assert.equal(teken.vorm, "teken");
-    assert.match(teken.kern, /^teken:/);
+    assert.ok(teken.let?.some((l) => /tekenvraag/.test(l)));
     assert.deepEqual(openHard(issues), []);
   });
   it("contextblokken: losse reken + uitleg uit dezelfde paragraaf worden één blok, aaneen, berekening eerst", () => {
@@ -92,6 +93,25 @@ describe("planner-vorm: herstel", () => {
     const { plan: p } = herstelBouwplan(plan, quota({ punten: 14, vorm: { jn: 0, mc: 0, kort: 12, invul: 0, uitleg: 0, reken: 0, teken: 0 } }));
     assert.equal(p.items.find((x) => x.begrip === "gehoorbeentjes")!.punten, 3);
     assert.equal(p.items.find((x) => x.begrip === "geluidsketen")!.punten, 3);
+  });
+  it("mislabelde tekenvraag → kort; ontbrekende rekenvraag uit kort-vraag met uitkomst; reserve-tekenvraag ingewisseld", () => {
+    const plan: Bouwplan = {
+      versie: 1,
+      items: [
+        ...Array.from({ length: 6 }, (_, i) => item(i + 1, { vorm: "mc", par: pars[i % 3], begrip: `mc begrip ${i}`, context: `plaats ${i}` })),
+        item(7, { vorm: "teken", par: "1.1", begrip: "functie slakkenhuis", kern: "noteer wat het slakkenhuis doet" }),
+        item(8, { vorm: "kort", par: "1.3", begrip: "druk", kern: "druk van de kast", antwoord: "4000 Pa", context: "kast op vloer" }),
+        item(9, { vorm: "kort", par: "1.2", begrip: "eenheid", kern: "welke eenheid", antwoord: "N/cm" }),
+        item(10, { vorm: "kort", par: "1.2", begrip: "veer", kern: "wat is een veer", antwoord: "rekt uit" }),
+        item(11, { vorm: "kort", par: "1.1", begrip: "massa", kern: "wat is massa", antwoord: "hoeveelheid stof" }),
+        item(12, { vorm: "kort", par: "1.3", begrip: "oppervlak", kern: "wat is oppervlak", antwoord: "grootte vlak" }),
+      ],
+      reserve: [item(13, { vorm: "teken", par: "1.1", begrip: "krachtpijl tekenen", kern: "teken de zwaartekracht op schaal" })],
+    };
+    const { plan: p } = herstelBouwplan(plan, quota({ vorm: { jn: 0, mc: 6, kort: 3, invul: 0, uitleg: 1, reken: 1, teken: 1 } }));
+    assert.equal(p.items.find((x) => x.begrip === "functie slakkenhuis")?.vorm ?? "kort", "kort");
+    assert.equal(p.items.find((x) => x.begrip === "druk")!.vorm, "reken");
+    assert.ok(p.items.some((x) => x.begrip === "krachtpijl tekenen" && x.vorm === "teken"));
   });
   it("deelAantal", () => {
     assert.equal(deelAantal("Noem twee geluidsbronnen"), 2);
@@ -124,6 +144,8 @@ describe("planner-vorm: Nova-doelen", () => {
     assert.doesNotMatch(alle, /absorberen|weerkaatsen|pijngrens|audiogram/i);
     assert.doesNotMatch((d["6.4"] ?? []).join(" "), /hinder|overlast|isolatie/i);
     assert.doesNotMatch(alle, /PLUS/);
+    // Ook het gedeelde Nova-promptblok (oude route + voorvoegsel) noemt geen doelen buiten de lesstof.
+    assert.doesNotMatch(novaPrompt(inp.titel, inp.bronmateriaal, inp.leerjaar, inp.leerweg, true), /absorberen|weerkaatsen|pijngrens|audiogram/i);
   });
 });
 

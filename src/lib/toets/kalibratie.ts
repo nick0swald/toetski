@@ -372,6 +372,23 @@ export function vindNovaHoofdstuk(titel: string, bron: string, leerjaar: number,
 }
 
 /** Promptregel met Nova-paragrafen en leerdoelen; alleen als de bron zelf geen paragraafkoppen heeft. */
+const DOEL_STOP = new Set(["uitleggen", "beschrijven", "noemen", "benoemen", "verschil", "tussen", "voorbeelden", "geven", "enkele", "manieren", "bepalen", "berekenen", "verband", "aantal", "welke", "waarom", "hoeveel", "gebruiken", "herkennen", "toepassen", "daarbij", "vanaf", "regelmatig", "langdurig", "factoren"]);
+/**
+ * Een Nova-doel telt alleen als de lesstof het behandelt: minstens 60 % van de inhoudswoorden (≥ 6 letters,
+ * geen doe-woorden) komt (op stam van 5 letters) in de lesstof voor. Zo komen "absorberen/weerkaatsen" of
+ * "pijngrens" niet in het plan als de geplakte lesstof ze niet noemt.
+ */
+export function inhoudsWoorden(doel: string): string[] {
+  return [...new Set((doel.toLowerCase().match(/\p{L}{6,}/gu) ?? []).filter((w) => !DOEL_STOP.has(w)))];
+}
+export function doelInLesstof(doel: string, bron: string): boolean {
+  const woorden = inhoudsWoorden(doel);
+  if (!woorden.length) return true;
+  const tekst = bron.toLowerCase();
+  const raak = woorden.filter((w) => tekst.includes(w.slice(0, 5))).length;
+  return raak / woorden.length >= 0.6;
+}
+
 export function novaPrompt(titel: string, bron: string, leerjaar: number, leerweg: Leerweg, heeftKoppen: boolean): string {
   const hit = vindNovaHoofdstuk(titel, bron, leerjaar, leerweg);
   if (!hit) return "";
@@ -381,7 +398,9 @@ export function novaPrompt(titel: string, bron: string, leerjaar: number, leerwe
     const code = `${h.n}.${p.n}`;
     const ld = Object.entries(doelen)
       .filter(([c]) => c.startsWith(`${code}.`))
-      .map(([, tekst]) => tekst.replace(/^Je kunt /, ""))
+      .map(([, tekst]) => tekst.replace(/^Je kunt /, "").replace(/\.?\s*PLUS\.?$/i, ""))
+      // Met eigen koppen: alleen Nova-doelen die de geplakte lesstof echt behandelt (anders vragen buiten de stof).
+      .filter((tekst) => !heeftKoppen || doelInLesstof(tekst, bron))
       .slice(0, 5);
     return `${code} ${p.titel}${ld.length ? `: ${ld.join("; ")}` : ""}`;
   });

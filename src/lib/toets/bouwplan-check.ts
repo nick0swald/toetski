@@ -72,7 +72,7 @@ const notitie = (it: PlanItem, tekst: string) => {
   it.let = [...new Set([...(it.let ?? []), tekst])];
 };
 const SCHOOL_RE = /\b[A-Z][\w-]*(?:college|lyceum|school)\b|\b(?:college|lyceum|scholengemeenschap|mavo|havo|vwo)\b/i;
-const TEKEN_RE = /\bteken|\bschets|\bpijl|\bgrafiek|\blijn\b|\bgeef .*aan\b|\baangeven\b|\bkleur|\bomcirkel/i;
+const TEKEN_RE = /teken|schets|pijl|grafiek|diagram|\blijn\b|schaal|\bgeef .*aan\b|\baangeven\b|\bkleur|\bomcirkel/i;
 
 const TELWOORD: Record<string, number> = { twee: 2, drie: 3, "2": 2, "3": 3 };
 const GEEN_DEEL = /^(keer|maal|punten?|meter|seconden?|minuten?|uur|newton|kilo|gram|cm|mm|km|kg)$/;
@@ -114,7 +114,10 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
   if (items.length > q.aantal) {
     while (items.length > q.aantal) {
       const c = overschot();
-      const idx = c ? items.map((it) => it.par).lastIndexOf(c) : items.length - 1;
+      // Te veel gesloten vragen? Dan eerst een gesloten vraag naar de reserve (de open vragen staan achteraan).
+      const teVeelGesloten = items.filter(isGesloten).length > q.vorm.mc + q.vorm.jn + 1;
+      const kandidaatIdx = items.map((it, i) => ({ it, i })).filter(({ it }) => (!c || it.par === c) && (!teVeelGesloten || isGesloten(it))).map(({ i }) => i);
+      const idx = kandidaatIdx.length ? kandidaatIdx[kandidaatIdx.length - 1]! : c ? items.map((it) => it.par).lastIndexOf(c) : items.length - 1;
       reserve.unshift(items.splice(idx >= 0 ? idx : items.length - 1, 1)[0]!);
     }
     meld("aantal", `te veel vragen in het plan → ${q.aantal}`, "zacht", true);
@@ -179,12 +182,36 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
     }
     meld("vorm", `${gesloten.length} gesloten vragen (max ${maxGesloten}) → ${om.length} korte open vragen`, "zacht", true);
   }
-  // Tekenvragen blijven tekenvragen; zonder tekenwerkwoord wordt de opdracht expliciet gemaakt.
+  // "teken" zonder tekenopdracht in de bedoeling is een verkeerd label → kort open. Echte tekenvragen blijven.
   for (const it of items) {
-    if (it.vorm === "teken" && !TEKEN_RE.test(it.kern)) {
-      it.kern = `teken: ${it.kern}`;
-      notitie(it, "tekenvraag: de leerling tekent zelf (pijl op schaal, lijn in een diagram of schema); alle gegevens in de tekst, geen plaatje");
-      meld("vorm", `"${it.begrip}": tekenopdracht expliciet gemaakt`, "zacht", true);
+    if (it.vorm === "teken" && !TEKEN_RE.test(`${it.kern} ${it.begrip}`)) {
+      it.vorm = "kort";
+      meld("vorm", `"${it.begrip}": "tekenen" zonder tekenopdracht → kort open`, "zacht", true);
+    } else if (it.vorm === "teken") notitie(it, "tekenvraag: de leerling tekent zelf (pijl op schaal, lijn in een diagram of schema); alle gegevens in de tekst, geen plaatje");
+  }
+  // Open vormen op quotum: eerst omlabelen wat het al is (kort met een uitkomst-getal → reken, kort T2/I →
+  // uitleg), daarna reservevragen van die vorm inwisselen tegen een losse kort-vraag uit dezelfde paragraaf.
+  const tel = (v: PlanItem["vorm"]) => items.filter((it) => it.vorm === v).length;
+  const REKEN_RE = /\bbereken|\d\s*(?:n|kg|m|s|pa|hz|db|nm|n\/cm²?|m\/s|cm|%)\b/i;
+  for (const it of items) if (tel("reken") < q.vorm.reken && it.vorm === "kort" && REKEN_RE.test(`${it.kern} ${it.antwoord} ${it.begrip}`)) {
+    it.vorm = "reken";
+    it.punten = Math.max(2, it.punten);
+    meld("vorm", `"${it.begrip}": rekenvraag → berekening`, "zacht", true);
+  }
+  for (const it of items) if (tel("uitleg") < q.vorm.uitleg && it.vorm === "kort" && (it.rtti === "T2" || it.rtti === "I")) {
+    it.vorm = "uitleg";
+    it.punten = Math.max(2, it.punten);
+    meld("vorm", `"${it.begrip}": redeneervraag → uitleggen`, "zacht", true);
+  }
+  for (const v of ["reken", "teken", "uitleg"] as const) {
+    while (tel(v) < q.vorm[v]) {
+      const ri = reserve.findIndex((r) => r.vorm === v && items.some((it) => it.par === r.par && it.vorm === "kort" && !it.groep));
+      if (ri < 0) break;
+      const r = reserve.splice(ri, 1)[0]!;
+      const ii = items.findIndex((it) => it.par === r.par && it.vorm === "kort" && !it.groep);
+      reserve.push(items[ii]!);
+      items[ii] = { ...r };
+      meld("vorm", `${v}: reservevraag "${r.begrip}" ingewisseld`, "zacht", true);
     }
   }
   // Punten: gesloten = 1; open 1–4 (rekenen ≥ 2); een vraag naar meerdere onderdelen ≥ 1 punt per onderdeel (max 3).
@@ -262,8 +289,18 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
       if (groepen().size >= doelBlokken) break;
       const kand = items.filter((it) => it.par === code && los(it));
       const eerste = kand.find((it) => it.vorm === "reken") ?? kand.find((it) => it.vorm === "kort" || it.vorm === "teken" || it.vorm === "invul");
-      const tweede = kand.find((it) => it !== eerste && (it.vorm === "uitleg" || it.rtti === "T2" || it.rtti === "I")) ?? kand.find((it) => it !== eerste);
-      if (!eerste || !tweede) continue;
+      if (!eerste) continue;
+      const rest = kand.filter((it) => it !== eerste);
+      const verwant = (it: PlanItem) => lijkt(`${it.begrip} ${it.kern}`, `${eerste.begrip} ${eerste.kern} ${eerste.context}`, 0.3);
+      const tweede = rest.find((it) => verwant(it) && (it.vorm === "uitleg" || it.rtti === "T2" || it.rtti === "I")) ?? rest.find(verwant) ?? rest.find((it) => it.vorm === "uitleg" || it.rtti === "T2" || it.rtti === "I") ?? rest[0];
+      if (!tweede) continue;
+      if (!verwant(tweede)) {
+        // Geen verwante vraag: deze vraag wordt een redeneer-vervolg op de situatie van de eerste (zelfde
+        // paragraaf, punten en RTTI blijven); het oude begrip vervalt (meestal een dubbeling).
+        tweede.begrip = `${eerste.begrip}: redeneren`;
+        tweede.kern = `leg uit of voorspel iets in dezelfde situatie, voortbouwend op de vorige vraag (${eerste.begrip})`;
+        tweede.antwoord = "";
+      }
       const basis = (eerste.context || tweede.context || eerste.begrip).replace(/[.:;]+$/, "").slice(0, 40);
       let titel = basis.charAt(0).toUpperCase() + basis.slice(1);
       if (groepen().has(titel)) titel = `${titel} (${code})`;
