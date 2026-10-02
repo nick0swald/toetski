@@ -13,6 +13,7 @@ import { vormAantallen } from "./kalibratie.ts";
 import type { RttiVerdeling } from "./types";
 import { PLAN, VOORNAMEN } from "./config.ts";
 import { CACHE_GRENS, berichten, vraagJson, type Kosten } from "./llm.ts";
+import { kernbegrippen, type Kernbegrip } from "./samenhang.ts";
 
 export type PlanVorm = "jn" | "mc" | "kort" | "invul" | "uitleg" | "reken" | "teken";
 export const PLAN_VORMEN: PlanVorm[] = ["jn", "mc", "kort", "invul", "uitleg", "reken", "teken"];
@@ -54,7 +55,11 @@ export interface Bouwplan {
   versie: 1;
   items: PlanItem[];
   reserve: PlanItem[];
+  /** Welke aanroep het plan maakte (log/eval): "plan-model" (grok-4.5), "plan-model (2e poging)" of "snel model". */
+  route?: PlanRoute;
 }
+
+export type PlanRoute = "plan-model" | "plan-model (2e poging)" | "snel model";
 
 export interface PlanQuota {
   aantal: number;
@@ -66,6 +71,10 @@ export interface PlanQuota {
   reserve: number;
   /** Leerdoelen per paragraafcode (Nova, op titel gekoppeld); elke vraag kiest een ander doel. */
   doelen?: Record<string, string[]>;
+  /** Kernbegrippen uit de lesstof ("Echo: …", "… heet ultrasoon"): elk minstens één vraag. */
+  kern?: Kernbegrip[];
+  /** Plan ingekort tot wat in de toetstijd past (was: kalibratie-aantal). */
+  ingekortVan?: number;
 }
 
 /** Grootste-restmethode: verdeel totaal naar gewicht, elk minstens min. */
@@ -110,7 +119,8 @@ export function maakQuota(input: {
   rttiDoel: RttiVerdeling;
   kal: Kalibratie;
 }): PlanQuota {
-  const N = input.aantalVragen;
+  const tijd = aantalVoorTijd(input.aantalVragen, input.kal);
+  const N = tijd;
   const pars = input.paragrafen;
   const lengtes = paragraafLengtes(input.bron, pars);
   const gem = lengtes.filter((l) => l > 0).reduce((s, l, _i, a) => s + l / a.length, 0) || 1;
@@ -128,7 +138,10 @@ export function maakQuota(input: {
     rttiPunten.T2 = Math.max(0, rttiPunten.T2 - tekort);
   }
   const vorm = vormAantallen({ ...input.kal, items: N }) as Record<PlanVorm, number>;
+  const kern = kernbegrippen(input.bron).slice(0, 12);
   return {
+    ...(N < input.aantalVragen ? { ingekortVan: input.aantalVragen } : {}),
+    ...(kern.length ? { kern } : {}),
     aantal: N,
     punten: input.doelPunten,
     paragrafen: pars.map((p, i) => ({ ...p, aantal: perPar[i]! })),
@@ -136,6 +149,19 @@ export function maakQuota(input: {
     vorm,
     reserve: PLAN.reserve,
   };
+}
+
+/**
+ * Aantal vragen dat in de toetstijd past. De kalibratie (Nicks schooltoetsen) geeft het aantal items; bij
+ * plan-first zijn de vragen voller (situatie + gegevens), dus begrenzen we op vragen per minuut (BB/KB 0,5,
+ * GT/TL 0,55) — nooit onder 86 % van de kalibratie (lengtecriterium) en de punten blijven gelijk: liever
+ * minder, rijkere vragen dan veel losse 1-puntsvragen (rechter kb2: "te veel items voor 45 min").
+ */
+export function aantalVoorTijd(aantal: number, kal: Pick<Kalibratie, "minuten" | "leerweg" | "examen">): number {
+  if (kal.examen || !kal.minuten) return aantal;
+  const perMin = kal.leerweg === "BB" || kal.leerweg === "KB" ? 0.5 : 0.55;
+  const maxTijd = Math.round(kal.minuten * perMin);
+  return Math.min(aantal, Math.max(Math.ceil(aantal * 0.86), maxTijd));
 }
 
 export function planTokens(q: PlanQuota): number {
@@ -158,6 +184,7 @@ export function bouwplanPrompt(q: PlanQuota): string {
     .join("; ");
   const gesloten = q.vorm.mc + q.vorm.jn;
   const blokken = contextBlokkenDoel(q);
+  const kernRegel = q.kern?.length ? `\n- Kernbegrippen uit de lesstof die elk minstens één vraag krijgen: ${q.kern.map((k) => `${k.term}${k.par ? ` (${k.par})` : ""}`).join(", ")}.` : "";
   return `OPDRACHT NU: maak nog GEEN vragen, maar eerst het BOUWPLAN van de hele toets (JSON). Het plan wordt daarna door anderen uitgeschreven, dus elke regel moet op zichzelf duidelijk zijn.
 
 Vaste aantallen (verplicht, tel na):
@@ -166,6 +193,7 @@ Vaste aantallen (verplicht, tel na):
 - Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt; nooit meer dan ${gesloten + 1} gesloten vragen${q.vorm.jn ? "" : ", geen juist/onjuist (jn)"}.
 - Contextblokken: ${blokken} groepen (g) van 2–3 open vragen bij één situatie, zoals in een schooltoets: eerst een berekening in die situatie (reken; of toepassen als er niets te rekenen valt), daarna een redeneer-/uitlegvraag (uitleg, T2 of I) die op dezelfde situatie voortbouwt. Zelfde groepstitel, aaneen.
 - RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I}${q.rttiPunten.I ? " (I = nieuwe situatie, eigen redenering, 2–3 p)" : ""}.
+- Elk kernbegrip of elke regel één keer: niet twee vragen over dezelfde regel of tabel (bijv. twee keer veilige tijd bij een geluidsniveau) en niet twee vragen over dezelfde onderdelen (bijv. twee keer de delen van het oor).${kernRegel}
 - Plus ${q.reserve} reservevragen (andere begrippen/situaties, verschillende paragrafen) in "reserve".
 
 Regels voor het plan:
@@ -260,34 +288,87 @@ export function planRegel(it: PlanItem): string {
 /**
  * De plan-aanroep. `voorvoegsel` = het volledige toetsvoorvoegsel (lesstof, kalibratie, leerdoelen) dat ook de
  * schrijvers krijgen; zo deelt het plan de promptcache met de schrijf-aanroepen erna.
+ *
+ * Robuust tegen trage API (gate plan5: 3 van 5 plan-aanroepen > 55 s → snel model of oude route):
+ * - het plan mag lopen tot er nog PLAN.schrijfReserveMs van de deadline over is (niet meer een vaste 55 s);
+ * - geen plan na PLAN.tweedePogingNaMs (of de eerste faalt eerder): een tweede, identieke grok-4.5-aanroep ernaast;
+ * - geen plan na PLAN.snelNaMs: het snelle model als reserve ernaast. Dat plan telt pas als alle
+ *   grok-4.5-aanroepen mislukt zijn; een grok-4.5-plan dat binnen het planbudget komt, gaat altijd voor.
+ * Pas als alles faalt, gooit dit (→ oude route in generate.ts).
  */
-export async function maakBouwplan(opts: {
+export function maakBouwplan(opts: {
   system: string;
   voorvoegsel: string;
   quota: PlanQuota;
   rest: () => number;
   kosten?: Kosten;
+  /** Testbaar: de modelaanroep (standaard vraagJson). */
+  roep?: (rol: "plannen" | "snel", timeoutMs: () => number) => Promise<Bouwplan>;
+  /** Testbaar: kortere wachttijden. */
+  tijden?: Partial<{ tweedePogingNaMs: number; snelNaMs: number; minGrokMs: number; minSnelMs: number }>;
 }): Promise<Bouwplan> {
+  const T = { tweedePogingNaMs: PLAN.tweedePogingNaMs, snelNaMs: PLAN.snelNaMs, minGrokMs: 20_000, minSnelMs: 10_000, ...opts.tijden };
   const msgs = berichten(opts.system, `${opts.voorvoegsel}${CACHE_GRENS}${bouwplanPrompt(opts.quota)}`);
-  try {
-    return await vraagJson("plannen", msgs, parseBouwplan, {
-      maxTokens: planTokens(opts.quota),
-      rest: () => Math.min(opts.rest(), PLAN.timeoutMs),
-      kosten: opts.kosten,
-      herkansingMinRestMs: 10 ** 9,
-    });
-  } catch (e) {
-    // grok-4.5 is soms traag (gemeten 21–30 s, uitschieters > 70 s): dan het snelle model voor het plan,
-    // zodat het schrijven (wel grok-4.5) op tijd kan starten. Lukt ook dat niet → oude route.
-    if (opts.rest() < PLAN.reserveTimeoutMs + 60_000) throw e;
-    console.warn("[bouwplan] plan-aanroep mislukt, snel model:", e instanceof Error ? e.message.slice(0, 120) : e);
-    return vraagJson("snel", msgs, parseBouwplan, {
-      maxTokens: planTokens(opts.quota),
-      rest: () => Math.min(opts.rest(), PLAN.reserveTimeoutMs),
-      kosten: opts.kosten,
-      herkansingMinRestMs: 10 ** 9,
-    });
-  }
+  const planRest = () => opts.rest() - PLAN.schrijfReserveMs;
+  const roep =
+    opts.roep ??
+    ((rol: "plannen" | "snel", t: () => number) =>
+      vraagJson(rol, msgs, parseBouwplan, { maxTokens: planTokens(opts.quota), rest: t, kosten: opts.kosten, herkansingMinRestMs: 10 ** 9 }));
+  return new Promise<Bouwplan>((resolve, reject) => {
+    let klaar = false;
+    let grokLopend = 0;
+    let lopend = 0;
+    let grokGestart = 0;
+    let snelGestart = false;
+    let snelPlan: Bouwplan | null = null;
+    let laatsteFout: unknown = new Error("Geen tijd voor het bouwplan");
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const einde = (p: Bouwplan | null) => {
+      if (klaar) return;
+      klaar = true;
+      timers.forEach(clearTimeout);
+      if (p) resolve(p);
+      else reject(laatsteFout);
+    };
+    const kijk = () => {
+      if (klaar || grokLopend > 0) return;
+      if (snelPlan) return einde(snelPlan);
+      // Geen grok-4.5 meer bezig: eerst nog een grok-4.5-poging (als die kan), dan het snelle model.
+      if (grokGestart < 2 && planRest() >= T.minGrokMs) return start("plannen");
+      if (!snelGestart && planRest() >= T.minSnelMs) return start("snel");
+      if (lopend === 0) einde(null);
+    };
+    const start = (rol: "plannen" | "snel") => {
+      if (klaar) return;
+      lopend++;
+      if (rol === "plannen") {
+        grokLopend++;
+        grokGestart++;
+      } else snelGestart = true;
+      const route: PlanRoute = rol === "snel" ? "snel model" : grokGestart > 1 ? "plan-model (2e poging)" : "plan-model";
+      const max = rol === "snel" ? PLAN.reserveTimeoutMs : PLAN.timeoutMs;
+      roep(rol, () => Math.min(planRest(), max))
+        .then(
+          (p) => {
+            if (rol === "plannen") einde({ ...p, route });
+            else snelPlan = { ...p, route };
+          },
+          (e) => {
+            laatsteFout = e;
+            if (!klaar) console.warn(`[bouwplan] plan-aanroep (${route}) mislukt:`, e instanceof Error ? e.message.slice(0, 120) : e);
+          },
+        )
+        .finally(() => {
+          lopend--;
+          if (rol === "plannen") grokLopend--;
+          kijk();
+        });
+    };
+    if (planRest() < T.minSnelMs) return einde(null);
+    start("plannen");
+    timers.push(setTimeout(() => !klaar && grokGestart < 2 && planRest() >= T.minGrokMs && start("plannen"), T.tweedePogingNaMs));
+    timers.push(setTimeout(() => !klaar && !snelGestart && planRest() >= T.minSnelMs && start("snel"), T.snelNaMs));
+  });
 }
 
 /** Plan als compacte rijen (zelfde formaat als de plan-aanroep), voor de kritiek-aanroep. */

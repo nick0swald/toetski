@@ -13,6 +13,7 @@ import {
   TableRow,
   TextRun,
   WidthType,
+  HeightRule,
   Header,
   Footer,
   VerticalAlign,
@@ -22,7 +23,7 @@ import { cesuurPunten, formuleTekst, modelLabel, omzetTabel, voldoendeHint } fro
 import { totaalPunten } from "./rtti";
 import { slug } from "./text";
 import { ghsPictogramSvg, grafiekSvg, maatcilinderSvg, schemaFiguurSvg } from "./figuur-svg";
-import { blokkenVoorVraag } from "./blad-volgorde";
+import { blokkenVoorVraag, tekenvakMaat } from "./blad-volgorde";
 import { figuurIsGeldig } from "./figuren/bevriezing";
 import type { CijferNorm, GegenereerdeToets, GoedgekeurdeFiguur, SchemaFiguur, Vraag, VraagTabel } from "./types";
 import { withDefaults } from "./defaults";
@@ -183,6 +184,43 @@ function goedgekeurdeFiguurBlocks(fig: GoedgekeurdeFiguur | undefined, nr: numbe
 function tabelBlocks(q: Vraag): DocChild[] {
   if (!q.tabel?.koppen?.length) return [];
   return [vraagTabelDocx(q.tabel), p("", { after: 80 })];
+}
+
+/** Tekenvak: raster van 1 cm-hokjes als Word-tabel (door code getekend, geen beeld), met schaal/aslabels. */
+function tekenvakBlocks(q: Vraag): DocChild[] {
+  const { kolommen, rijen } = tekenvakMaat(q);
+  const cm = 567; // 1 cm in twips
+  const raster = q.tekenvak?.soort !== "leeg";
+  const lijn = { style: BorderStyle.SINGLE, size: raster ? 2 : 0, color: raster ? "B0B0B0" : "FFFFFF" };
+  const rand = { style: BorderStyle.SINGLE, size: 8, color: INK };
+  const rows = Array.from(
+    { length: rijen },
+    (_, r) =>
+      new TableRow({
+        height: { value: cm, rule: HeightRule.EXACT },
+        children: Array.from(
+          { length: kolommen },
+          (_, c) =>
+            new TableCell({
+              width: { size: cm, type: WidthType.DXA },
+              borders: {
+                top: r === 0 ? rand : lijn,
+                bottom: r === rijen - 1 ? rand : lijn,
+                left: c === 0 ? rand : lijn,
+                right: c === kolommen - 1 ? rand : lijn,
+              },
+              children: [new Paragraph({ children: [] })],
+            }),
+        ),
+      }),
+  );
+  const out: DocChild[] = [];
+  const t = q.tekenvak;
+  const bijschrift = [t?.schaal ? `Schaal: ${t.schaal}` : "", t?.yLabel ? `verticaal: ${t.yLabel}` : "", t?.xLabel ? `horizontaal: ${t.xLabel}` : ""].filter(Boolean).join("   ");
+  if (bijschrift) out.push(p(bijschrift, { size: SMALL_SIZE, before: 60, after: 40 }));
+  out.push(new Table({ width: { size: kolommen * cm, type: WidthType.DXA }, columnWidths: Array.from({ length: kolommen }, () => cm), rows }));
+  out.push(p("", { after: 80 }));
+  return out;
 }
 
 function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number; before?: number }) {
@@ -445,6 +483,8 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
             }),
           );
         }
+      } else if (blok === "tekenvak") {
+        out.push(...tekenvakBlocks(q));
       } else if (blok === "antwoordlijnen") {
         const lijnen = Math.max(2, (Number(q.punten) || 1) + 1);
         for (let i = 0; i < lijnen; i++) {

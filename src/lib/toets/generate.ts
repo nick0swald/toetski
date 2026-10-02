@@ -16,6 +16,7 @@ import { bouwKwaliteit } from "./kwaliteit-check";
 import { LIMIETEN, PLAN, TIJD, metRttiDoel, tokensVoorAantalVragen } from "./config";
 import { CACHE_GRENS, berichten, nieuweKosten, vraagJson, vriendelijkeAiFout, xaiChat, type Kosten } from "./llm";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
+import { gInstructie, gVoorToets } from "./reken-check";
 import {
   annoteerKalibratie,
   isExamenNiveau,
@@ -378,6 +379,7 @@ async function genereerRuw(invoer: GenerateData, kosten: Kosten = nieuweKosten()
 /** Plan-first route (zie bouwplan.ts, bouwplan-check.ts, plan-schrijven.ts). */
 async function schrijfViaPlan(o: { system: string; basisPrompt: string; quota: PlanQuota; deadline: number; kosten: Kosten }): Promise<GeneratedPayload | null> {
   const ruwPlan = await maakBouwplan({ system: o.system, voorvoegsel: o.basisPrompt, quota: o.quota, rest: () => o.deadline - Date.now(), kosten: o.kosten });
+  console.info(`[generate] bouwplan via ${ruwPlan.route ?? "plan-model"}`);
   let { plan, issues } = herstelBouwplan(ruwPlan, o.quota);
   if (PLAN.kritiek && o.deadline - Date.now() > 100_000) {
     const k = await kritiseerBouwplan({ system: o.system, voorvoegsel: o.basisPrompt, plan, rest: () => o.deadline - Date.now(), kosten: o.kosten });
@@ -407,7 +409,7 @@ async function schrijfViaPlan(o: { system: string; basisPrompt: string; quota: P
   const samen = voegStukkenSamen(res, stukken, o.quota);
   const namen = ontdubbelNamen(samen.vragen, samen.nakijkmodel);
   if (namen.vervangen.length) console.info("[generate] namen ontdubbeld:", namen.vervangen.join("; "));
-  return { ...samen, vragen: namen.vragen, nakijkmodel: namen.nakijkmodel, bouwplan: { ...plan, issues } };
+  return { ...samen, vragen: namen.vragen, nakijkmodel: namen.nakijkmodel, bouwplan: { ...plan, issues, ...(ruwPlan.route ? { route: ruwPlan.route } : {}) } };
 }
 
 /** Eén schrijf-aanroep (rol "schrijven") met één herkansing voor kapotte JSON, binnen de deadline. */
@@ -430,6 +432,13 @@ export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
       opties: q.opties?.length ? q.opties : undefined,
     }),
   );
+}
+
+/** Rekent de toets met de zwaartekracht, dan staat de gebruikte g bij de instructies (één g per toets). */
+function metGInstructie(instructies: string[], vragen: Vraag[], nakijk: NakijkItem[], bron: string): string[] {
+  const regel = gInstructie(vragen, gVoorToets(bron, vragen, nakijk));
+  if (!regel || instructies.some((i) => /\bg\s*=|N\s*\/\s*kg/i.test(i))) return instructies;
+  return [...instructies, regel];
 }
 
 /** Stap 2: afwerken (reparatie, punten, MC-hussel, kwaliteit) → complete toets. */
@@ -490,7 +499,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       duurMinuten: payload.meta.duurMinuten || data.duurMinuten,
       school: "",
       hulpmiddelen: payload.meta.hulpmiddelen,
-      instructies: payload.meta.instructies,
+      instructies: metGInstructie(payload.meta.instructies, vragen, nakijkmodel, bron),
       onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
       versie: data.versie,
       moeilijkheid: data.moeilijkheid,

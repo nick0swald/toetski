@@ -119,9 +119,18 @@ export const PLAN = {
   /** Uitvoertokens per bouwplan-item (compacte rij) + vaste marge (incl. redeneren). */
   tokensPerItem: 70,
   tokensMarge: 2500,
-  /** Bouwplan-aanroep (grok-4.5) duurt nooit langer dan dit. Gemeten 21–30 s, uitschieters > 70 s. */
-  timeoutMs: 55_000,
-  /** Daarna één plan-poging met het snelle model (niet-redenerend, ~15 s); lukt dat niet → oude route. */
+  /**
+   * Bouwplan-aanroep (grok-4.5). Gemeten 21–30 s, uitschieters > 70 s (gate plan5: 3 van 5 keer > 55 s → terugval).
+   * Het plan mag lopen tot er nog `schrijfReserveMs` van de stap-1-deadline over is (bij 150 s: ± 90 s).
+   */
+  timeoutMs: 90_000,
+  /** Het schrijven (parallel, grok-4.5) heeft na het plan minstens zoveel nodig (gemeten 30–45 s). */
+  schrijfReserveMs: 60_000,
+  /** Nog geen plan na zoveel ms (of de eerste aanroep faalt): tweede, identieke grok-4.5-aanroep ernaast. */
+  tweedePogingNaMs: 40_000,
+  /** Nog geen plan na zoveel ms: het snelle model als reserve ernaast; dat plan telt alleen als grok-4.5 faalt. */
+  snelNaMs: 60_000,
+  /** Max duur van de reserve-aanroep met het snelle model. */
   reserveTimeoutMs: 30_000,
   /** Tweede plan-aanroep: semantische dubbelingen zoeken en vervangen (aan/uit, max duur). */
   kritiek: true,

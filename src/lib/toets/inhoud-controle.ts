@@ -174,4 +174,6 @@ export const CONTROLE_CODES: Record<string, string> = {
   "figuur-ontbreekt": "verwijzing naar ontbrekende figuur",
   dekking: "paragraafdekking",
   rtti: "RTTI-balans",
+  herhaling: "herhaalde een andere vraag",
+  verklapt: "verklapte een ander antwoord",
 };

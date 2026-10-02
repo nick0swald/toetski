@@ -57,7 +57,7 @@ Regels:
 - Personen: ALLEEN de persoon uit de planregel; staat er geen persoon, gebruik dan geen naam ("een leerling", "je").
 - Volg per vraag het begrip, de situatie, de persoon en wat er gevraagd wordt; het verwachte antwoord staat in het plan. "LET OP" bij een regel is verplicht.
 - "vraag" in de planregel is de bedoeling, niet de letterlijke tekst: maak er een volwaardige schooltoetsvraag van (concrete situatie met gegevens, dan een duidelijke opdracht zoals "Bereken …", "Leg uit …", "Noteer …").
-- Tekenvraag (vorm tekenen): de leerling tekent zelf op de antwoordruimte (pijl op schaal, lijn in een diagram, schema); geef alle gegevens in de tekst (geen plaatje nodig) en in het nakijkmodel één tekencriterium per punt.
+- Tekenvraag (vorm tekenen): begin de opdracht met "Teken …"; de leerling tekent in een leeg rastervak (tekenvak, hokjes van 1 cm) dat de software onder de vraag zet. Zet de schaal in de stam (bijv. "1 cm ≙ 10 N") en alle gegevens in de tekst; verwijs niet naar een figuur of plaatje ("teken in het tekenvak" mag). Nakijkmodel: één tekencriterium per punt (aangrijpingspunt, richting, lengte volgens schaal).
 - Vraagt een vraag om meerdere onderdelen (bijv. drie namen), dan is elk onderdeel één punt van de geplande punten; vraag niet meer onderdelen dan er punten zijn.
 - Gebruik geen persoon, situatie of begrip van een andere planregel, en noem nooit het antwoord van een andere planregel in jouw vraagtekst (geen weggevers).
 - "context" = alleen de situatie (1–3 korte zinnen) met de gegevens; de stam is daarna alleen de vraagzin en herhaalt niets uit de context. Staat er in de planregel geen situatie, dan geen context (gewoon een korte vraag).
@@ -69,7 +69,7 @@ Regels:
 }
 
 interface MiniPayload {
-  vragen: { nummer: number; domein?: string; contextTitel?: string; punten?: number; rtti?: Rtti; rttiPlan?: Rtti; puntenPlan?: number }[];
+  vragen: { nummer: number; domein?: string; contextTitel?: string; punten?: number; rtti?: Rtti; rttiPlan?: Rtti; puntenPlan?: number; vormPlan?: string }[];
   nakijkmodel: { nummer: number; puntenverdeling?: { punt: number; criterium: string }[] }[];
 }
 
@@ -119,7 +119,7 @@ export function voegStukkenSamen<P extends MiniPayload>(stukken: (P | null)[], p
       vragen.push({
         ...v1,
         nummer: nr,
-        ...(it ? { domein: `${it.par}${titel(it.par) ? ` ${titel(it.par)}` : ""}`, rtti: it.rtti, rttiPlan: it.rtti, puntenPlan: it.punten, ...(it.groep ? { contextTitel: it.groep } : {}) } : {}),
+        ...(it ? { domein: `${it.par}${titel(it.par) ? ` ${titel(it.par)}` : ""}`, rtti: it.rtti, rttiPlan: it.rtti, puntenPlan: it.punten, ...(it.vorm === "teken" ? { vormPlan: "teken" } : {}), ...(it.groep ? { contextTitel: it.groep } : {}) } : {}),
       });
       if (n1) nakijk.push({ ...n1, nummer: nr });
     }

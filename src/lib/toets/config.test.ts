@@ -30,7 +30,11 @@ describe("config: modellen (Nick, 1 okt 2026)", () => {
   });
 
   it("plan-first: bouwplan past ruim binnen de schrijfdeadline", () => {
-    assert.ok(PLAN.timeoutMs <= TIJD.vragenDeadlineMs - 75_000, "na het plan moet er ≥ 75 s over zijn om te schrijven");
+    // Het plan stopt altijd als er nog schrijfReserveMs over is (gemeten schrijven 30–45 s).
+    assert.ok(PLAN.schrijfReserveMs >= 60_000, "na het plan moet er ≥ 60 s over zijn om te schrijven");
+    assert.ok(PLAN.timeoutMs <= TIJD.vragenDeadlineMs - PLAN.schrijfReserveMs);
+    assert.ok(PLAN.tweedePogingNaMs < PLAN.snelNaMs && PLAN.snelNaMs < TIJD.vragenDeadlineMs - PLAN.schrijfReserveMs);
+    assert.ok(TIJD.vragenDeadlineMs < TIJD.vercelMaxMs);
     assert.ok(PLAN.stukGrootte >= 3 && PLAN.stukGrootte <= 8);
   });
 

@@ -108,7 +108,9 @@ async function genereer(caseNaam) {
   const { pakketDocument } = await jiti.import(join(ROOT, "src/lib/toets/docx-export.ts"));
   writeFileSync(join(uit, `${caseNaam}.docx`), await Packer.toBuffer(await pakketDocument(toets)));
   if (ruw.payload?.bouwplan) writeFileSync(join(uit, `${caseNaam}.bouwplan.json`), JSON.stringify(ruw.payload.bouwplan, null, 1));
-  const meta = { case: caseNaam, base: lokaal ? "lokaal" : base, naam, start: new Date(t0).toISOString(), tijden: toets.figuurRapport.tijden, kosten: toets.kosten ?? null, vragen: toets.vragen.length, punten: toets.vragen.reduce((s, q) => s + q.punten, 0) };
+  const planRoute = ruw.payload?.bouwplan ? (ruw.payload.bouwplan.route ?? "plan-first") : "oude route";
+  console.log(`planroute: ${planRoute}`);
+  const meta = { case: caseNaam, base: lokaal ? "lokaal" : base, naam, planRoute, start: new Date(t0).toISOString(), tijden: toets.figuurRapport.tijden, kosten: toets.kosten ?? null, vragen: toets.vragen.length, punten: toets.vragen.reduce((s, q) => s + q.punten, 0) };
   writeFileSync(join(uit, `${caseNaam}.meta.json`), JSON.stringify(meta, null, 1));
   console.log(JSON.stringify(meta, null, 1));
   console.log(`→ ${join(uit, caseNaam)}.{json,docx,meta.json}`);
