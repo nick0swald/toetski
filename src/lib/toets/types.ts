@@ -188,6 +188,13 @@ export interface Vraag {
   rttiPlan?: Rtti;
   /** Plan-first: geplande punten (bovengrens na reparatie en puntennormalisatie). */
   puntenPlan?: number;
+  /** Plan-first: geplande vorm (bijv. "teken" → tekenvak op het leerlingblad). */
+  vormPlan?: string;
+  /**
+   * Leeg antwoordkader voor een tekenvraag (krachtpijl, parallellogram, grafiek): door code getekend
+   * raster of leeg vak, nooit een AI-beeld. Vervangt de antwoordlijnen.
+   */
+  tekenvak?: Tekenvak;
   /** Bronvermelding bij een bewerkte examenvraag, bijv. "naar: examen 2019 tijdvak 1". */
   bronvermelding?: string;
   /** Vraagtekst: bij lege context eerst inleiding, daarna vraagzin — nooit omgekeerd. */
@@ -309,6 +316,18 @@ export interface FiguurRapport {
   zonderPlaatjes?: boolean;
   /** Gemeten doorlooptijden (ms) van de laatste generatie. */
   tijden?: { vragenMs?: number; afwerkenMs?: number; figurenMs?: number; totaalMs?: number };
+}
+
+export interface Tekenvak {
+  soort: "raster" | "leeg";
+  /** Aantal hokjes van 1 cm (raster), standaard 14 × 8. */
+  kolommen?: number;
+  rijen?: number;
+  /** Schaal, bijv. "1 cm ≙ 10 N" (ook in de stam). */
+  schaal?: string;
+  /** Aslabels bij een grafiek, bijv. "u (cm)" en "F (N)". */
+  xLabel?: string;
+  yLabel?: string;
 }
 
 export interface PuntenCriterium {

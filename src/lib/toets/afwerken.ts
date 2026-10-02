@@ -15,6 +15,9 @@ import { groepIntro, herstelGroepen, type Volgorde } from "./context-groepen.ts"
 import { labelRtti } from "./rtti-regels.ts";
 import { kapPunten } from "./plan-schrijven.ts";
 import { LIMIETEN, TIJD } from "./config.ts";
+import { controleerBerekeningen, gVoorToets } from "./reken-check.ts";
+import { dubbelsWeg, kernbegrippen, ontbrekendeKern, samenhangIssues, type Kernbegrip } from "./samenhang.ts";
+import { zetTekenvakken } from "./tekenvak.ts";
 import { CACHE_GRENS } from "./llm.ts";
 
 const REPAIR_SYSTEM = `Je verbetert ALLEEN de aangewezen VMBO-vragen. Antwoord met één JSON-object:
@@ -75,6 +78,8 @@ function behoudGroep(oud: Vraag, nieuw: Vraag): Vraag {
     leerdoelId: nieuw.leerdoelId ?? oud.leerdoelId,
     rttiPlan: oud.rttiPlan ?? nieuw.rttiPlan,
     puntenPlan: oud.puntenPlan ?? nieuw.puntenPlan,
+    vormPlan: oud.vormPlan ?? nieuw.vormPlan,
+    tekenvak: nieuw.tekenvak ?? oud.tekenvak,
   };
 }
 
@@ -190,6 +195,33 @@ async function repareerRonde(
 }
 
 /**
+ * Deterministische stap na elke (re)generatie: itemreparaties, tekenvakken en de rekencontrole (één g per toets;
+ * kleine afrondfouten hersteld, grote afwijkingen → sleutel-fout voor de reparatie).
+ */
+export function deterministisch(vragen: Vraag[], nakijk: NakijkItem[], bron: string, g?: number): { vragen: Vraag[]; nakijkmodel: NakijkItem[]; issues: ItemIssue[]; g: number } {
+  // Tekenvak eerst: een tekenvraag met tekenvak verwijst niet naar een "ontbrekende figuur".
+  const det = repareerItemsDeterministisch(zetTekenvakken(vragen), nakijk, bron);
+  const v = zetTekenvakken(det.vragen);
+  const gT = g ?? gVoorToets(bron, v, det.nakijkmodel);
+  const rk = controleerBerekeningen(v, det.nakijkmodel, { g: gT });
+  const al = new Set(det.issues.map((i) => `${i.nummer}:${i.code}`));
+  return { vragen: v, nakijkmodel: rk.nakijkmodel, issues: [...det.issues, ...rk.issues.filter((i) => !al.has(`${i.nummer}:${i.code}`))], g: gT };
+}
+
+/** "Niet oplosbaar: staat niet in de lesstof" → meteen vervangen (scheelt een tweede reparatie- en controleronde). */
+export function vervangBuitenLesstof(issues: ItemIssue[], ontbreekt: Kernbegrip[]): ItemIssue[] {
+  const vrij = [...ontbreekt];
+  return issues.map((i) => {
+    if (i.code !== "gegeven-ontbreekt" || !/lesstof|antwoordenboek/i.test(i.uitleg) || !/nergens|niet in|staat niet|ontbreek|geen/i.test(i.uitleg)) return i;
+    const k = vrij.shift();
+    return {
+      ...i,
+      uitleg: `${i.uitleg} Staat de gevraagde kennis niet in de lesstof, VERVANG de vraag dan door een nieuwe vraag ${k ? `over "${k.term}"${k.par ? ` (paragraaf ${k.par}; zet domein op die paragraaf)` : ""}` : "over een ander kernbegrip uit de lesstof dat nog niet in de toets staat"}; zelfde vorm, punten en rtti; nooit een tweede vraag over iets wat al in de toets staat.`,
+    };
+  });
+}
+
+/**
  * Lengte: ligt het totaal ruim onder het doel (tijd van de toets), dan een paar 1-punts gesloten vragen
  * laten herschrijven tot open vragen van 2 punten (zelfde leerdoel en rtti) — geen extra vragen.
  */
@@ -294,7 +326,8 @@ export async function werkVragenAf(input: {
       return Promise.race([f(p).catch(() => null), stop]).finally(() => clearTimeout(timer));
     });
   input = { ...input, controleer: binnenTijd(input.controleer), repair: binnenTijd(input.repair) };
-  let stap = repareerItemsDeterministisch(input.vragen, input.nakijkmodel, bron);
+  let stap = deterministisch(input.vragen, input.nakijkmodel, bron);
+  const g = stap.g;
   let vragen = stap.vragen;
   let nakijk = stap.nakijkmodel;
   // Zonder plaatjes: figuurvelden er meteen uit, zodat controle en reparatie geen spookfiguren beoordelen.
@@ -302,6 +335,7 @@ export async function werkVragenAf(input: {
   const eigen = extractParagrafen(bron, input.antwoorden);
   const paragrafen = eigen.length >= 2 ? eigen : (input.paragrafen ?? []);
   const bronW = { lesstof: bron, antwoorden: input.antwoorden };
+  const kern = kernbegrippen(bron);
   let controle: ControleLog | undefined;
 
   if (input.controleer && input.repair) {
@@ -315,21 +349,25 @@ export async function werkVragenAf(input: {
       if (eerste.gelukt) vragen = herlabel(vragen, eerste.oordelen);
       // Regel-RTTI (type → basis, bijgesteld op opdracht/stappen/context) is leidend voor de balans.
       vragen = labelRtti(vragen);
-      const inhoud = controleIssues(vragen, nakijk, eerste.oordelen);
       const heur = stap.issues;
-      const bezet = new Set([...inhoud, ...heur].map((i) => i.nummer));
+      const bezet0 = new Set([...controleIssues(vragen, nakijk, eerste.oordelen), ...heur].map((i) => i.nummer));
+      // Herhaling en weggevers (deterministisch): de dubbele vraag wordt vervangen, liefst door een ontbrekend kernbegrip.
+      const sam = samenhangIssues(vragen, nakijk, { kern, vermijd: bezet0 });
+      const nieuwKern = new Set(sam.map((i) => i.uitleg.match(/NIEUWE vraag over "([^"]+)"/)?.[1]).filter(Boolean));
+      const inhoud = vervangBuitenLesstof(controleIssues(vragen, nakijk, eerste.oordelen), ontbrekendeKern(vragen, nakijk, kern).filter((k) => !nieuwKern.has(k.term)));
+      const bezet = new Set([...bezet0, ...sam.map((i) => i.nummer)]);
       const dek = dekkingIssues(vragen, paragrafen, bezet);
       dek.forEach((i) => bezet.add(i.nummer));
       const rtti = input.rttiDoel ? rttiHerschrijfPlan(vragen, input.rttiDoel, { vermijd: bezet }) : [];
       rtti.forEach((i) => bezet.add(i.nummer));
       const lengte = lengteIssues(vragen, input.doelPunten, bezet, input.minGesloten);
-      const alle = [...heur, ...inhoud, ...dek, ...rtti, ...lengte];
+      const alle = [...heur, ...inhoud, ...sam, ...dek, ...rtti, ...lengte];
       gevonden.push(...alle.map((i) => ({ nummer: i.nummer, code: i.code, uitleg: i.uitleg })));
       let open = alle;
       // Gegarandeerd: controle ≤ TIJD.controleTimeoutMs, dus bij het standaardbudget is er altijd tijd voor ronde 1.
       if (alle.length && rest() > TIJD.reparatieMinRestMs) {
         const r1 = await repareerRonde(vragen, nakijk, alle, bron, input.repair);
-        const det = repareerItemsDeterministisch(r1.vragen, r1.nakijkmodel, bron);
+        const det = deterministisch(r1.vragen, r1.nakijkmodel, bron, g);
         vragen = det.vragen;
         nakijk = det.nakijkmodel;
         stap = det;
@@ -349,7 +387,7 @@ export async function werkVragenAf(input: {
         const ernstig = open.filter((i) => ERNSTIG.has(i.code));
         if (ernstig.length && rest() > TIJD.vervangMinRestMs) {
           const r2 = await repareerRonde(vragen, nakijk, ernstig, bron, input.repair, true);
-          const det2 = repareerItemsDeterministisch(r2.vragen, r2.nakijkmodel, bron);
+          const det2 = deterministisch(r2.vragen, r2.nakijkmodel, bron, g);
           vragen = det2.vragen;
           nakijk = det2.nakijkmodel;
           stap = det2;
@@ -370,7 +408,16 @@ export async function werkVragenAf(input: {
       let blijft = [...new Map(open.filter((i) => INHOUD.has(i.code)).map((i) => [`${i.nummer}:${i.code}`, i])).values()];
       // Na reparatie én vervanging nog steeds onbruikbaar (geen juiste sleutel of niet oplosbaar): van het blad af,
       // zolang er genoeg vragen overblijven. Liever een vraag minder dan een foute vraag.
-      const weg = [...new Set(blijft.filter((i) => ONBRUIKBAAR.has(i.code)).map((i) => i.nummer))].slice(0, Math.max(0, vragen.length - 8));
+      const onbruikbaar = [...new Set(blijft.filter((i) => ONBRUIKBAAR.has(i.code)).map((i) => i.nummer))].slice(0, Math.max(0, vragen.length - 8));
+      // Na de reparatie nog steeds twee keer hetzelfde (zelfde antwoord/begrippen)? Dan de losse 1-puntsvraag eraf
+      // (hooguit 2, zolang er genoeg vragen en ≥ 90 % van de punten blijven).
+      const over = vragen.filter((q) => !onbruikbaar.includes(q.nummer));
+      const dubbel = dubbelsWeg(over, nakijk, {
+        minVragen: Math.max(8, over.length - 2),
+        minPunten: input.doelPunten ? Math.ceil(input.doelPunten * 0.9) : 0,
+      });
+      if (dubbel.length) gevonden.push(...dubbel.map((nr) => ({ nummer: nr, code: "herhaling", uitleg: "Na reparatie nog steeds dezelfde vraag als een andere: weggehaald." })));
+      const weg = [...onbruikbaar, ...dubbel];
       if (weg.length) {
         const voor = vragen;
         vragen = herstelGroepen(vragen.filter((q) => !weg.includes(q.nummer)), voor);
@@ -417,7 +464,7 @@ export async function werkVragenAf(input: {
         const parsed = bijschavenPayloadSchema.parse(JSON.parse(stripJson(raw)));
         const nummers = new Set(stap.issues.map((i) => i.nummer));
         const gemengd = mergeOpNummer(vragen, nakijk, parsed.vragen, parsed.nakijkmodel, nummers);
-        const opnieuw = repareerItemsDeterministisch(gemengd.vragen, gemengd.nakijkmodel, bron);
+        const opnieuw = deterministisch(gemengd.vragen, gemengd.nakijkmodel, bron, g);
         if (opnieuw.issues.length <= stap.issues.length) {
           vragen = opnieuw.vragen;
           nakijk = opnieuw.nakijkmodel;
@@ -429,7 +476,7 @@ export async function werkVragenAf(input: {
     }
   }
 
-  const punten = houdPlanPunten(repareerPunten(vragen, nakijk));
+  const punten = houdPlanPunten(repareerPunten(zetTekenvakken(vragen), nakijk));
   const figMode = input.figuren ?? "nodig";
   vragen =
     figMode === "geen"

@@ -6,10 +6,11 @@
  */
 import type { Rtti } from "./types";
 import { VOORNAMEN } from "./config.ts";
+import { noemtKern, ontbrekendeTermen } from "./samenhang.ts";
 import { GESLOTEN, contextBlokkenDoel, type Bouwplan, type PlanItem, type PlanQuota } from "./bouwplan.ts";
 
 export interface PlanIssue {
-  code: "aantal" | "dekking" | "diepgang" | "persoon" | "context" | "begrip" | "weggever" | "punten" | "rtti" | "vorm" | "school";
+  code: "aantal" | "dekking" | "diepgang" | "persoon" | "context" | "begrip" | "weggever" | "punten" | "rtti" | "vorm" | "school" | "kern" | "lengte";
   detail: string;
   ernst: "hard" | "zacht";
   hersteld: boolean;
@@ -110,6 +111,9 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
   const overschot = () =>
     [...codes].sort((a, b) => telPar(b) - quotaVan(b) - (telPar(a) - quotaVan(a)))[0];
 
+  if (q.ingekortVan) meld("lengte", `${q.ingekortVan} vragen past niet in de toetstijd → ${q.aantal} vragen, zelfde punten`, "zacht", true);
+  // Vragen die na de uniek-check nog dubbel zijn (geen reserve beschikbaar): kandidaat voor een ontbrekend kernbegrip.
+  const dubbel = new Set<PlanItem>();
   // 1. Aantal vragen
   if (items.length > q.aantal) {
     while (items.length > q.aantal) {
@@ -270,7 +274,10 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
         meld("context", `situatie "${b.context}" lijkt op "${a.context}"`, "zacht", true);
       } else if (lijkt(a.begrip, b.begrip, 0.5)) {
         const ok = wissel(i, (r) => !items.some((x) => lijkt(x.begrip, r.begrip, 0.5)));
-        if (!ok) notitie(items[i]!, `begrip "${a.begrip}" komt al aan bod: vraag vanuit een andere invalshoek (toepassen/verklaren i.p.v. herkennen)`);
+        if (!ok) {
+          notitie(items[i]!, `begrip "${a.begrip}" komt al aan bod: vraag vanuit een andere invalshoek (toepassen/verklaren i.p.v. herkennen)`);
+          dubbel.add(items[i]!);
+        }
         meld("begrip", `begrip "${b.begrip}" herhaalt "${a.begrip}"`, "zacht", true);
       }
     }
@@ -333,6 +340,70 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
         notitie(b, `noem "${a.antwoord}" niet in de vraagtekst (dat is het antwoord op de vraag over "${a.begrip}")`);
         meld("weggever", `"${b.begrip}" verklapt het antwoord van "${a.begrip}"`, "zacht", true);
       }
+    }
+  }
+
+  // 6b. Zelfde antwoord: het antwoord van een vraag is (grotendeels) ook het antwoord van een andere (bijv. "slakkenhuis"
+  // na "trommelvlies, gehoorbeentjes, slakkenhuis"; twee keer "15 minuten"). Reserve inwisselen, anders kandidaat voor 6c.
+  for (let i = 0; i < items.length; i++) {
+    const b = items[i]!;
+    const kb = woorden6(b.antwoord);
+    const getalB = b.antwoord.match(/\d+(?:[.,]\d+)?\s*[a-zA-Z/]+/g) ?? [];
+    for (let j = 0; j < i; j++) {
+      const a = items[j]!;
+      if (zelfdeGroep(a, b) || !b.antwoord || b.begrip.startsWith("(")) continue;
+      const ka = new Set(woorden6(a.antwoord));
+      const woordHit = kb.length > 0 && kb.filter((w) => ka.has(w)).length / kb.length >= 0.5;
+      const getalHit = getalB.some((g) => a.antwoord.replace(/\s+/g, "").includes(g.replace(/\s+/g, "")));
+      if (!woordHit && !getalHit) continue;
+      const ok = wissel(i, (r) => !items.some((x) => x.antwoord && woorden6(r.antwoord).some((w) => woorden6(x.antwoord).includes(w))));
+      if (!ok) dubbel.add(b);
+      meld("begrip", `"${b.begrip}" heeft hetzelfde antwoord als "${a.begrip}"`, "zacht", true);
+      break;
+    }
+  }
+
+  // 6c. Kernbegrippen uit de lesstof (bijv. echo) die nergens in het plan staan: een reservevraag erover inwisselen,
+  // of een dubbele vraag (6b/5) / een vraag uit een overvolle paragraaf op dat begrip zetten. Hooguit 3.
+  if (q.kern?.length) {
+    const tekstVan = (it: PlanItem) => `${it.begrip} ${it.kern} ${it.antwoord} ${it.context}`.toLowerCase();
+    const ontbreekt = ontbrekendeTermen(q.kern, (k) => items.some((it) => noemtKern(tekstVan(it), k)));
+    let gedaan = 0;
+    const nieuwKern = new Set<PlanItem>();
+    for (const k of ontbreekt) {
+      if (gedaan >= 2) break;
+      const vrij = (it: PlanItem) => !it.groep && !it.begrip.startsWith("(") && telPar(it.par) > 1 && !nieuwKern.has(it);
+      const donor =
+        [...dubbel].find((it) => items.includes(it) && vrij(it)) ??
+        // Anders alleen een losse 1-punts R-vraag uit een paragraaf die boven zijn quota zit (goede vragen blijven).
+        (k.zwak ? undefined : items.filter((it) => vrij(it) && it.rtti === "R" && it.punten === 1 && it.vorm !== "reken" && telPar(it.par) > quotaVan(it.par)).at(-1));
+      if (!donor) {
+        meld("kern", `kernbegrip "${k.term}" (${k.par}) heeft geen vraag`, "zacht", false);
+        continue;
+      }
+      const ii = items.indexOf(donor);
+      dubbel.delete(donor);
+      const ri = reserve.findIndex((r) => noemtKern(tekstVan(r), k) && isGesloten(r) === isGesloten(donor));
+      if (ri >= 0) {
+        reserve.push(donor);
+        items[ii] = { ...reserve.splice(ri, 1)[0]! };
+        nieuwKern.add(items[ii]!);
+      } else {
+        const par = k.par && codes.includes(k.par) ? k.par : donor.par;
+        items[ii] = {
+          ...donor,
+          par,
+          begrip: k.term,
+          context: "",
+          persoon: undefined,
+          kern: `toets het kernbegrip "${k.term}" uit ${par} (staat in de lesstof); ${isGesloten(donor) ? "gesloten vraag" : "open vraag, bij voorkeur toepassen in een concrete situatie"}`,
+          antwoord: "",
+          let: [`kernbegrip "${k.term}" komt verder nergens in de toets voor; vraag niets wat al in een andere vraag zit`],
+        };
+        nieuwKern.add(items[ii]!);
+      }
+      gedaan++;
+      meld("kern", `kernbegrip "${k.term}" (${k.par}) ontbrak → ${ri >= 0 ? "reservevraag ingewisseld" : `vraag "${donor.begrip}" omgezet`}`, "zacht", true);
     }
   }
 

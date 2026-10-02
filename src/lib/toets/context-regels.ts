@@ -95,12 +95,13 @@ export function figuurVerwijzingenZonderFiguur(q: Vraag, n?: NakijkItem): string
         if (!heeftTabel) out.push(m[0]);
         continue;
       }
-      if (/hieronder|hiernaast|kijk naar|zie/i.test(m[0]) && (heeftBeeld || heeftTabel)) continue;
+      if (/hieronder|hiernaast|kijk naar|zie/i.test(m[0]) && (heeftBeeld || heeftTabel || q.tekenvak)) continue;
       if (!heeftBeeld) out.push(m[0]);
     }
   }
   // Aanduiden op een voorwerp ("geef het draaipunt aan", "teken de armen") kan alleen als dat voorwerp getekend is.
-  if (!heeftBeeld) {
+  // Met een tekenvak tekent de leerling zelf (krachtpijl vanuit het aangrijpingspunt): geen spookfiguur.
+  if (!heeftBeeld && !q.tekenvak) {
     const zin = (q.stam.match(/[^.!?]+[.!?]*/g) ?? []).find((z) => AANDUIDEN.some((re) => re.test(z)) && !/hoe\s+groot|bereken|hoeveel/i.test(z));
     if (zin) out.push(zin.trim());
   }

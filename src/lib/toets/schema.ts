@@ -112,6 +112,20 @@ export const vraagSchema = z.object({
   rttiPlan: rtti.nullish().transform((r) => r ?? undefined),
   /** Plan-first: geplande punten; na reparatie/normalisatie nooit meer punten dan dit. */
   puntenPlan: z.coerce.number().int().min(1).max(6).nullish().transform((n) => n ?? undefined),
+  vormPlan: z.string().max(12).nullish().transform((v) => v || undefined),
+  /** Leeg antwoordkader voor een tekenvraag (code-getekend raster, nooit een AI-beeld). */
+  tekenvak: z
+    .object({
+      soort: z.enum(["raster", "leeg"]).catch("raster"),
+      kolommen: z.coerce.number().int().min(4).max(16).optional().catch(undefined),
+      rijen: z.coerce.number().int().min(3).max(12).optional().catch(undefined),
+      schaal: z.string().max(40).nullish().transform((v) => v?.trim() || undefined),
+      xLabel: z.string().max(30).nullish().transform((v) => v?.trim() || undefined),
+      yLabel: z.string().max(30).nullish().transform((v) => v?.trim() || undefined),
+    })
+    .nullish()
+    .catch(undefined)
+    .transform((v) => v ?? undefined),
   rttiUitleg: z
     .string()
     .nullish()

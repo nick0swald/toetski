@@ -13,6 +13,7 @@ import { vormAantallen } from "./kalibratie.ts";
 import type { RttiVerdeling } from "./types";
 import { PLAN, VOORNAMEN } from "./config.ts";
 import { CACHE_GRENS, berichten, vraagJson, type Kosten } from "./llm.ts";
+import { kernbegrippen, type Kernbegrip } from "./samenhang.ts";
 
 export type PlanVorm = "jn" | "mc" | "kort" | "invul" | "uitleg" | "reken" | "teken";
 export const PLAN_VORMEN: PlanVorm[] = ["jn", "mc", "kort", "invul", "uitleg", "reken", "teken"];
@@ -66,6 +67,10 @@ export interface PlanQuota {
   reserve: number;
   /** Leerdoelen per paragraafcode (Nova, op titel gekoppeld); elke vraag kiest een ander doel. */
   doelen?: Record<string, string[]>;
+  /** Kernbegrippen uit de lesstof ("Echo: …", "… heet ultrasoon"): elk minstens één vraag. */
+  kern?: Kernbegrip[];
+  /** Plan ingekort tot wat in de toetstijd past (was: kalibratie-aantal). */
+  ingekortVan?: number;
 }
 
 /** Grootste-restmethode: verdeel totaal naar gewicht, elk minstens min. */
@@ -110,7 +115,8 @@ export function maakQuota(input: {
   rttiDoel: RttiVerdeling;
   kal: Kalibratie;
 }): PlanQuota {
-  const N = input.aantalVragen;
+  const tijd = aantalVoorTijd(input.aantalVragen, input.kal);
+  const N = tijd;
   const pars = input.paragrafen;
   const lengtes = paragraafLengtes(input.bron, pars);
   const gem = lengtes.filter((l) => l > 0).reduce((s, l, _i, a) => s + l / a.length, 0) || 1;
@@ -128,7 +134,10 @@ export function maakQuota(input: {
     rttiPunten.T2 = Math.max(0, rttiPunten.T2 - tekort);
   }
   const vorm = vormAantallen({ ...input.kal, items: N }) as Record<PlanVorm, number>;
+  const kern = kernbegrippen(input.bron).slice(0, 12);
   return {
+    ...(N < input.aantalVragen ? { ingekortVan: input.aantalVragen } : {}),
+    ...(kern.length ? { kern } : {}),
     aantal: N,
     punten: input.doelPunten,
     paragrafen: pars.map((p, i) => ({ ...p, aantal: perPar[i]! })),
@@ -136,6 +145,19 @@ export function maakQuota(input: {
     vorm,
     reserve: PLAN.reserve,
   };
+}
+
+/**
+ * Aantal vragen dat in de toetstijd past. De kalibratie (Nicks schooltoetsen) geeft het aantal items; bij
+ * plan-first zijn de vragen voller (situatie + gegevens), dus begrenzen we op vragen per minuut (BB/KB 0,5,
+ * GT/TL 0,55) — nooit onder 86 % van de kalibratie (lengtecriterium) en de punten blijven gelijk: liever
+ * minder, rijkere vragen dan veel losse 1-puntsvragen (rechter kb2: "te veel items voor 45 min").
+ */
+export function aantalVoorTijd(aantal: number, kal: Pick<Kalibratie, "minuten" | "leerweg" | "examen">): number {
+  if (kal.examen || !kal.minuten) return aantal;
+  const perMin = kal.leerweg === "BB" || kal.leerweg === "KB" ? 0.5 : 0.55;
+  const maxTijd = Math.round(kal.minuten * perMin);
+  return Math.min(aantal, Math.max(Math.ceil(aantal * 0.86), maxTijd));
 }
 
 export function planTokens(q: PlanQuota): number {
@@ -158,6 +180,7 @@ export function bouwplanPrompt(q: PlanQuota): string {
     .join("; ");
   const gesloten = q.vorm.mc + q.vorm.jn;
   const blokken = contextBlokkenDoel(q);
+  const kernRegel = q.kern?.length ? `\n- Kernbegrippen uit de lesstof die elk minstens één vraag krijgen: ${q.kern.map((k) => `${k.term}${k.par ? ` (${k.par})` : ""}`).join(", ")}.` : "";
   return `OPDRACHT NU: maak nog GEEN vragen, maar eerst het BOUWPLAN van de hele toets (JSON). Het plan wordt daarna door anderen uitgeschreven, dus elke regel moet op zichzelf duidelijk zijn.
 
 Vaste aantallen (verplicht, tel na):
@@ -166,6 +189,7 @@ Vaste aantallen (verplicht, tel na):
 - Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt; nooit meer dan ${gesloten + 1} gesloten vragen${q.vorm.jn ? "" : ", geen juist/onjuist (jn)"}.
 - Contextblokken: ${blokken} groepen (g) van 2–3 open vragen bij één situatie, zoals in een schooltoets: eerst een berekening in die situatie (reken; of toepassen als er niets te rekenen valt), daarna een redeneer-/uitlegvraag (uitleg, T2 of I) die op dezelfde situatie voortbouwt. Zelfde groepstitel, aaneen.
 - RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I}${q.rttiPunten.I ? " (I = nieuwe situatie, eigen redenering, 2–3 p)" : ""}.
+- Elk kernbegrip of elke regel één keer: niet twee vragen over dezelfde regel of tabel (bijv. twee keer veilige tijd bij een geluidsniveau) en niet twee vragen over dezelfde onderdelen (bijv. twee keer de delen van het oor).${kernRegel}
 - Plus ${q.reserve} reservevragen (andere begrippen/situaties, verschillende paragrafen) in "reserve".
 
 Regels voor het plan:

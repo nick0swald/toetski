@@ -16,6 +16,7 @@ import { bouwKwaliteit } from "./kwaliteit-check";
 import { LIMIETEN, PLAN, TIJD, metRttiDoel, tokensVoorAantalVragen } from "./config";
 import { CACHE_GRENS, berichten, nieuweKosten, vraagJson, vriendelijkeAiFout, xaiChat, type Kosten } from "./llm";
 import type { GegenereerdeToets, NakijkItem, Vraag } from "./types";
+import { gInstructie, gVoorToets } from "./reken-check";
 import {
   annoteerKalibratie,
   isExamenNiveau,
@@ -432,6 +433,13 @@ export function ruweVragen(payload: Pick<GeneratedPayload, "vragen">): Vraag[] {
   );
 }
 
+/** Rekent de toets met de zwaartekracht, dan staat de gebruikte g bij de instructies (één g per toets). */
+function metGInstructie(instructies: string[], vragen: Vraag[], nakijk: NakijkItem[], bron: string): string[] {
+  const regel = gInstructie(vragen, gVoorToets(bron, vragen, nakijk));
+  if (!regel || instructies.some((i) => /\bg\s*=|N\s*\/\s*kg/i.test(i))) return instructies;
+  return [...instructies, regel];
+}
+
 /** Stap 2: afwerken (reparatie, punten, MC-hussel, kwaliteit) → complete toets. */
 async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayload, budgetMs: number = TIJD.afwerkBudgetMs, kosten: Kosten = nieuweKosten()): Promise<GegenereerdeToets> {
   data = metRttiDoel(data);
@@ -490,7 +498,7 @@ async function rondAf(data: GenerateData, bron: string, payload: GeneratedPayloa
       duurMinuten: payload.meta.duurMinuten || data.duurMinuten,
       school: "",
       hulpmiddelen: payload.meta.hulpmiddelen,
-      instructies: payload.meta.instructies,
+      instructies: metGInstructie(payload.meta.instructies, vragen, nakijkmodel, bron),
       onderwerp: payload.meta.onderwerp || data.titel || payload.meta.titel,
       versie: data.versie,
       moeilijkheid: data.moeilijkheid,
