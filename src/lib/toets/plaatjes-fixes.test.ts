@@ -58,4 +58,10 @@ describe("figuurplanner", () => {
     assert.ok(!uit.includes("Sanne heeft"));
     assert.match(uit, /staafdiagram/);
   });
+  it("geen interne woorden als 'sfeerplaat' of 'de staafdiagram' in de stam", () => {
+    const oud = "Bereken de afstand tussen Finn en de muur als de echo na 0,60 s terugkomt.";
+    const uit = veiligeNieuweStam(oud, `In de sfeerplaat zie je Finn. In de staafdiagram staat niets. ${oud}`)!;
+    assert.ok(!/sfeerplaat|de staafdiagram/i.test(uit), uit);
+    assert.match(uit, /afbeelding/);
+  });
 });

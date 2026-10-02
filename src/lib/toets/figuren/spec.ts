@@ -510,7 +510,7 @@ function woorden(s: string): string[] {
  * Anders blijft de oude stam staan (bijv. planner gaf alleen "Bekijk de grafiek.").
  */
 export function veiligeNieuweStam(oud: string, nieuw: string | undefined, context?: string): string | undefined {
-  const n = zonderContext(nieuw?.trim(), context);
+  const n = leerlingWoorden(zonderContext(nieuw?.trim(), context));
   if (!n || n === oud.trim()) return undefined;
   if (n.length < Math.min(oud.trim().length * 0.6, oud.trim().length - 10)) return undefined;
   const zinnen = oud.trim().split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -531,4 +531,12 @@ function zonderContext(stam: string | undefined, context: string | undefined): s
   if (s.startsWith(c)) s = s.slice(c.length);
   else for (const zin of c.split(/(?<=[.?!])\s+/).filter((z) => z.length > 25)) s = s.replace(zin, "");
   return s.replace(/\s{2,}/g, " ").trim() || stam;
+}
+
+/** Interne figuursoortnamen horen niet in de leerlingtekst ("de sfeerplaat" → "de afbeelding"). */
+function leerlingWoorden(stam: string | undefined): string | undefined {
+  return stam
+    ?.replace(/\b([Dd])e sfeerplaat\b/g, "$1e afbeelding")
+    .replace(/\bsfeerplaat\b/gi, "afbeelding")
+    .replace(/\b([Dd])e staafdiagram\b/g, (_m, d: string) => (d === "D" ? "Het" : "het") + " staafdiagram");
 }
