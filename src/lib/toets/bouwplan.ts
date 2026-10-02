@@ -14,6 +14,7 @@ import type { RttiVerdeling } from "./types";
 import { PLAN, VOORNAMEN } from "./config.ts";
 import { CACHE_GRENS, berichten, vraagJson, type Kosten } from "./llm.ts";
 import { boekEigennamen, kernbegrippen, type Kernbegrip } from "./samenhang.ts";
+import { buitenStammenVoor, buitenWoord } from "./examen-checks.ts";
 
 export type PlanVorm = "jn" | "mc" | "kort" | "invul" | "uitleg" | "reken" | "teken";
 export const PLAN_VORMEN: PlanVorm[] = ["jn", "mc", "kort", "invul", "uitleg", "reken", "teken"];
@@ -84,6 +85,8 @@ export interface PlanQuota {
   tekenSoorten?: string[];
   /** Eigennamen uit de lesstof (plaatsen, centrales, bedrijven): nooit overnemen in de toets. */
   eigennamen?: string[];
+  /** Onderwerpen die niet in de lesstof staan (stammen, zie examen-checks): geen vragen over. */
+  buitenStammen?: string[];
 }
 
 /** Grootste-restmethode: verdeel totaal naar gewicht, elk minstens min. */
@@ -153,6 +156,16 @@ export function maakQuota(input: {
   const examen = examenVorm(input.kal, N);
   const teken = tekenSoortenUit(input.bron);
   const namen = boekEigennamen(`${input.bron}\n${input.antwoorden ?? ""}`);
+  const buiten = input.bron.length > 5000 ? buitenStammenVoor(`${input.bron}\n${input.antwoorden ?? ""}`) : [];
+  if (examen) {
+    // Examenstijl (Nicks archief ~6 % uitleggen, CSE meer): minstens 2 uitlegvragen, ten koste van kort/mc.
+    const doel = Math.max(2, Math.round(N * 0.07));
+    while (vorm.uitleg < doel && (vorm.kort > 1 || vorm.mc > 2)) {
+      if (vorm.kort > 1) vorm.kort--;
+      else vorm.mc--;
+      vorm.uitleg++;
+    }
+  }
   if (!teken.length) {
     // Niets tekenbaars in de lesstof (bijv. geen krachten of grafieken): geen tekenvragen, die worden korte open vragen.
     vorm.kort += vorm.teken;
@@ -164,6 +177,7 @@ export function maakQuota(input: {
     ...(examen ? { examen } : {}),
     tekenSoorten: teken,
     ...(namen.length ? { eigennamen: namen } : {}),
+    ...(buiten.length ? { buitenStammen: buiten } : {}),
     aantal: N,
     punten: input.doelPunten,
     paragrafen: pars.map((p, i) => ({ ...p, aantal: perPar[i]! })),
@@ -254,7 +268,7 @@ Vaste aantallen (verplicht, tel na):
 - Per paragraaf: ${parRegels}.${doelRegels}
 - Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt; nooit meer dan ${gesloten + 1} gesloten vragen${q.vorm.jn ? "" : ", geen juist/onjuist (jn)"}.
 ${q.examen
-    ? `- EXAMENVORM (zoals het CSE NaSk1): ${blokken} contextblokken (g), elk met een korte titel van 1–4 woorden (een onderwerp, bijv. "Zonneboiler", "Koelcel", "Optreden in de sporthal"; geen gegevens, geen persoonsnaam) en ${q.examen.vragenPer[0]}–${q.examen.vragenPer[1]} deelvragen bij die ene situatie (meerkeuze mag ook in een blok). Binnen een blok oplopend: herkennen/aflezen → berekenen (met gegevens uit de inleiding of een tabel; formule zelf kiezen, Binas mag) → redeneren/uitleggen. Een blok mag stof uit meer paragrafen combineren als dat natuurlijk is. Laat waar de stof dat toelaat een paar vragen een Binas-tabel gebruiken (bijv. dichtheid, smelt-/kookpunt, geluidssnelheid, gehoorgevoeligheid, verbrandingswarmte; noem de tabel in de vraag). De overige vragen staan los.`
+    ? `- EXAMENVORM (zoals het CSE NaSk1): ${blokken} contextblokken (g), elk met een korte titel van 1–4 woorden (een onderwerp, bijv. "Zonneboiler", "Koelcel", "Optreden in de sporthal"; geen gegevens, geen persoonsnaam) en ${q.examen.vragenPer[0]}–${q.examen.vragenPer[1]} deelvragen bij die ene situatie (meerkeuze mag ook in een blok). Binnen een blok oplopend: herkennen/aflezen → berekenen (met gegevens uit de inleiding of een tabel; formule zelf kiezen, Binas mag) → redeneren/uitleggen. Een blok mag stof uit meer paragrafen combineren als dat natuurlijk is. Laat waar de stof dat toelaat een paar vragen een Binas-tabel gebruiken (bijv. dichtheid, smelt-/kookpunt, geluidssnelheid, gehoorgevoeligheid, verbrandingswarmte; noem de tabel in de vraag). Vrijwel elke vraag hoort bij een blok (zoals in de schooltoetsen); hooguit een paar losse vragen, zonder titel.`
     : `- Contextblokken: ${blokken} groepen (g) van 2–3 open vragen bij één situatie, zoals in een schooltoets: eerst een berekening in die situatie (reken; of toepassen als er niets te rekenen valt), daarna een redeneer-/uitlegvraag (uitleg, T2 of I) die op dezelfde situatie voortbouwt. Zelfde groepstitel, aaneen.`}
 - RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I} (verplicht, tel na). R = feit/begrip reproduceren; T1 = een geleerde regel/formule toepassen in een bekende situatie (één stap); T2 = toepassen in een nieuwe situatie of in meer stappen (gegevens zelf selecteren, eerst omrekenen of aflezen, dan berekenen of een gevolg afleiden)${q.rttiPunten.I ? "; I = nieuwe situatie, eigen redenering, 2–3 p" : ""}.
 - Elk kernbegrip of elke regel één keer: niet twee vragen over dezelfde regel of tabel (bijv. twee keer veilige tijd bij een geluidsniveau) en niet twee vragen over dezelfde onderdelen (bijv. twee keer de delen van het oor).${kernRegel}
@@ -270,7 +284,7 @@ Regels voor het plan:
 ${q.examen ? "- Volgorde: losse vragen en blokken door elkaar in de volgorde van de lesstof; elk blok aaneen." : "- Volgorde: eerst alle gesloten vragen (jn, mc), daarna open/berekening/tekenen; groepen aaneen."}
 - Rekenvragen: realistische getallen; g = 10 N/kg als zwaartekracht nodig is (één waarde voor g in de hele toets).
 ${q.tekenSoorten?.length ? `- Tekenen (teken): de leerling tekent zelf, zonder plaatje, en ALLEEN iets wat de lesstof behandelt: ${q.tekenSoorten.join("; ")}. Zet in "wat wordt gevraagd" wat er getekend moet worden.` : "- Geen tekenvragen: de lesstof behandelt niets wat de leerling op schaal of in een diagram tekent."}
-- Alles binnen de lesstof: geen onderwerpen uit andere hoofdstukken (bijv. geen krachten tekenen of berekenen als krachten niet in de lesstof staan). Een formule die alleen terloops in de lesstof voorkomt, is geen toetsstof.${q.eigennamen?.length ? `
+- Alles binnen de lesstof: geen onderwerpen uit andere hoofdstukken (bijv. geen krachten tekenen of berekenen als krachten niet in de lesstof staan). Een formule die alleen terloops in de lesstof voorkomt, is geen toetsstof.${q.buitenStammen?.length ? ` Staat NIET in deze lesstof, dus geen vragen over: ${q.buitenStammen.map(buitenWoord).join(", ")}.` : ""}${q.eigennamen?.length ? `
 - Neem geen eigennamen uit de lesstof over (plaatsen, centrales, bedrijven, gebouwen): ${q.eigennamen.slice(0, 20).join(", ")}. Verzin een algemene situatie ("een gascentrale aan de kust"). Geen merknamen.` : "\n- Geen merknamen."}
 - Neem geen opdrachten uit het boek of het antwoordenboek 1-op-1 over: andere situatie, andere getallen.
 

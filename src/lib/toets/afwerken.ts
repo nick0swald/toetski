@@ -20,6 +20,7 @@ import { controleerBerekeningen, gVoorToets } from "./reken-check.ts";
 import { boekEigennamen, boeknaamIssues, dubbelsWeg, kernbegrippen, ontbrekendeKern, samenhangIssues, type Kernbegrip } from "./samenhang.ts";
 import { zetTekenvakken } from "./tekenvak.ts";
 import { CACHE_GRENS } from "./llm.ts";
+import { buitenLesstofIssues, buitenStammenVoor, herstelMcOpties, herstelTitels, vervolgWeggeverIssues } from "./examen-checks.ts";
 
 const REPAIR_SYSTEM = `Je verbetert ALLEEN de aangewezen VMBO-vragen. Antwoord met één JSON-object:
 { "vragen": [ volledige vraagobjecten van alleen de aangewezen nummers ], "nakijkmodel": [ bijbehorende nakijkregels ], "toelichting": "kort" }
@@ -112,8 +113,8 @@ function mergeOpNummer(
 
 type Repair = (prompt: string) => Promise<string | null>;
 
-const INHOUD = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "realisme", "onhelder", "rubriek", "vage-verwijzing", "figuur-ontbreekt", "schoolnaam", "boeknaam"]);
-const ERNSTIG = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "realisme"]);
+const INHOUD = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "realisme", "onhelder", "rubriek", "vage-verwijzing", "figuur-ontbreekt", "schoolnaam", "boeknaam", "mc-opties", "weggever-vervolg", "buiten-lesstof"]);
+const ERNSTIG = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "realisme", "mc-opties", "buiten-lesstof"]);
 
 function inStukken<T>(lijst: T[], grootte: number): T[][] {
   const out: T[][] = [];
@@ -135,7 +136,7 @@ function herlabel(vragen: Vraag[], oordelen: ControleOordeel[]): Vraag[] {
 }
 
 /** Codes waarbij een vraag niet op het blad mag blijven (geen/verkeerde sleutel, niet oplosbaar). */
-export const ONBRUIKBAAR = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt"]);
+export const ONBRUIKBAAR = new Set(["geen-juiste-optie", "meer-juiste-opties", "sleutel-fout", "gegeven-ontbreekt", "mc-opties"]);
 
 /** Onafhankelijke controle, parallel in stukjes van LIMIETEN.stukGrootte vragen. */
 async function controleerVragen(
@@ -202,11 +203,21 @@ async function repareerRonde(
 export function deterministisch(vragen: Vraag[], nakijk: NakijkItem[], bron: string, g?: number): { vragen: Vraag[]; nakijkmodel: NakijkItem[]; issues: ItemIssue[]; g: number } {
   // Tekenvak eerst: een tekenvraag met tekenvak verwijst niet naar een "ontbrekende figuur".
   const det = repareerItemsDeterministisch(zetTekenvakken(vragen), nakijk, bron);
-  const v = zetTekenvakken(det.vragen);
-  const gT = g ?? gVoorToets(bron, v, det.nakijkmodel);
-  const rk = controleerBerekeningen(v, det.nakijkmodel, { g: gT });
+  // MC-opties na elke (re)generatie/reparatie opnieuw valideren: dubbele opties eruit, anders een issue.
+  const mc = herstelMcOpties(zetTekenvakken(det.vragen), det.nakijkmodel);
+  const v = mc.vragen;
+  const gT = g ?? gVoorToets(bron, v, mc.nakijkmodel);
+  const rk = controleerBerekeningen(v, mc.nakijkmodel, { g: gT });
+  // Weggevers tussen opeenvolgende vragen en de lesstofgrens (alleen bij echte lesstof, niet bij een korte bron).
+  const extra = [...mc.issues, ...vervolgWeggeverIssues(v, rk.nakijkmodel), ...(bron.length > 5000 ? buitenLesstofIssues(v, rk.nakijkmodel, buitenStammenVoor(bron)) : [])];
   const al = new Set(det.issues.map((i) => `${i.nummer}:${i.code}`));
-  return { vragen: v, nakijkmodel: rk.nakijkmodel, issues: [...det.issues, ...rk.issues.filter((i) => !al.has(`${i.nummer}:${i.code}`))], g: gT };
+  const rest = [...rk.issues, ...extra].filter((i) => {
+    const k = `${i.nummer}:${i.code}`;
+    if (al.has(k)) return false;
+    al.add(k);
+    return true;
+  });
+  return { vragen: v, nakijkmodel: rk.nakijkmodel, issues: [...det.issues, ...rest], g: gT };
 }
 
 /** "Niet oplosbaar: staat niet in de lesstof" → meteen vervangen (scheelt een tweede reparatie- en controleronde). */
@@ -488,7 +499,10 @@ export async function werkVragenAf(input: {
         : plaatsMaatcilinders(plaatsPictogrammen(punten.vragen, punten.nakijkmodel));
   nakijk = punten.nakijkmodel;
   vragen = labelRtti(herstelGroepen(groepeerDomeinen(vragen, bron)));
-  const klaar = finalizeVragen(vragen, nakijk, { skipOrder: input.skipOrder, volgorde: input.volgorde });
+  const klaar0 = finalizeVragen(vragen, nakijk, { skipOrder: input.skipOrder, volgorde: input.volgorde });
+  // Na de MC-hussel nog één keer de opties valideren; titels alleen op blokken en passend bij hun vragen.
+  const mcNa = herstelMcOpties(herstelTitels(klaar0.vragen), klaar0.nakijkmodel);
+  const klaar = { ...klaar0, vragen: mcNa.vragen, nakijkmodel: mcNa.nakijkmodel };
   // Vragen met een bevroren figuur krijgen nooit (opnieuw) ongekeurde figuurvelden.
   const beschermd = klaar.vragen.map((q) => (q.figuur || q.figuurId ? zonderLegacyFiguren(q) : q));
   if (controle) {

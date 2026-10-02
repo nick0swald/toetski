@@ -1,3 +1,5 @@
+import { metDoelFiguren } from "./examen-checks.ts";
+import { MAX_FIGUREN_PER_TOETS } from "./figuren/spec.ts";
 import { afwerkToets, generateVragenRuw, ruweVragen } from "./generate";
 import { figuurDeps } from "./figuren/client";
 import { verwerkFiguren, type FiguurGebeurtenis } from "./figuren/verwerk";
@@ -98,7 +100,7 @@ export async function maakToets(
     kwaliteit: { samenvatting: "", punten: [] },
   };
   const vroegPromise: Promise<GegenereerdeToets | null> = uniek
-    ? verwerkFiguren(voorlopig, deps, { deadline, ...(verplicht ? { minFiguren: MET_DOEL_FIGUREN } : {}) }).catch(() => null)
+    ? verwerkFiguren(voorlopig, deps, { deadline, ...(verplicht ? { minFiguren: metDoelFiguren(voorlopig.vragen, MET_DOEL_FIGUREN, MAX_FIGUREN_PER_TOETS) } : {}) }).catch(() => null)
     : Promise.resolve(null);
 
   const af = await afwerkToets({ data: { ...afwerkData, verstrekenMs: nu() - t0 } });
@@ -130,7 +132,7 @@ export async function maakToets(
       const afgekeurd = [...new Set((toets.figuurRapport?.items ?? []).filter((i) => i.status === "gedropt").map((i) => i.nummer))];
       meld({ fase: "plaatjes", wachtOpPlaatjes: true, figuurDeadline: hardeDeadline, figuurStart: nu(), figuren: { klaar: 0, totaal: 0, gepland: false } });
       try {
-        toets = await verwerkFiguren(toets, deps, { deadline: hardeDeadline, minFiguren: MET_DOEL_FIGUREN - geplaatst, afgekeurd });
+        toets = await verwerkFiguren(toets, deps, { deadline: hardeDeadline, minFiguren: Math.max(1, metDoelFiguren(toets.vragen, MET_DOEL_FIGUREN, MAX_FIGUREN_PER_TOETS) - geplaatst), afgekeurd });
       } catch {
         break;
       }

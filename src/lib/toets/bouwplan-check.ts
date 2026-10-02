@@ -283,11 +283,18 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
     }
   }
 
+  // 5a. Examenvorm (klas 4): bijna alle vragen in genummerde contextblokken van 2–4 vragen (Nicks archief, CSE).
+  // Een plan met vooral losse vragen wordt hier in code omgebouwd; 5b is dan niet meer nodig.
+  if (q.examen) {
+    const r = dwingExamenBlokken(items, q.examen);
+    const los = items.filter((it) => !it.groep).length;
+    meld("context", `${r.blokken} contextblokken, ${los} losse vragen${r.gemaakt ? ` (${r.gemaakt} blokken in code gevormd)` : ""}`, "zacht", r.blokken >= Math.min(6, q.examen.blokken) && los <= Math.ceil(items.length * 0.2));
+  }
   // 5b. Contextblokken zoals in Nicks schooltoetsen: minstens het doel aan groepen van 2–3 open vragen bij één
   // situatie (eerst berekening/toepassing, dan redeneren). Ontbreken ze, dan koppelen we losse open vragen
   // uit dezelfde paragraaf. Groepstitels met maar één vraag vervallen.
-  for (const it of items) if (it.groep && items.filter((x) => x.groep === it.groep).length < 2) it.groep = undefined;
-  const doelBlokken = contextBlokkenDoel(q);
+  if (!q.examen) for (const it of items) if (it.groep && items.filter((x) => x.groep === it.groep).length < 2) it.groep = undefined;
+  const doelBlokken = q.examen ? 0 : contextBlokkenDoel(q);
   const groepen = () => new Set(items.filter((it) => it.groep).map((it) => it.groep!));
   if (groepen().size < doelBlokken) {
     let gemaakt = 0;
@@ -499,12 +506,93 @@ export function herstelBouwplan(invoer: Bouwplan, q: PlanQuota): { plan: Bouwpla
     if (it.groep && !eerste.has(it.groep)) eerste.set(it.groep, i);
   });
   // Een groep telt als gesloten alleen als al zijn vragen gesloten zijn; anders staat de hele groep bij de open vragen.
-  const klasse = (it: PlanItem) => (it.groep ? Number(items.some((x) => x.groep === it.groep && !isGesloten(x))) : Number(!isGesloten(it)));
+  const klasse = (it: PlanItem) => (q.examen ? 0 : it.groep ? Number(items.some((x) => x.groep === it.groep && !isGesloten(x))) : Number(!isGesloten(it)));
   const geordend = items
     .map((it, i) => ({ it, i }))
     .sort((a, b) => klasse(a.it) - klasse(b.it) || (a.it.groep ? eerste.get(a.it.groep)! : a.i) - (b.it.groep ? eerste.get(b.it.groep)! : b.i) || a.i - b.i)
     .map(({ it }, i) => ({ ...it, n: i + 1 }));
   return { plan: { versie: 1, items: geordend, reserve: reserve.map((it, i) => ({ ...it, n: geordend.length + i + 1 })) }, issues };
+}
+
+const blokNotitie = (it: PlanItem, tekst: string) => {
+  it.let = [tekst, ...(it.let ?? []).filter((t) => t !== tekst)].slice(0, 3);
+};
+
+const RANG_BLOK: Record<Rtti, number> = { R: 0, T1: 1, T2: 2, I: 3 };
+
+/**
+ * Examenvorm afdwingen: groepen > max splitsen, groepen van 1 opheffen, daarna de losse vragen per hoofdstuk (eerste
+ * deel van de paragraafcode) in blokken van min–max vragen zetten. Eén vraag over in een hoofdstuk: bij een bestaand
+ * blok van dat hoofdstuk met ruimte, anders blijft hij los. Binnen een blok oplopend R → T1 → T2 → I; de eerste
+ * vraag draagt de situatie, de volgende krijgen een aanwijzing om in die situatie te spelen. Muteert `items`.
+ */
+export function dwingExamenBlokken(items: PlanItem[], ex: NonNullable<PlanQuota["examen"]>): { blokken: number; gemaakt: number } {
+  const [min, max] = [Math.max(2, ex.vragenPer[0]), Math.max(3, Math.min(4, ex.vragenPer[1]))];
+  const hoofd = (it: PlanItem) => it.par.split(".")[0] ?? it.par;
+  const leden = (g: string) => items.filter((x) => x.groep === g);
+  for (const g of new Set(items.map((it) => it.groep).filter(Boolean) as string[])) {
+    const l = leden(g);
+    if (l.length < 2) l.forEach((it) => (it.groep = undefined));
+    else if (l.length > max) l.slice(max).forEach((it) => (it.groep = undefined));
+  }
+  const titels = new Set(items.map((it) => it.groep).filter(Boolean) as string[]);
+  let gemaakt = 0;
+  // Positie binnen het blok (de drager van de situatie eerst; aangehaakte vragen achteraan).
+  const pos = new Map<PlanItem, number>();
+  items.forEach((it, i) => pos.set(it, i));
+  const hoofden = [...new Set(items.map(hoofd))];
+  for (const h of hoofden) {
+    const los = items.filter((it) => hoofd(it) === h && !it.groep);
+    if (!los.length) continue;
+    if (los.length === 1) {
+      const it = los[0]!;
+      const doel = [...titels].find((g) => leden(g).length < max && leden(g).every((x) => hoofd(x) === h));
+      if (doel) {
+        it.groep = doel;
+        pos.set(it, 1e6);
+        const eerste = [...leden(doel)].sort((a, b) => pos.get(a)! - pos.get(b)!)[0]!;
+        it.context = "";
+        it.persoon = eerste.persoon;
+        blokNotitie(it, `deelvraag in het blok "${doel}" (situatie: ${eerste.context || eerste.begrip}): laat deze vraag over "${it.begrip}" in die situatie spelen`);
+      }
+      continue;
+    }
+    const aantal = Math.max(1, Math.ceil(los.length / max), Math.floor(los.length / max) + (los.length % max && los.length % max < min ? 1 : 0));
+    const stukken: PlanItem[][] = Array.from({ length: aantal }, () => []);
+    los.forEach((it, i) => stukken[i % aantal]!.push(it));
+    for (const st of stukken) {
+      if (st.length < 2) continue;
+      st.sort((a, b) => RANG_BLOK[a.rtti] - RANG_BLOK[b.rtti] || Number(!isGesloten(a)) - Number(!isGesloten(b)));
+      const drager = st.find((it) => it.context) ?? st[0]!;
+      const situatie = drager.context;
+      let titel = netteTitel((situatie || drager.begrip).replace(/[.:;]+$/, "").slice(0, 40));
+      for (let k = 2; titels.has(titel); k++) titel = `${netteTitel((situatie || drager.begrip).slice(0, 40))} ${k}`;
+      titels.add(titel);
+      const [eerste, ...rest] = st;
+      const basis = Math.min(...st.map((it) => pos.get(it)!));
+      st.forEach((it, k) => pos.set(it, basis + k / 10));
+      eerste!.groep = titel;
+      eerste!.context = situatie;
+      eerste!.persoon = drager.persoon;
+      if (!situatie) blokNotitie(eerste!, `eerste vraag van het blok "${titel}": begin met een concrete situatie (inleiding) waar alle deelvragen bij passen`);
+      for (const it of rest) {
+        it.groep = titel;
+        it.context = "";
+        it.persoon = drager.persoon;
+        blokNotitie(it, `deelvraag in het blok "${titel}" (situatie: ${situatie || eerste!.begrip}): laat deze vraag over "${it.begrip}" in die situatie spelen, met de gegevens uit de inleiding of één nieuw gegeven`);
+      }
+      gemaakt++;
+    }
+  }
+  // Blokken aaneen in de volgorde van hun eerste vraag.
+  const eersteIdx = new Map<string, number>();
+  items.forEach((it, i) => it.groep && !eersteIdx.has(it.groep) && eersteIdx.set(it.groep, i));
+  const geordend = items
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => (a.it.groep ? eersteIdx.get(a.it.groep)! : a.i) - (b.it.groep ? eersteIdx.get(b.it.groep)! : b.i) || pos.get(a.it)! - pos.get(b.it)!)
+    .map(({ it }) => it);
+  items.splice(0, items.length, ...geordend);
+  return { blokken: new Set(items.map((it) => it.groep).filter(Boolean)).size, gemaakt };
 }
 
 /** Harde problemen die na herstel overblijven (dan valt de app terug op de oude route). */

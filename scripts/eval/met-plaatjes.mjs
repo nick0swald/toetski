@@ -76,6 +76,7 @@ const { PLANNER_SYSTEM, plannerUser } = await jiti.import(join(ROOT, "src/lib/to
 const { maakFiguurMetKeuring } = await jiti.import(join(ROOT, "src/lib/toets/figuren/pijplijn.ts"));
 const png = await jiti.import(join(ROOT, "src/lib/toets/figuren/png.server.ts"));
 const jpeg = await jiti.import(join(ROOT, "src/lib/toets/figuren/jpeg.server.ts"));
+const { metDoelFiguren } = await jiti.import(join(ROOT, "src/lib/toets/examen-checks.ts"));
 const { MET_DOEL_FIGUREN, MIN_MET_GEPLAATST } = await jiti.import(join(ROOT, "src/lib/toets/maak-toets.ts")).catch(() => ({ MET_DOEL_FIGUREN: 3, MIN_MET_GEPLAATST: 2 }));
 
 const log = [];
@@ -139,7 +140,7 @@ const voorlopig = {
   vragen: vragenRuw, nakijkmodel: r.payload.nakijkmodel,
   cesuur: { nTerm: 1, cesuurPunten: 0, toelichting: "", formule: "" }, matrijs: { cellen: {} }, kwaliteit: { samenvatting: "", punten: [] },
 };
-const vroegP = uniek ? verwerkFiguren(voorlopig, deps, { deadline, ...(verplicht ? { minFiguren: MET_DOEL_FIGUREN } : {}) }).catch((e) => { L(`[figuren] vroeg mislukt: ${e?.message}`); return null; }) : Promise.resolve(null);
+const vroegP = uniek ? verwerkFiguren(voorlopig, deps, { deadline, ...(verplicht ? { minFiguren: metDoelFiguren(voorlopig.vragen, MET_DOEL_FIGUREN, MAX_FIGUREN_PER_TOETS) } : {}) }).catch((e) => { L(`[figuren] vroeg mislukt: ${e?.message}`); return null; }) : Promise.resolve(null);
 const afInput = { ...input, bronmateriaal: "", bronUrl: undefined, antwoordenmateriaal: (input.antwoordenmateriaal ?? "").slice(0, 30000), stuurdocument: undefined };
 const k2 = nieuweKosten();
 const tA = Date.now();
@@ -161,7 +162,7 @@ if (verplicht) {
     if (geplaatst >= MIN_MET_GEPLAATST || harde - Date.now() < 22_000) break;
     const afgekeurd = [...new Set((toets.figuurRapport?.items ?? []).filter((i) => i.status === "gedropt").map((i) => i.nummer))];
     L(`[figuren] extra ronde ${ronde + 1}: ${geplaatst} geplaatst, afgekeurd ${afgekeurd.join(",")}`);
-    try { toets = await verwerkFiguren(toets, deps, { deadline: harde, minFiguren: MET_DOEL_FIGUREN - geplaatst, afgekeurd }); } catch { break; }
+    try { toets = await verwerkFiguren(toets, deps, { deadline: harde, minFiguren: Math.max(1, metDoelFiguren(toets.vragen, MET_DOEL_FIGUREN, MAX_FIGUREN_PER_TOETS) - geplaatst), afgekeurd }); } catch { break; }
     if (toets.vragen.filter((q) => q.figuur).length === geplaatst && harde - Date.now() < 30_000) break;
   }
 }

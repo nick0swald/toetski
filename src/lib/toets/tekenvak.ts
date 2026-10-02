@@ -26,22 +26,26 @@ export function leesSchaal(t: string): { tekst: string; perCm: number; eenheid: 
   return perCm > 0 ? { tekst: `1 cm ≙ ${m[1]} ${eenheid}`, perCm, eenheid } : null;
 }
 
+/** Volle tekstbreedte (16 hokjes van 1 cm, ≈ 16 cm); de hoogte past bij de tekening. */
+export const TEKENVAK_KOLOMMEN = 16;
+
 export function tekenvakVoor(q: Vraag, groepTekst = ""): Tekenvak {
   const tekst = `${groepTekst} ${q.context ?? ""} ${q.stam}`;
   const schaal = leesSchaal(tekst);
-  if (/schakelschema|schema\b/i.test(q.stam)) return { soort: "leeg", kolommen: 12, rijen: 6 };
+  const kolommen = TEKENVAK_KOLOMMEN;
+  if (/schakelschema|schema\b/i.test(q.stam)) return { soort: "leeg", kolommen, rijen: 7 };
   if (/grafiek|diagram/i.test(q.stam)) {
     const [x, y] = q.tabel?.koppen ?? [];
-    return { soort: "raster", kolommen: 14, rijen: 10, ...(x ? { xLabel: x } : {}), ...(y ? { yLabel: y } : {}) };
+    return { soort: "raster", kolommen, rijen: 10, ...(x ? { xLabel: x } : {}), ...(y ? { yLabel: y } : {}) };
   }
-  // Krachtpijl(en): breed genoeg voor de langste pijl op schaal (+ marge), parallellogram iets hoger.
-  let kolommen = 12;
-  if (schaal) {
+  if (/deeltjes|molecu|bolletjes/i.test(q.stam)) return { soort: "raster", kolommen, rijen: 6 };
+  // Zijaanzicht/opstelling op schaal: hoog genoeg voor de hoogste maat op schaal (+ marge), minstens 6.
+  let rijen = /parallellogram|samenstel|resulterende|twee krachten/i.test(tekst) ? 10 : 8;
+  if (schaal && /zijaanzicht|hoog|hoogte|opstelling/i.test(tekst)) {
     const waarden = [...tekst.matchAll(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*${schaal.eenheid.replace("/", "\\/")}\\b`, "g"))].map((m) => Number(m[1]!.replace(",", ".")));
-    const langst = Math.max(0, ...waarden.filter((w) => w !== schaal.perCm).map((w) => w / schaal.perCm));
-    if (langst > 0) kolommen = Math.min(16, Math.max(8, Math.ceil(langst) + 4));
+    const hoogst = Math.max(0, ...waarden.filter((w) => w !== schaal.perCm).map((w) => w / schaal.perCm));
+    if (hoogst > 0) rijen = Math.min(12, Math.max(6, Math.ceil(hoogst) + 3));
   }
-  const rijen = /parallellogram|samenstel|resulterende|twee krachten/i.test(tekst) ? 10 : 8;
   return { soort: "raster", kolommen, rijen, ...(schaal ? { schaal: schaal.tekst } : {}) };
 }
 
