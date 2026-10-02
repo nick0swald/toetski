@@ -14,7 +14,7 @@ export interface Stijl {
   size: number;
   leading: number;
   kleur?: string;
-  uitlijning?: "links" | "midden";
+  uitlijning?: "links" | "midden" | "rechts";
 }
 
 export const ST: Record<string, Stijl> = {
@@ -31,6 +31,17 @@ export const ST: Record<string, Stijl> = {
   idx: { font: "Arial", size: 8, leading: 9.6 },
   idxb: { font: "Arial-Bold", size: 8, leading: 9.6 },
   pn: { font: "Arial-Bold", size: 10.5, leading: 10.5 * 1.35 },
+  // Leerlingdeel: Toetski-leerlingblad (Arial 12 pt) in CSE-opbouw.
+  lbody: { font: "Arial", size: 12, leading: 12 * 1.3 },
+  lnr: { font: "Arial-Bold", size: 12, leading: 12 * 1.3 },
+  lpunt: { font: "Arial", size: 9, leading: 12 * 1.3 },
+  ltitel: { font: "Arial-Bold", size: 13, leading: 17 },
+  lklein: { font: "Arial", size: 9, leading: 11 },
+  vbKop: { font: "Arial-Bold", size: 12, leading: 15, uitlijning: "rechts" },
+  vbJaar: { font: "Arial-Bold", size: 28, leading: 32, uitlijning: "rechts" },
+  vbRechts: { font: "Arial", size: 11, leading: 14, uitlijning: "rechts" },
+  vbBalk: { font: "Arial-Bold", size: 11, leading: 14, kleur: "#ffffff", uitlijning: "rechts" },
+  vbLabel: { font: "Arial-Bold", size: 10, leading: 12 },
 };
 
 const SYMBOOL = /[\u2259\u22c5]/;
@@ -174,6 +185,55 @@ export interface Blok {
   splits?(doc: Doc, w: number): Blok[];
   paginaNa?: boolean;
   bijeen?: boolean;
+  /** Onderaan de huidige pagina zetten (voorblad: aantal vragen/punten). */
+  onderaan?: boolean;
+  /** Geen paginanummer op de huidige pagina (voorblad). */
+  geenNummer?: boolean;
+}
+
+/** Horizontale lijn over de volle breedte (CSE: lijn boven een contexttitel). */
+export class Lijn implements Blok {
+  kleur: string;
+  lw: number;
+  voor: number;
+  na: number;
+  constructor(kleur = "#000000", lw = 0.5, voor = 0, na = 4) {
+    this.kleur = kleur;
+    this.lw = lw;
+    this.voor = voor;
+    this.na = na;
+  }
+  hoogte() {
+    return this.voor + this.na + this.lw;
+  }
+  teken(doc: Doc, x: number, y: number, w: number) {
+    const ly = y + this.voor + this.lw / 2;
+    doc.save().lineWidth(this.lw).strokeColor(this.kleur).moveTo(x, ly).lineTo(x + w, ly).stroke().restore();
+  }
+}
+
+/** Zet de inhoud onderaan de pagina. */
+export class Onderaan implements Blok {
+  onderaan = true;
+  b: Blok;
+  constructor(b: Blok) {
+    this.b = b;
+  }
+  hoogte(doc: Doc, w: number) {
+    return this.b.hoogte(doc, w);
+  }
+  teken(doc: Doc, x: number, y: number, w: number) {
+    this.b.teken(doc, x, y, w);
+  }
+}
+
+/** Markeert de huidige pagina als pagina zonder nummer. */
+export class GeenNummer implements Blok {
+  geenNummer = true;
+  hoogte() {
+    return 0;
+  }
+  teken() {}
 }
 
 export class Para implements Blok {
@@ -191,7 +251,7 @@ export class Para implements Blok {
   teken(doc: Doc, x: number, y: number, w: number) {
     const regels = breek(doc, this.markup, this.st, w);
     regels.forEach((r, i) => {
-      let cx = this.st.uitlijning === "midden" ? x + (w - r.w) / 2 : x;
+      let cx = this.st.uitlijning === "midden" ? x + (w - r.w) / 2 : this.st.uitlijning === "rechts" ? x + w - r.w : x;
       // pdfkit-tekst staat met de bovenkant op y; de basislijn ligt ~0,8·size lager. Centreer in de regelhoogte.
       const top = y + i * this.st.leading + (this.st.leading - this.st.size * 1.15) / 2;
       r.stukken.forEach((s, j) => {
@@ -409,8 +469,21 @@ export async function maakPdf(blokken: Blok[], fonts: Fonts, meta: { titel: stri
     doc.addPage({ size: "A4", margin: 0 });
     y = M;
   };
+  const zonderNummer = new Set<number>();
   const flow = (lijst: Blok[]) => {
     for (const b of lijst) {
+      if (b.geenNummer) {
+        zonderNummer.add(doc.bufferedPageRange().count - 1);
+        continue;
+      }
+      if (b.onderaan) {
+        const h = b.hoogte(doc, TW);
+        if (y + h > onder + 0.5) nieuw();
+        y = onder - h;
+        b.teken(doc, M, y, TW);
+        y = onder;
+        continue;
+      }
       if (b.paginaNa) {
         if (y > M + 0.5) nieuw();
         continue;
@@ -440,6 +513,7 @@ export async function maakPdf(blokken: Blok[], fonts: Fonts, meta: { titel: stri
   flow(blokken);
   const bereik = doc.bufferedPageRange();
   for (let i = 0; i < bereik.count; i++) {
+    if (zonderNummer.has(i)) continue;
     doc.switchToPage(bereik.start + i);
     kiesFont(doc, "Arial").fontSize(9).fillColor("#000000");
     const t = String(i + 1);

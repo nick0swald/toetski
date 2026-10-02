@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se42-sleutelhanger",
+ "titel": "Sleutelhanger",
  "vraagtype": {
   "nr": 5,
   "code": "W-DICHT",
@@ -17,7 +18,7 @@
  "punten": 3,
  "leerdoel": "K/4.2 dichtheid bepalen met maatcilinder en ρ = m/V",
  "context": [
-  "Lisa vindt een metalen sleutelhanger. Ze wil weten van welk metaal hij is gemaakt. De massa is 63,0 g. Ze bepaalt het volume met een maatcilinder met water (zie figuur)."
+  "Lisa vindt een metalen sleutelhanger. Ze wil weten van welk metaal hij is gemaakt. De massa is 63,0 g. Ze bepaalt het volume met een maatcilinder met water. Je ziet de maatcilinder vóór en ná het onderdompelen van de sleutelhanger."
  ],
  "figuur": {
   "type": "maatcilinder",

@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se43-stoelverwarming",
+ "titel": "Stoelverwarming",
  "vraagtype": {
   "nr": 60,
   "code": "E-RV",
@@ -17,7 +18,7 @@
  "punten": 2,
  "leerdoel": "K/6.5 vervangingsweerstand van een parallelschakeling berekenen",
  "context": [
-  "In een stoelverwarming van een auto zitten twee verwarmingsdraden die parallel zijn geschakeld (zie schakelschema)."
+  "In een stoelverwarming van een auto zitten twee verwarmingsdraden die parallel zijn geschakeld. Je ziet het schakelschema."
  ],
  "figuur": {
   "type": "schakelschema",

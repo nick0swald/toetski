@@ -5,7 +5,7 @@
  "se": "SE4.2",
  "hoofdstuk": "Geluid (H13): oscilloscoop, trillingstijd en frequentie",
  "context": [
-  "Gijs laat met een toongenerator een toon horen. Met een microfoon en een oscilloscoop maakt hij het beeld hieronder. De tijdbasis is 0,2 ms per hokje."
+  "Gijs laat met een toongenerator een toon horen. Met een microfoon en een oscilloscoop maakt hij een beeld van de toon. Je ziet dit beeld. De tijdbasis is 0,2 ms per hokje."
  ],
  "figuur": {
   "type": "oscilloscoop",
@@ -71,7 +71,7 @@
    "niveau": "vooral KB/GT",
    "punten": 1,
    "leerdoel": "K/13.3 trillingstijd aflezen op een oscilloscoop",
-   "stam": "Bepaal met de figuur de trillingstijd van de toon in ms.",
+   "stam": "Bepaal de trillingstijd van de toon in ms.",
    "antwoordregels": 2,
    "antwoordmodel": {
     "regels": [
@@ -170,7 +170,7 @@
    "punten": 1,
    "leerdoel": "K/13.2 toonhoogte en luidheid herkennen in een oscilloscoopbeeld",
    "context": [
-    "Gijs stelt de toongenerator anders in. De nieuwe toon is <b>hoger én harder</b>. De instellingen van de oscilloscoop blijven gelijk."
+    "Gijs stelt de toongenerator anders in. De nieuwe toon is <b>hoger én harder</b>. De instellingen van de oscilloscoop blijven gelijk. Je ziet vier beelden."
    ],
    "figuur": {
     "type": "oscilloscoop",
@@ -285,9 +285,9 @@
    "punten": 2,
    "leerdoel": "K/13.3 inzicht: tijdbasis en trillingstijd",
    "context": [
-    "Gijs zet de tijdbasis van de oscilloscoop op 0,1 ms per hokje. De toongenerator laat dezelfde toon horen als in de eerste figuur."
+    "Gijs zet de tijdbasis van de oscilloscoop op 0,1 ms per hokje. De toongenerator laat dezelfde toon horen als eerst."
    ],
-   "stam": "Hoeveel hokjes is één trilling nu breed? Leg je antwoord uit.",
+   "stam": "Leg uit hoeveel hokjes één trilling nu breed is.",
    "antwoordregels": 3,
    "antwoordmodel": {
     "regels": [

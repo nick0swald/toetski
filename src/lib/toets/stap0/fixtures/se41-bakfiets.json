@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se41-bakfiets",
+ "titel": "Bakfiets",
  "vraagtype": {
   "nr": 21,
   "code": "K-DRUK",
@@ -106,5 +107,14 @@
    "eenheid": "N/cm²",
    "afgerond": "150"
   }
- ]
+ ],
+ "figuur": {
+  "type": "ai-afbeelding",
+  "stijl": "foto",
+  "beschrijving": "Een man fietst op een bakfiets met drie wielen door een woonstraat. In de bak voorin zitten een hond en twee boodschappentassen. Zijaanzicht, daglicht.",
+  "reden": "Situatieplaatje zoals bij vrijwel elke CSE-context: de leerling ziet de bakfiets met drie wielen op de weg. Er wordt niets uit de foto gemeten of afgelezen.",
+  "alt": "Bakfiets met drie wielen, met een hond en boodschappen in de bak",
+  "breedteCm": 8,
+  "hoogteCm": 5
+ }
 }

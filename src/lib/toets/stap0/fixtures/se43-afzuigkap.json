@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se43-afzuigkap",
+ "titel": "Afzuigkap",
  "vraagtype": {
   "nr": 14,
   "code": "E-SCHEMA",
@@ -17,7 +18,7 @@
  "punten": 2,
  "leerdoel": "K/6.2 schakelschema met NEN-symbolen aanvullen",
  "context": [
-  "Een afzuigkap boven het fornuis heeft een lamp en een motor (ventilator). De lamp en de motor kunnen elk apart worden aan- en uitgezet. Op beide staat een spanning van 230 V. Hieronder zie je een deel van het schakelschema."
+  "Een afzuigkap boven het fornuis heeft een lamp en een motor (ventilator). De lamp en de motor kunnen elk apart worden aan- en uitgezet. Op beide staat een spanning van 230 V. Je ziet een deel van het schakelschema."
  ],
  "figuur": {
   "type": "schakelschema",

@@ -21,6 +21,8 @@ import { controleerBerekeningen } from "./reken.ts";
 import { SPEC_SCHEMA } from "./spec-schema.ts";
 import type { Fixture, VraagSpec } from "./spec.ts";
 import { valideerSpec, valideerToets } from "./valideer.ts";
+import { formuleringCSE, voorbladTekst } from "./opmaak.ts";
+import { keurAiAfbeelding } from "./figuren/ai-afbeelding.ts";
 
 const kloon = <T>(x: T): T => structuredClone(x);
 const fixtures = laadFixtures();
@@ -30,7 +32,7 @@ test("10–15 fixtures, elk geldig volgens schema + regels", () => {
   assert.ok(fixtures.length >= 10 && fixtures.length <= 15, `${fixtures.length} fixtures`);
   for (const f of fixtures) assert.deepEqual(valideerSpec(f), [], f.id);
   const types = new Set(fixtures.flatMap((f) => [f.figuur?.type, ...("deelvragen" in f ? f.deelvragen.map((d) => d.figuur?.type) : [])]).filter(Boolean));
-  assert.deepEqual([...types].sort(), ["grafiek", "krachten", "maatcilinder", "oscilloscoop", "schakelschema"]);
+  assert.deepEqual([...types].sort(), ["ai-afbeelding", "grafiek", "krachten", "maatcilinder", "oscilloscoop", "schakelschema"]);
 });
 
 test("spec.schema.json is gelijk aan SPEC_SCHEMA", () => {
@@ -122,6 +124,7 @@ test("PNG-snapshots: TS-render ≈ Python-referentie (inktvergelijking)", async 
   assert.equal(refs.length, 16);
   for (const k of res.keuringen) {
     for (const [i, fig] of k.figuren.entries()) {
+      if (fig.type === "ai-afbeelding") continue; // placeholder, geen Python-referentie
       const naam = `${k.id}-${i}-${fig.rol}.png`;
       assert.ok(refs.includes(naam), `referentie ontbreekt: ${naam}`);
       const ref = decodeerPng(readFileSync(join(refDir, naam)));
@@ -192,11 +195,63 @@ test("export: leerlingdeel zonder antwoorden, docentdeel met sleutel, matrijs en
     };
     const l = lees(pdf.leerling, "l.pdf");
     const d = lees(pdf.docent, "d.pdf");
-    assert.match(l, /Leerlingdeel · Deel A/);
-    assert.match(l, /Leerlingdeel · Deel B/);
-    assert.doesNotMatch(l, /Antwoordmodel|Toetsmatrijs|Cijferberekening|maximumscore/);
+    for (const x of ["Deel A · vraag 1–9", "Deel B · vraag 10–15", "Naam", "Klas", "Datum", "Extra tijd 20%", "Behaalde punten", "Cijfer", "Gebruik het BINAS informatieboek.", "Dit deel bestaat uit 9 vragen.", "Meerkeuzevragen", "Open vragen", "Toongenerator", "einde", "→"]) assert.ok(l.includes(x), `leerling mist "${x}"`);
+    assert.doesNotMatch(l, /Antwoordmodel|Toetsmatrijs|Cijferberekening|maximumscore|Type \d+ ·/);
     for (const kop of ["Antwoordmodel", "Toetsmatrijs", "Totaal per SE-toets", "Totaal per RTTI-categorie", "Cijferberekening", "cijfer tegen score"]) assert.match(d, new RegExp(kop));
   }
   const docx = await maakDocxs(toets, res, pngRender);
   assert.ok(docx.leerling.byteLength > 1000 && docx.docent.byteLength > docx.leerling.byteLength);
+});
+
+test("CSE-formulering: elke vraag in alle fixtures", () => {
+  for (const f of fixtures) {
+    const qs = "deelvragen" in f ? f.deelvragen.map((d) => ({ ...d, context: [...f.context, ...(d.context ?? [])] })) : [f];
+    for (const q of qs) assert.deepEqual(formuleringCSE(q), [], `${f.id}/${q.id}`);
+  }
+  assert.ok(formuleringCSE({ stam: "Hoeveel hokjes is het? Leg je antwoord uit." }).length > 0);
+  assert.ok(formuleringCSE({ stam: "Bereken de druk.", context: ["Sanne bouwt de schakeling hieronder."] }).length > 0);
+  assert.ok(formuleringCSE({ stam: "Wat gebeurt er?", opties: ["L1 gaat uit.", "L1 blijft branden"] }).length > 0);
+});
+
+test("ai-afbeelding: schema, alleen als situatieplaatje, placeholder zonder beeld-API", () => {
+  const bak = fx("se41-bakfiets") as VraagSpec;
+  assert.equal(bak.figuur?.type, "ai-afbeelding");
+  const svg = figuurSvg(bak.figuur!);
+  assert.match(svg, /data-ai-afbeelding="foto"/);
+  assert.match(svg, /stroke-dasharray/);
+  // Een meetvraag of meetwaarden in de beschrijving: no-go.
+  const f = bak.figuur as Extract<typeof bak.figuur, { type: "ai-afbeelding" }>;
+  assert.deepEqual(keurAiAfbeelding(f!, bak), []);
+  assert.ok(keurAiAfbeelding(f!, { stam: "Lees af hoe lang de bakfiets is.", parameters: [] }).length > 0);
+  assert.ok(keurAiAfbeelding({ ...f!, beschrijving: "Een bakfiets van 2,4 m lang op een weg met 12 cm² contact." }, bak).length > 0);
+  assert.ok(keurAiAfbeelding(f!, { stam: "Bereken de druk.", parameters: [{ naam: "A", waarde: 12, bron: "figuur" }] }).length > 0);
+  // Schema: geen `controle` toegestaan; antwoordfiguur mag geen AI-afbeelding zijn.
+  const metControle = kloon(bak) as unknown as { figuur: Record<string, unknown> };
+  metControle.figuur.controle = [{ meting: "x", verwacht: 1 }];
+  assert.ok(valideerSpec(metControle).length > 0);
+  const alsAntwoord = kloon(bak);
+  alsAntwoord.antwoordmodel.figuur = bak.figuur;
+  assert.ok(valideerSpec(alsAntwoord).some((e) => /AI-afbeelding/.test(e)));
+  // In de pijplijn: GO als placeholder.
+  const res = verwerkToets(laadVoorbeeldtoets(), fixtures);
+  const k = res.keuringen.find((x) => x.id === "se41-bakfiets")!;
+  assert.equal(k.ok, true);
+  assert.equal(k.figuren[0].type, "ai-afbeelding");
+});
+
+test("voorblad: velden van de schooltoetsen + leerlingblad, geen schoolnaam, schoolveld standaard leeg", () => {
+  const t = laadVoorbeeldtoets();
+  const res = verwerkToets(t, fixtures);
+  const deelA = res.delen[0];
+  const qs = res.vragen.filter((q) => deelA.nrs.includes(q.nr));
+  const v = voorbladTekst(t, qs, deelA, res.delen, "5,5 bij 16 van de 31 punten");
+  assert.equal(v.schoolveld, "");
+  assert.match(v.kop, /^Toets .* VMBO-GL en TL$/);
+  assert.equal(v.schooljaar, "2026-2027");
+  assert.deepEqual(v.rechts, ["SE4", "Deel A · vraag 1–9", "voorbeeld stap 0", "90 minuten"]);
+  assert.match(v.balk, /^natuur- en scheikunde 1/);
+  assert.deepEqual(v.onder, ["Dit deel bestaat uit 9 vragen.", "Voor dit deel zijn maximaal 19 punten te behalen.", "Voor elk vraagnummer staat hoeveel punten met een goed antwoord behaald kunnen worden."]);
+  const metSchool = voorbladTekst({ ...t, voorblad: { ...t.voorblad, schoolveld: "Sectie NaSk — mevr. Jansen" } }, qs, null, [res.delen[0]], "");
+  assert.equal(metSchool.schoolveld, "Sectie NaSk — mevr. Jansen");
+  assert.equal(metSchool.onder[0], "Deze toets bestaat uit 9 vragen.");
 });

@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se41-krat",
+ "titel": "Krat met flessen",
  "vraagtype": {
   "nr": 55,
   "code": "K-SCHAAL",
@@ -17,7 +18,7 @@
  "punten": 1,
  "leerdoel": "K/9.1 krachtenschaal bepalen",
  "context": [
-  "Op een plank in de schuur staat een krat met flessen. De zwaartekracht op de krat is 90 N. In de figuur is de zwaartekracht op schaal getekend. De pijl is 4,5 cm lang."
+  "Op een plank in de schuur staat een krat met flessen. De zwaartekracht op de krat is 90 N. Je ziet de krat met de zwaartekracht op schaal getekend. De pijl is 4,5 cm lang."
  ],
  "figuur": {
   "type": "krachten",

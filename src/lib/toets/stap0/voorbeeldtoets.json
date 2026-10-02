@@ -40,5 +40,20 @@
     "alg-lampje"
    ]
   }
- ]
+ ],
+ "voorblad": {
+  "kop": "Toets Krachten, Geluid, Elektriciteit en Beweging",
+  "leerweg": "VMBO-GL en TL",
+  "schooljaar": "2026-2027",
+  "seCode": "SE4",
+  "toetscode": "voorbeeld stap 0",
+  "vak": "natuur- en scheikunde 1 – SE4 GL en TL",
+  "hulpmiddelen": [
+   "Gebruik het BINAS informatieboek.",
+   "Je mag een rekenmachine gebruiken."
+  ],
+  "uitwerkbijlage": false,
+  "schoolveld": "",
+  "voetcode": "SE4-VB0"
+ }
 }

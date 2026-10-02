@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se41-boomstam",
+ "titel": "Omgevallen boom",
  "vraagtype": {
   "nr": 44,
   "code": "K-RES",
@@ -17,7 +18,7 @@
  "punten": 3,
  "leerdoel": "K/9.2 resultante van twee krachten construeren",
  "context": [
-  "Twee trekkers trekken een omgevallen boomstam weg. In de figuur zijn de twee krachten op de boomstam in punt P op schaal getekend. F<sub>1</sub> = 400 N en F<sub>2</sub> = 300 N. De hoek tussen de krachten is 60°.",
+  "Twee trekkers trekken een omgevallen boomstam weg. Je ziet de twee krachten op de boomstam in punt P, op schaal getekend. F<sub>1</sub> = 400 N en F<sub>2</sub> = 300 N. De hoek tussen de krachten is 60°.",
   "De krachtenschaal is 1 cm ≙ 100 N."
  ],
  "figuur": {

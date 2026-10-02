@@ -184,7 +184,29 @@ export interface OscilloscoopFiguur {
   controle?: FiguurControle[];
 }
 
-export type FiguurSpec = MaatcilinderFiguur | SchakelschemaFiguur | GrafiekFiguur | KrachtenFiguur | OscilloscoopFiguur;
+/**
+ * Optionele AI-afbeelding (foto of gestileerde illustratie van de situatie). ALLEEN als de vraag echt een foto of
+ * situatieplaatje nodig heeft — nooit voor een meet- of rekenfiguur (daar zijn de vijf deterministische typen voor).
+ * Generatie gaat via de bestaande beeldstroom met een interne go/no-go vóór plaatsing en zonder nabewerking.
+ * Stap 0: alleen schema + placeholder in de opmaak; er wordt geen beeld-API aangeroepen.
+ */
+export interface AiAfbeeldingFiguur {
+  type: "ai-afbeelding";
+  stijl: "foto" | "illustratie";
+  /** Wat er te zien moet zijn (prompt voor de beeldstroom), zonder getallen of meetwaarden. */
+  beschrijving: string;
+  /** Waarom een foto/situatieplaatje nodig is (wordt gekeurd: geen meet-/rekenfiguur). */
+  reden: string;
+  /** Alt-tekst voor toegankelijkheid. */
+  alt: string;
+  /** Optionele labels bij de afbeelding, zoals in het CSE ("adapter", "luidspreker"). */
+  labels?: string[];
+  breedteCm: number;
+  hoogteCm: number;
+}
+
+export type MeetFiguurSpec = MaatcilinderFiguur | SchakelschemaFiguur | GrafiekFiguur | KrachtenFiguur | OscilloscoopFiguur;
+export type FiguurSpec = MeetFiguurSpec | AiAfbeeldingFiguur;
 export type FiguurType = FiguurSpec["type"];
 
 export interface Scorestap {
@@ -211,6 +233,8 @@ export interface VraagSpec {
   hoofdstuk: string;
   /** Andere SE's waar de vraag ook past. */
   ookIn?: string;
+  /** Contexttitel zoals in het CSE ("Gedeeld geluid"). */
+  titel?: string;
   niveau: Niveau;
   punten: number;
   context: string[];
@@ -251,6 +275,10 @@ export interface OpmaakVraag extends VraagSpec {
   /** SE-code + volgnummer, bv. "SE4.2-03". */
   code: string;
   vraagstuk?: { id: string; titel: string; eerste: boolean; deel: number; aantal: number };
+  /** Gedeelde context van het vraagstuk (alleen bij de eerste deelvraag) resp. de context van de vraag zelf. */
+  gedeeldeContext?: string[];
+  /** Eigen context van een deelvraag: staat in het CSE op de regel van het vraagnummer, vóór de opdracht (→). */
+  aanloop?: string[];
 }
 
 /** Toets-niveau: welke vragen, in welke leerlingdelen, en de cijferberekening. */
@@ -265,4 +293,31 @@ export interface ToetsSpec {
   nTerm?: number;
   /** Tijd in minuten (op het voorblad). */
   minuten?: number;
+  /** Voorblad van het leerlingdeel (opbouw als de schooltoetsen/CSE + Toetski-leerlingblad). */
+  voorblad?: Voorblad;
+}
+
+/** Velden van het voorblad. Alles optioneel; lege velden worden weggelaten (invulvelden blijven altijd staan). */
+export interface Voorblad {
+  /** Kop rechtsboven, bv. "Toets Krachten en Geluid". Standaard de toetstitel. */
+  kop?: string;
+  /** Leerweg/niveau achter de kop, bv. "VMBO-GL en TL". */
+  leerweg?: string;
+  /** Groot rechtsboven, bv. "2026-2027". */
+  schooljaar?: string;
+  /** Rechterblok onder het schooljaar, bv. "SE4" en "O 01 - W 2". */
+  seCode?: string;
+  toetscode?: string;
+  /** Tekst in de zwarte balk, bv. "natuur- en scheikunde 1 – SE4 GL en TL". */
+  vak?: string;
+  /** Hulpmiddelen, elk als eigen regel ("Gebruik het BINAS informatieboek."). */
+  hulpmiddelen?: string[];
+  /** "Bij deze toets hoort een uitwerkbijlage." */
+  uitwerkbijlage?: boolean;
+  /** Interne code linksonder op het voorblad (zoals "4-03W2 - …" op de schooltoetsen). Standaard leeg. */
+  voetcode?: string;
+  /** Vrij veld voor school/docent (linksboven). Standaard leeg: dan staat er niets. */
+  schoolveld?: string;
+  /** Cesuur op het voorblad tonen (Toetski-leerlingblad). Standaard aan. */
+  cesuur?: boolean;
 }

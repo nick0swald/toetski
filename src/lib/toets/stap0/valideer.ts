@@ -24,6 +24,7 @@ export function valideerSchema(spec: unknown): string[] {
 function regelsVoorVraag(q: VraagSpec | DeelvraagSpec, pad: string): string[] {
   const f: string[] = [];
   const som = q.scorestappen.reduce((s, x) => s + x.punten, 0);
+  if (q.antwoordmodel.figuur?.type === "ai-afbeelding") f.push(`${pad}: een antwoordfiguur kan geen AI-afbeelding zijn`);
   if (q.opties) {
     if (!q.antwoordmodel.juist) f.push(`${pad}: meerkeuze zonder juiste letter`);
     else if (q.antwoordmodel.juist.charCodeAt(0) - 65 >= q.opties.length) f.push(`${pad}: juiste letter ${q.antwoordmodel.juist} valt buiten de opties`);

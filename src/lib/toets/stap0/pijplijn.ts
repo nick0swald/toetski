@@ -29,11 +29,11 @@ export interface Pijplijnresultaat {
 }
 
 /** Plat maken: een vraagstuk wordt deelvragen met de gedeelde context en figuur alleen bij de eerste deelvraag. */
-function plat(fx: Fixture): { q: VraagSpec; extraParams?: VraagSpec["parameters"]; extraTekst: string; vs?: OpmaakVraag["vraagstuk"]; ouderId: string }[] {
+function plat(fx: Fixture): { q: VraagSpec; extraParams?: VraagSpec["parameters"]; extraTekst: string; vs?: OpmaakVraag["vraagstuk"]; ouderId: string; gedeeld: string[]; aanloop: string[] }[] {
   if (fx.soort !== "vraagstuk") {
     const { soort: _s, ...q } = fx;
     void _s;
-    return [{ q, extraTekst: "", ouderId: fx.id }];
+    return [{ q, extraTekst: "", ouderId: fx.id, gedeeld: fx.context, aanloop: [] }];
   }
   return fx.deelvragen.map((d, i) => ({
     q: {
@@ -47,6 +47,8 @@ function plat(fx: Fixture): { q: VraagSpec; extraParams?: VraagSpec["parameters"
     extraTekst: fx.context.join(" "),
     vs: { id: fx.id, titel: fx.titel, eerste: i === 0, deel: i + 1, aantal: fx.deelvragen.length },
     ouderId: fx.id,
+    gedeeld: i === 0 ? fx.context : [],
+    aanloop: d.context ?? [],
   }));
 }
 
@@ -55,7 +57,7 @@ export function verwerkToets(toets: ToetsSpec, fixtures: Fixture[]): Pijplijnres
   const toetsFouten = valideerToets(toets, fixtures.map((f) => f.id));
   const keuringen: Keuring[] = [];
   const afgekeurd: string[] = [];
-  const geplaatst: { q: VraagSpec; vs?: OpmaakVraag["vraagstuk"]; ouderId: string }[] = [];
+  const geplaatst: { q: VraagSpec; vs?: OpmaakVraag["vraagstuk"]; ouderId: string; gedeeld: string[]; aanloop: string[] }[] = [];
   for (const id of toets.vragen) {
     const fx = perId.get(id);
     if (!fx) continue;
@@ -73,7 +75,7 @@ export function verwerkToets(toets: ToetsSpec, fixtures: Fixture[]): Pijplijnres
       ];
       for (const [f, rol] of figs) {
         if (!f) continue;
-        const o = keurFiguur(f, params);
+        const o = keurFiguur(f, params, it.q);
         kOuder.figuren.push({ rol, type: f.type, go: o.go, metingen: o.metingen, svg: o.svg });
         kOuder.fouten.push(...o.fouten.map((x) => `${it.q.id} (${rol}): ${x}`));
       }
@@ -87,7 +89,7 @@ export function verwerkToets(toets: ToetsSpec, fixtures: Fixture[]): Pijplijnres
   const teller: Record<string, number> = {};
   const vragen: OpmaakVraag[] = geplaatst.map((g, i) => {
     teller[g.q.se] = (teller[g.q.se] ?? 0) + 1;
-    return { ...g.q, nr: i + 1, code: `${g.q.se}-${String(teller[g.q.se]).padStart(2, "0")}`, vraagstuk: g.vs, ouderId: g.ouderId } as OpmaakVraag;
+    return { ...g.q, nr: i + 1, code: `${g.q.se}-${String(teller[g.q.se]).padStart(2, "0")}`, vraagstuk: g.vs, ouderId: g.ouderId, gedeeldeContext: g.gedeeld, aanloop: g.aanloop } as OpmaakVraag;
   });
   const ouderVan = new Map(vragen.map((v) => [v.nr, (v as OpmaakVraag & { ouderId: string }).ouderId]));
   const delen = (toets.delen ?? [{ naam: "", vragen: toets.vragen }]).map((d) => ({

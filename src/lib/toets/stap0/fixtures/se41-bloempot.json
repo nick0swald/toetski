@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se41-bloempot",
+ "titel": "Bloempot",
  "vraagtype": {
   "nr": 22,
   "code": "K-VECT",
@@ -17,7 +18,7 @@
  "punten": 3,
  "leerdoel": "K/9.1 kracht als pijl op schaal tekenen",
  "context": [
-  "Sophie hangt een bloempot met plant aan een haak in de veranda. De bloempot met aarde en plant heeft een massa van 6,0 kg. Z is het zwaartepunt van de bloempot.",
+  "Sophie hangt een bloempot met plant aan een haak in de veranda. De bloempot met aarde en plant heeft een massa van 6,0 kg. Je ziet de bloempot. Z is het zwaartepunt.",
   "Gebruik g = 10 N/kg. De krachtenschaal is 1 cm ≙ 20 N."
  ],
  "figuur": {

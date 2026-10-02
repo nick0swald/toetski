@@ -10,8 +10,8 @@ import type { Pijplijnresultaat } from "./pijplijn.ts";
 import { figuurSvg } from "./figuren/index.ts";
 import { cijferGrafiekSvg, cijferTabel, cesuur, formule } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
-import { antwoordKop, bandTekst, INSTRUCTIE, matrijsTotalen, rttiRegel, SE_INFO, SE_ORDE, seNaam, UITLEG_DOCENT, UITLEG_SE, vraagstukBereik } from "./opmaak.ts";
-import { A4, Beeld, Bijeen, type Blok, CM, type Fonts, Ingesprongen, Lijnen, maakPdf, PaginaEinde, Para, Ruimte, ST, Tabel } from "./pdf-opmaak.ts";
+import { antwoordKop, bandTekst, contextTitel, INSTRUCTIE_CSE, INVULVELDEN, matrijsTotalen, rttiRegel, SE_INFO, SE_ORDE, seNaam, UITLEG_DOCENT, UITLEG_SE, voorbladTekst, vraagstukBereik } from "./opmaak.ts";
+import { A4, Beeld, Bijeen, type Blok, CM, type Fonts, GeenNummer, Ingesprongen, Lijn, Lijnen, maakPdf, Onderaan, PaginaEinde, Para, Ruimte, ST, Tabel } from "./pdf-opmaak.ts";
 
 export type PngRender = (svg: string, breedtePx: number) => Promise<Uint8Array>;
 
@@ -295,19 +295,130 @@ function vragenMetSecties(vragen: OpmaakVraag[], docent: boolean, figs: Map<stri
   return out;
 }
 
+// ── Leerlingdeel ──────────────────────────────────────────────────────────────────────────────────────────────
+// Voorblad: opbouw van de schooltoetsen (kop + schooljaar + SE/toetscode/duur rechtsboven, zwarte vakbalk,
+// hulpmiddelen, aantal vragen/punten onderaan) met de invulvelden van het Toetski-leerlingblad. Daarna de
+// instructiepagina en de vragen in CSE-opbouw: lijn + contexttitel, context ingesprongen, in de kantlijn punten en
+// vraagnummer, eigen informatie van een deelvraag op de nummerregel en de opdracht met →.
+
+/** Kantlijn als in het CSE: punten (klein) | vraagnummer (vet) | tekst. */
+const K_P = 0.95 * CM;
+const K_NR = IND - K_P;
+
+function invulCel(label: string, waarde?: string): Blok[] {
+  return waarde
+    ? [new Para(label, ST.vbLabel, 2), new Para(waarde, ST.lbody)]
+    : [new Para(label, ST.vbLabel, 0), new Lijn("#7f7f7f", 0.6, 16, 2)];
+}
+
+function voorblad(toets: ToetsSpec, vragen: OpmaakVraag[], deel: { naam: string; nrs: number[] } | null, delen: { naam: string; nrs: number[] }[], cesuurTekst: string): Blok[] {
+  const v = voorbladTekst(toets, vragen, deel, delen, cesuurTekst);
+  const out: Blok[] = [new GeenNummer()];
+  if (v.schoolveld) out.push(new Para(v.schoolveld, ST.lklein, 4));
+  out.push(new Para(v.kop, ST.vbKop, 6));
+  if (v.schooljaar) out.push(new Para(v.schooljaar, ST.vbJaar, 8));
+  for (const r of v.rechts) out.push(new Para(r, ST.vbRechts));
+  out.push(new Ruimte(10));
+  if (v.balk) out.push(new Tabel([[{ inhoud: [new Para(v.balk, ST.vbBalk)], bg: "#000000" }]], { kolommen: [TW], pad: { l: 6, r: 6, t: 3, b: 4 } }));
+  out.push(new Ruimte(26));
+  const rijen = INVULVELDEN.map(([a, b]) => [invulCel(a), invulCel(b)]);
+  if (v.cesuur) rijen.push([invulCel("Cesuur", v.cesuur), []]);
+  out.push(new Tabel(rijen, { kolommen: [TW / 2, TW / 2], pad: { l: 0, r: 18, t: 5, b: 9 } }));
+  out.push(new Ruimte(26));
+  for (const h of v.hulpmiddelen) out.push(new Para(h, ST.lbody, 4));
+  if (v.delenZin) out.push(new Ruimte(8), new Para(v.delenZin, ST.lbody, 4));
+  out.push(new Onderaan(new Bijeen([...v.onder.map((r) => new Para(r, ST.lbody)), ...(v.voetcode ? [new Ruimte(14), new Para(v.voetcode, ST.lklein)] : [])])));
+  // Instructiepagina (CSE pagina 2); de vragen volgen direct.
+  out.push(new PaginaEinde());
+  for (const blok of INSTRUCTIE_CSE) {
+    out.push(ind(new Para(`<b>${blok.kop}</b>`, ST.lbody, 1)));
+    if (blok.regels.length === 1) out.push(ind(new Para(blok.regels[0], ST.lbody, 8)));
+    else {
+      out.push(ind(new Tabel(blok.regels.map((r) => [[new Para("–", ST.lbody)], [new Para(r, ST.lbody)]]), { kolommen: [0.45 * CM, IW - 0.45 * CM], pad: { l: 0, r: 0, t: 0, b: 1 } })));
+      out.push(new Ruimte(8));
+    }
+  }
+  out.push(new Ruimte(10));
+  return out;
+}
+
+/** CSE-contexttitel: vet, iets ingesprongen (op de nummerkolom), daaronder een dikke grijze balk over de volle breedte. */
+function titelBlok(titel: string, se: SeCode): Blok {
+  return new Bijeen([
+    new Tabel([[[], [new Para(titel, ST.ltitel)], { inhoud: [new Para(`<font color="#808080">${seNaam(se)}</font>`, ST.lklein)], uitlijning: "rechts" as const }]], {
+      kolommen: [K_P, TW - K_P - 2 * CM, 2 * CM],
+      pad: { l: 0, r: 0, t: 0, b: 1 },
+      va: "midden",
+    }),
+    new Lijn("#bfbfbf", 4, 0, 12),
+  ]);
+}
+
+function lDataTabel(rijen: string[][]): Blok {
+  const n = rijen[0].length;
+  const kol = Array(n).fill(Math.min(2.6 * CM, IW / n));
+  kol[0] = Math.min(4.2 * CM, IW - (n - 1) * kol[1]);
+  return ind(new Tabel(rijen.map((r, ri) => r.map((c, j) => ({ inhoud: [new Para(c, ri === 0 || j === 0 ? ST.cellb : ST.cell)] }))), { kolommen: kol, rooster: { kleur: "#000000", lw: 0.6 }, pad: { l: 5, r: 5, t: 3, b: 4 }, va: "midden" }));
+}
+
+function leerlingVraag(q: OpmaakVraag, figs: Map<string, Fig>): Blok[] {
+  const blokken: Blok[] = [];
+  const titel = contextTitel(q);
+  if (titel) blokken.push(titelBlok(titel, q.se));
+  for (const c of q.gedeeldeContext ?? []) blokken.push(ind(new Para(c, ST.lbody, 6)));
+  if (q.tabel) blokken.push(lDataTabel(q.tabel), new Ruimte(8));
+  const fig = figs.get(`${q.id}/leerling`);
+  const aanloop = q.aanloop ?? [];
+  if (fig && !aanloop.length) blokken.push(ind(figBlok(fig)), new Ruimte(4));
+  // Nummerregel: eigen informatie van de deelvraag → (figuur) → opdracht (met → als er informatie vóór staat).
+  const tekst: Blok[] = [];
+  for (const a of aanloop) tekst.push(new Para(a, ST.lbody, 4));
+  if (fig && aanloop.length) tekst.push(figBlok(fig, IW), new Ruimte(2));
+  tekst.push(
+    aanloop.length
+      ? new Tabel([[[new Para("<b>→</b>", ST.lbody)], [new Para(q.stam, ST.lbody)]]], { kolommen: [0.55 * CM, IW - 0.55 * CM], pad: { l: 0, r: 0, t: 0, b: 0 } })
+      : new Para(q.stam, ST.lbody),
+  );
+  if (q.opties) {
+    tekst.push(new Ruimte(3));
+    tekst.push(new Tabel(q.opties.map((o, i) => [[new Para(`<b>${String.fromCharCode(65 + i)}</b>`, ST.lbody)], [new Para(o, ST.lbody)]]), { kolommen: [0.6 * CM, IW - 0.6 * CM], pad: { l: 0, r: 0, t: 0, b: 1 } }));
+  }
+  blokken.push(
+    new Tabel([[[new Para(`${q.punten}p`, ST.lpunt)], [new Para(String(q.nr), ST.lnr)], tekst]], { kolommen: [K_P, K_NR, IW], pad: { l: 0, r: 0, t: 0, b: 0 } }),
+  );
+  if (q.antwoordregels) blokken.push(new Ruimte(2), ind(new Lijnen(q.antwoordregels)));
+  blokken.push(new Ruimte(18));
+  return blokken;
+}
+
+function leerlingVragen(vragen: OpmaakVraag[], figs: Map<string, Fig>): Blok[] {
+  const out: Blok[] = [];
+  let vorigeSe: SeCode | null = null;
+  vragen.forEach((q, i) => {
+    // Paginagrens: bij een nieuwe SE-toets en vóór elk vraagstuk (CSE: een vraagstuk begint bovenaan een pagina).
+    const nieuwVraagstuk = q.vraagstuk?.eerste && q.vraagstuk.aantal > 1;
+    if (i > 0 && (q.se !== vorigeSe || nieuwVraagstuk)) out.push(new PaginaEinde());
+    vorigeSe = q.se;
+    const b = leerlingVraag(q, figs);
+    // Losse vraag: titel t/m antwoordlijnen bij elkaar. Vraagstuk: per deelvraag bij elkaar (titel + context bij de eerste).
+    out.push(new Bijeen(b));
+  });
+  out.push(new Tabel([[{ inhoud: [new Para("einde", ST.lbody)], uitlijning: "rechts" as const }]], { kolommen: [TW], pad: { l: 0, r: 0, t: 4, b: 0 } }));
+  return out;
+}
+
 function leerlingBlokken(toets: ToetsSpec, res: Pijplijnresultaat, figs: Map<string, Fig>, deelIdx: number | null): Blok[] {
   const delen = res.delen.filter((d) => d.nrs.length);
-  const meerdere = delen.length > 1 && delen[0].naam;
   const kiezen = deelIdx === null ? delen : [delen[deelIdx]];
+  const max = res.vragen.reduce((s, q) => s + q.punten, 0);
+  const cs = cesuur(max, toets.nTerm ?? 1);
+  const cesuurTekst = `5,5 bij ${cs} van de ${max} punten${delen.length > 1 ? " (hele toets)" : ""}`;
   const out: Blok[] = [];
   kiezen.forEach((d, i) => {
     const vragen = res.vragen.filter((q) => d.nrs.includes(q.nr));
     if (i > 0) out.push(new PaginaEinde());
-    out.push(...kopBlokken(toets, `Leerlingdeel${meerdere ? ` · ${d.naam} (vraag ${d.nrs[0]}–${d.nrs[d.nrs.length - 1]})` : ""}`, vragen));
-    if (meerdere && i === 0 && deelIdx === null)
-      out.push(new Para(`Deze toets bestaat uit ${delen.map((x) => `${x.naam.replace(/^Deel/, "deel")} (vraag ${x.nrs[0]}–${x.nrs[x.nrs.length - 1]})`).join(" en ")}.`, ST.body, 6));
-    out.push(new Para(UITLEG_SE, ST.body, 6), legenda(vragen), new Ruimte(8), new Para(INSTRUCTIE, ST.body));
-    out.push(...vragenMetSecties(vragen, false, figs, res.vragen));
+    out.push(...voorblad(toets, vragen, d.naam ? d : null, delen, cesuurTekst));
+    out.push(...leerlingVragen(vragen, figs));
   });
   return out;
 }

@@ -630,6 +630,60 @@
        }
       }
      }
+    },
+    {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "type",
+      "stijl",
+      "beschrijving",
+      "reden",
+      "alt",
+      "breedteCm",
+      "hoogteCm"
+     ],
+     "properties": {
+      "type": {
+       "const": "ai-afbeelding"
+      },
+      "stijl": {
+       "enum": [
+        "foto",
+        "illustratie"
+       ]
+      },
+      "beschrijving": {
+       "type": "string",
+       "minLength": 10
+      },
+      "reden": {
+       "type": "string",
+       "minLength": 10
+      },
+      "alt": {
+       "type": "string",
+       "minLength": 1
+      },
+      "labels": {
+       "type": "array",
+       "items": {
+        "type": "string",
+        "minLength": 1
+       },
+       "maxItems": 6
+      },
+      "breedteCm": {
+       "type": "number",
+       "minimum": 2,
+       "maximum": 16
+      },
+      "hoogteCm": {
+       "type": "number",
+       "minimum": 2,
+       "maximum": 12
+      }
+     }
     }
    ]
   },
@@ -740,6 +794,10 @@
     },
     "ookIn": {
      "type": "string"
+    },
+    "titel": {
+     "type": "string",
+     "minLength": 1
     },
     "niveau": {
      "enum": [
@@ -951,6 +1009,10 @@
     },
     "ookIn": {
      "type": "string"
+    },
+    "titel": {
+     "type": "string",
+     "minLength": 1
     },
     "niveau": {
      "enum": [

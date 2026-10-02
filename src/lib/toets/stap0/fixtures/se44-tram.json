@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se44-tram",
+ "titel": "Tram",
  "vraagtype": {
   "nr": 36,
   "code": "B-ACC",
@@ -17,7 +18,7 @@
  "punten": 3,
  "leerdoel": "K/8.3 versnelling bepalen uit een (v,t)-diagram",
  "context": [
-  "Een tram vertrekt bij een halte. In het (v,t)-diagram zie je de snelheid van de tram in de eerste 14 seconden."
+  "Een tram vertrekt bij een halte. Je ziet het (v,t)-diagram van de tram in de eerste 14 seconden."
  ],
  "figuur": {
   "type": "grafiek",

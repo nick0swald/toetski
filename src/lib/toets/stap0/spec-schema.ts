@@ -169,6 +169,22 @@ const figuur = {
         controle,
       },
     },
+    {
+      // Foto/situatieplaatje via de beeldstroom; nooit een meet- of rekenfiguur, dus geen `controle`.
+      type: "object",
+      additionalProperties: false,
+      required: ["type", "stijl", "beschrijving", "reden", "alt", "breedteCm", "hoogteCm"],
+      properties: {
+        type: { const: "ai-afbeelding" },
+        stijl: { enum: ["foto", "illustratie"] },
+        beschrijving: { type: "string", minLength: 10 },
+        reden: { type: "string", minLength: 10 },
+        alt: str,
+        labels: { type: "array", items: str, maxItems: 6 },
+        breedteCm: breedte,
+        hoogteCm: { type: "number", minimum: 2, maximum: 12 },
+      },
+    },
   ],
 } as const;
 
@@ -191,6 +207,7 @@ const vraagVelden = {
     properties: { nr: { type: "integer", minimum: 1, maximum: 63 }, code: str, naam: str, cse: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 3, maxItems: 3 } },
   },
   ookIn: { type: "string" },
+  titel: str,
   niveau: { enum: ["BB/KB/GT", "vooral KB/GT", "vooral GT"] },
   punten: { type: "integer", minimum: 1, maximum: 6 },
   context: { type: "array", items: str },
@@ -294,5 +311,22 @@ export const TOETS_SCHEMA = {
     },
     nTerm: { type: "number", minimum: 0, maximum: 3 },
     minuten: { type: "integer", minimum: 10, maximum: 240 },
+    voorblad: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        kop: { type: "string" },
+        leerweg: { type: "string" },
+        schooljaar: { type: "string" },
+        seCode: { type: "string" },
+        toetscode: { type: "string" },
+        vak: { type: "string" },
+        hulpmiddelen: { type: "array", items: str },
+        uitwerkbijlage: { type: "boolean" },
+        voetcode: { type: "string" },
+        schoolveld: { type: "string" },
+        cesuur: { type: "boolean" },
+      },
+    },
   },
 } as const;

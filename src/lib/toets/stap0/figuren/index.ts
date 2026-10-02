@@ -1,5 +1,6 @@
 /** Figurenbibliotheek stap 0: spec → SVG (deterministisch) en de automatische go/no-go per figuur. */
-import type { FiguurControle, FiguurSpec, Parameter } from "../spec.ts";
+import type { FiguurControle, FiguurSpec, Parameter, VraagSpec } from "../spec.ts";
+import { aiAfbeeldingSvg, keurAiAfbeelding } from "./ai-afbeelding.ts";
 import { grafiekSvg, meetGrafiek } from "./grafiek.ts";
 import { krachtenSvg, meetKrachten } from "./krachten.ts";
 import { maatcilinderSvg, meetMaatcilinder } from "./maatcilinder.ts";
@@ -18,6 +19,8 @@ export function figuurSvg(f: FiguurSpec): string {
       return krachtenSvg(f);
     case "oscilloscoop":
       return oscilloscoopSvg(f);
+    case "ai-afbeelding":
+      return aiAfbeeldingSvg(f);
   }
 }
 
@@ -36,6 +39,8 @@ export function meetFiguur(f: FiguurSpec, svg: string): Record<string, number> {
       return meetKrachten(svg, f.schaalN);
     case "oscilloscoop":
       return meetOscilloscoop(svg);
+    case "ai-afbeelding":
+      return { placeholder: 1 }; // niets te meten: een foto/situatieplaatje is nooit een meetfiguur
   }
 }
 
@@ -45,6 +50,7 @@ const STANDAARD_TOL: Record<FiguurSpec["type"], number> = {
   grafiek: 0.05,
   krachten: 0.5, // N
   oscilloscoop: 0.05, // hokjes
+  "ai-afbeelding": 0,
 };
 
 export interface FiguurOordeel {
@@ -58,8 +64,13 @@ export interface FiguurOordeel {
  * Go/no-go: elke `controle` koppelt een meting uit de SVG aan een parameter (of een vaste waarde). Daarnaast:
  * grafiek-asgetallen op de juiste plek, krachtenfiguur op ware grootte.
  */
-export function keurFiguur(f: FiguurSpec, params: Record<string, number>): FiguurOordeel {
+export function keurFiguur(f: FiguurSpec, params: Record<string, number>, vraag?: Pick<VraagSpec, "stam" | "parameters">): FiguurOordeel {
   const svg = figuurSvg(f);
+  if (f.type === "ai-afbeelding") {
+    // Stap 0: spec-keuring + placeholder. De beeldkeuring (go/no-go op het gegenereerde beeld) zit in de beeldstroom.
+    const fouten = keurAiAfbeelding(f, vraag);
+    return { go: fouten.length === 0, fouten, metingen: { placeholder: 1 }, svg };
+  }
   const m = meetFiguur(f, svg);
   const fouten: string[] = [];
   for (const c of (f.controle ?? []) as FiguurControle[]) {

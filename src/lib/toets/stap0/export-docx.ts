@@ -10,7 +10,7 @@ import { figuurSvg } from "./figuren/index.ts";
 import { cijferGrafiekSvg, cijferTabel, cesuur, formule } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
 import { PAGE_A4, PAGE_MARGINS, pageNumberChrome } from "../docx-pagina.ts";
-import { antwoordKop, bandTekst, INSTRUCTIE, matrijsTotalen, rttiRegel, SE_INFO, SE_ORDE, seNaam, UITLEG_DOCENT, UITLEG_SE, vraagstukBereik } from "./opmaak.ts";
+import { antwoordKop, bandTekst, contextTitel, INSTRUCTIE_CSE, INVULVELDEN, matrijsTotalen, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seNaam, UITLEG_DOCENT, UITLEG_SE, vraagstukBereik } from "./opmaak.ts";
 
 type Kind = Paragraph | Table;
 const FONT = "Arial";
@@ -48,8 +48,14 @@ function runs(markup: string, basis: { size?: number; bold?: boolean; kleur?: st
   return out;
 }
 
-const para = (markup: string, o: { size?: number; bold?: boolean; kleur?: string; na?: number; voor?: number; links?: number; midden?: boolean } = {}) =>
-  new Paragraph({ children: runs(markup, o), spacing: { after: o.na ?? 60, before: o.voor ?? 0 }, indent: o.links ? { left: o.links } : undefined, alignment: o.midden ? AlignmentType.CENTER : undefined });
+const para = (markup: string, o: { size?: number; bold?: boolean; kleur?: string; na?: number; voor?: number; links?: number; midden?: boolean; rechts?: boolean; lijnOnder?: boolean } = {}) =>
+  new Paragraph({
+    children: runs(markup, o),
+    spacing: { after: o.na ?? 60, before: o.voor ?? 0 },
+    indent: o.links ? { left: o.links } : undefined,
+    alignment: o.midden ? AlignmentType.CENTER : o.rechts ? AlignmentType.RIGHT : undefined,
+    border: o.lijnOnder ? { bottom: { style: BorderStyle.SINGLE, size: 32, color: "BFBFBF", space: 2 } } : undefined,
+  });
 
 function cel(kinderen: Kind[], o: { w: number; bg?: string; rand?: boolean; va?: boolean } = { w: 1000 }) {
   return new TableCell({
@@ -174,6 +180,61 @@ const kop = (toets: ToetsSpec, sub: string, qs: OpmaakVraag[]): Kind[] => [
   para(`${toets.minuten ? `Tijd: ${toets.minuten} minuten · ` : ""}${qs.length} vragen · ${qs.reduce((s, q) => s + q.punten, 0)} punten`, { na: 120 }),
 ];
 
+// ── Leerlingdeel: zelfde voorblad en CSE-opbouw als de PDF (Arial 12 pt) ──
+const LB = 24; // 12 pt
+function voorbladDocx(toets: ToetsSpec, qs: OpmaakVraag[], deel: { naam: string; nrs: number[] } | null, delen: { naam: string; nrs: number[] }[], res: Pijplijnresultaat): Kind[] {
+  const max = res.vragen.reduce((s, q) => s + q.punten, 0);
+  const v = voorbladTekst(toets, qs, deel, delen, `5,5 bij ${cesuur(max, toets.nTerm ?? 1)} van de ${max} punten${delen.length > 1 ? " (hele toets)" : ""}`);
+  const lijn = () => new Paragraph({ spacing: { before: 320, after: 60 }, border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "7F7F7F", space: 1 } }, children: [] });
+  const invul = (label: string, waarde?: string) => cel(waarde ? [para(`<b>${label}</b>`, { size: 20, na: 20 }), para(waarde, { size: LB, na: 60 })] : [para(`<b>${label}</b>`, { size: 20, na: 0 }), lijn()], { w: TW / 2 });
+  const rijen = INVULVELDEN.map(([a, b]) => [invul(a), invul(b)]);
+  if (v.cesuur) rijen.push([invul("Cesuur", v.cesuur), cel([], { w: TW / 2 })]);
+  const out: Kind[] = [];
+  if (v.schoolveld) out.push(para(v.schoolveld, { size: 18, na: 80 }));
+  out.push(para(`<b>${v.kop}</b>`, { size: LB, rechts: true, na: 120 }), ...(v.schooljaar ? [para(`<b>${v.schooljaar}</b>`, { size: 56, rechts: true, na: 160 })] : []));
+  for (const r of v.rechts) out.push(para(r, { size: 22, rechts: true, na: 0 }));
+  out.push(para("", { na: 160 }));
+  if (v.balk) out.push(tabel([[cel([para(`<b>${v.balk}</b>`, { size: 22, kleur: "FFFFFF", rechts: true, na: 0 })], { w: TW, bg: "#000000" })]], [TW]));
+  out.push(para("", { na: 360 }), tabel(rijen, [TW / 2, TW / 2]), para("", { na: 360 }));
+  for (const h of v.hulpmiddelen) out.push(para(h, { size: LB, na: 60 }));
+  if (v.delenZin) out.push(para(v.delenZin, { size: LB, voor: 160 }));
+  out.push(para("", { na: 1400 }));
+  for (const r of v.onder) out.push(para(r, { size: LB, na: 0 }));
+  if (v.voetcode) out.push(para(v.voetcode, { size: 16, voor: 200 }));
+  out.push(new Paragraph({ children: [new PageBreak()] }));
+  for (const b of INSTRUCTIE_CSE) {
+    out.push(para(`<b>${b.kop}</b>`, { size: LB, na: 20 }));
+    for (const r of b.regels) out.push(para(b.regels.length > 1 ? `–  ${r}` : r, { size: LB, na: 20 }));
+    out.push(para("", { na: 120 }));
+  }
+  return out;
+}
+
+async function leerlingVragenDocx(qs: OpmaakVraag[], png: PngRender): Promise<Kind[]> {
+  const out: Kind[] = [];
+  let vorige: SeCode | null = null;
+  for (const [i, q] of qs.entries()) {
+    if (i > 0 && (q.se !== vorige || (q.vraagstuk?.eerste && q.vraagstuk.aantal > 1))) out.push(new Paragraph({ children: [new PageBreak()] }));
+    vorige = q.se;
+    const titel = contextTitel(q);
+    if (titel) out.push(para(`<b>${titel}</b>`, { size: 26, lijnOnder: true, links: 540, voor: 120, na: 200 }));
+    const blok: Kind[] = (q.gedeeldeContext ?? []).map((c) => para(c, { size: LB, na: 100 }));
+    if (q.tabel) blok.push(tabel(q.tabel.map((r, ri) => r.map((c, j) => cel([para(c, { size: 20, bold: ri === 0 || j === 0, na: 0 })], { w: Math.floor((TW - IND) / r.length), rand: true }))), q.tabel[0].map(() => Math.floor((TW - IND) / q.tabel![0].length)), { kleur: "#000000", size: 4 }));
+    const aanloop = q.aanloop ?? [];
+    if (q.figuur && !aanloop.length) blok.push(await beeld(q.figuur, png));
+    if (blok.length) out.push(ingesprongen(blok));
+    const tekst: Kind[] = aanloop.map((a) => para(a, { size: LB, na: 60 }));
+    if (q.figuur && aanloop.length) tekst.push(await beeld(q.figuur, png, 14.2));
+    tekst.push(aanloop.length ? tabel([[cel([para("<b>→</b>", { size: LB, na: 0 })], { w: 320 }), cel([para(q.stam, { size: LB, na: 0 })], { w: TW - IND - 320 })]], [320, TW - IND - 320]) : para(q.stam, { size: LB, na: 0 }));
+    if (q.opties) tekst.push(tabel(q.opties.map((o, k) => [cel([para(`<b>${String.fromCharCode(65 + k)}</b>`, { size: LB, na: 0 })], { w: 400 }), cel([para(o, { size: LB, na: 0 })], { w: TW - IND - 400 })]), [400, TW - IND - 400]));
+    out.push(tabel([[cel([para(`${q.punten}p`, { size: 18, na: 0 })], { w: 540 }), cel([para(`<b>${q.nr}</b>`, { size: LB, na: 0 })], { w: IND - 540 }), cel(tekst, { w: TW - IND })]], [540, IND - 540, TW - IND]));
+    if (q.antwoordregels) out.push(ingesprongen(Array.from({ length: q.antwoordregels }, () => new Paragraph({ spacing: { before: 280 }, border: { bottom: { style: BorderStyle.DOTTED, size: 6, color: "595959", space: 1 } }, children: [] }))));
+    out.push(para("", { na: 240 }));
+  }
+  out.push(para("einde", { size: LB, rechts: true }));
+  return out;
+}
+
 const doc = (kinderen: Kind[]) =>
   new Document({ styles: { default: { document: { run: { font: FONT, size: 21 } } } }, sections: [{ properties: { page: { size: PAGE_A4, margin: { ...PAGE_MARGINS, bottom: PAGE_MARGINS.top } } }, ...pageNumberChrome(), children: kinderen }] });
 
@@ -183,8 +244,8 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
   for (const [i, d] of delen.entries()) {
     const qs = res.vragen.filter((q) => d.nrs.includes(q.nr));
     if (i > 0) L.push(new Paragraph({ children: [new PageBreak()] }));
-    L.push(...kop(toets, `Leerlingdeel${delen.length > 1 ? ` · ${d.naam} (vraag ${d.nrs[0]}–${d.nrs[d.nrs.length - 1]})` : ""}`, qs), para(UITLEG_SE, { na: 120 }), legenda(qs), para(INSTRUCTIE, { voor: 160 }));
-    L.push(...(await vragen(qs, false, png, res.vragen)));
+    L.push(...voorbladDocx(toets, qs, d.naam ? d : null, delen, res));
+    L.push(...(await leerlingVragenDocx(qs, png)));
   }
   const max = res.vragen.reduce((s, q) => s + q.punten, 0);
   const n = toets.nTerm ?? 1;

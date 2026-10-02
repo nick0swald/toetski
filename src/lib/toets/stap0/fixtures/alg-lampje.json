@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "alg-lampje",
+ "titel": "Lampje",
  "vraagtype": {
   "nr": 12,
   "code": "S-GRAF",
@@ -18,7 +19,7 @@
  "punten": 3,
  "leerdoel": "V/2.3 grafiek tekenen uit een tabel",
  "context": [
-  "Eva meet de stroomsterkte door een lampje bij verschillende spanningen. Haar metingen staan in de tabel."
+  "Eva meet de stroomsterkte door een lampje bij verschillende spanningen. Je ziet een tabel met haar meetresultaten."
  ],
  "tabel": [
   [

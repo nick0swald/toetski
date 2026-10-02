@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se43-sanne",
+ "titel": "Twee lampjes",
  "vraagtype": {
   "nr": 9,
   "code": "E-SERPAR",
@@ -17,7 +18,7 @@
  "punten": 1,
  "leerdoel": "K/6.4 spanning en stroom in een parallelschakeling",
  "context": [
-  "Sanne bouwt de schakeling hieronder. In de figuur is schakelaar S open. Lampje L1 brandt. Sanne sluit schakelaar S, zodat ook L2 gaat branden. De spanning van de batterij blijft 6 V."
+  "Sanne bouwt een schakeling. Je ziet het schakelschema. Schakelaar S is open. Lampje L1 brandt. Sanne sluit schakelaar S, zodat ook L2 gaat branden. De spanning van de batterij blijft 6 V."
  ],
  "figuur": {
   "type": "schakelschema",
@@ -65,10 +66,10 @@
  },
  "stam": "Wat gebeurt er met lampje L1 als Sanne schakelaar S sluit?",
  "opties": [
-  "L1 gaat uit.",
-  "L1 gaat zwakker branden.",
-  "L1 blijft even fel branden.",
-  "L1 gaat feller branden."
+  "L1 gaat uit",
+  "L1 gaat zwakker branden",
+  "L1 blijft even fel branden",
+  "L1 gaat feller branden"
  ],
  "antwoordmodel": {
   "juist": "C",

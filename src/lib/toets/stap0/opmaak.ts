@@ -1,5 +1,5 @@
 /** Gedeelde opmaakgegevens (zoals build.py): SE-kleuren, teksten, toetsmatrijs-totalen. Gebruikt door PDF en Word. */
-import type { OpmaakVraag, SeCode } from "./spec.ts";
+import type { OpmaakVraag, SeCode, ToetsSpec } from "./spec.ts";
 
 export const SE_INFO: Record<SeCode, { naam: string; kleur: string; tint: string }> = {
   "SE4.1": { naam: "Krachten en werktuigen", kleur: "#1f6fb2", tint: "#e3eef8" },
@@ -69,4 +69,101 @@ export function matrijsTotalen(vragen: OpmaakVraag[]) {
 export function vraagstukBereik(vragen: OpmaakVraag[], id: string): string {
   const nrs = vragen.filter((q) => q.vraagstuk?.id === id).map((q) => q.nr);
   return nrs.length > 1 ? `${nrs[0]}–${nrs[nrs.length - 1]}` : String(nrs[0] ?? "");
+}
+
+// ── Leerlingdeel: voorblad (schooltoetsen + Toetski-leerlingblad) en CSE-opbouw per vraag ──────────────────────
+
+/** Instructiepagina na het voorblad (zoals pagina 2 van het CSE), aangepast aan antwoorden in het boekje. */
+export const INSTRUCTIE_CSE: { kop: string; regels: string[] }[] = [
+  { kop: "Meerkeuzevragen", regels: ["Schrijf alleen de hoofdletter van het goede antwoord op."] },
+  {
+    kop: "Open vragen",
+    regels: [
+      "Schrijf je antwoord op de lijnen onder de vraag. Bij een tekenvraag teken je in de figuur.",
+      "Geef niet méér antwoorden dan er worden gevraagd. Als er bijvoorbeeld twee redenen worden gevraagd, geef er dan twee en niet méér. Alleen de eerste twee redenen kunnen punten opleveren.",
+      "Vermeld altijd de berekening, als een berekening gevraagd wordt. Als een gedeelte van de berekening goed is, kan dat punten opleveren. Een goede uitkomst zonder berekening levert geen punten op.",
+      "Vermeld bij een berekening altijd welke grootheid berekend wordt.",
+      "Geef de uitkomst van een berekening ook altijd met de juiste eenheid.",
+      "Gebruik g = 10 N/kg, tenzij anders vermeld.",
+    ],
+  },
+];
+
+/** Invulvelden van het Toetski-leerlingblad (twee kolommen). */
+export const INVULVELDEN: [string, string][] = [
+  ["Naam", "Klas"],
+  ["Datum", "Extra tijd 20%"],
+  ["Behaalde punten", "Cijfer"],
+];
+
+export interface VoorbladTekst {
+  schoolveld: string;
+  kop: string;
+  schooljaar: string;
+  rechts: string[];
+  balk: string;
+  hulpmiddelen: string[];
+  delenZin: string;
+  onder: string[];
+  cesuur: string;
+  voetcode: string;
+}
+
+/** Alle teksten van het voorblad; lege velden vallen weg. Geen schoolnaam/logo: alleen `schoolveld` (standaard leeg). */
+export function voorbladTekst(
+  t: ToetsSpec,
+  vragen: OpmaakVraag[],
+  deel: { naam: string; nrs: number[] } | null,
+  delen: { naam: string; nrs: number[] }[],
+  cesuurTekst: string,
+): VoorbladTekst {
+  const v = t.voorblad ?? {};
+  const p = vragen.reduce((s, q) => s + q.punten, 0);
+  const bereik = (d: { nrs: number[] }) => `vraag ${d.nrs[0]}–${d.nrs[d.nrs.length - 1]}`;
+  const ditDeel = deel && delen.length > 1;
+  const hulp = [...(v.uitwerkbijlage ? ["Bij deze toets hoort een uitwerkbijlage."] : []), ...(v.hulpmiddelen ?? ["Gebruik het BINAS informatieboek.", "Je mag een rekenmachine gebruiken."])];
+  return {
+    schoolveld: v.schoolveld?.trim() ?? "",
+    kop: [v.kop ?? t.titel, v.leerweg].filter(Boolean).join(" "),
+    schooljaar: v.schooljaar ?? "",
+    rechts: [v.seCode, ditDeel ? `${deel!.naam} · ${bereik(deel!)}` : "", v.toetscode, t.minuten ? `${t.minuten} minuten` : ""].filter((x): x is string => Boolean(x)),
+    balk: v.vak ?? "",
+    hulpmiddelen: hulp,
+    delenZin: delen.length > 1 ? `Deze toets bestaat uit ${delen.length === 2 ? "twee" : delen.length} delen: ${delen.map((d) => `${d.naam.replace(/^Deel/, "deel")} (${bereik(d)})`).join(" en ")}.` : "",
+    onder: [
+      `${ditDeel ? "Dit deel" : "Deze toets"} bestaat uit ${vragen.length} ${vragen.length === 1 ? "vraag" : "vragen"}.`,
+      `Voor ${ditDeel ? "dit deel" : "deze toets"} zijn maximaal ${p} punten te behalen.`,
+      "Voor elk vraagnummer staat hoeveel punten met een goed antwoord behaald kunnen worden.",
+    ],
+    cesuur: v.cesuur === false ? "" : cesuurTekst,
+    voetcode: v.voetcode?.trim() ?? "",
+  };
+}
+
+/** Contexttitel zoals in het CSE: de titel van het vraagstuk, of de titel van een losse vraag. */
+export function contextTitel(q: OpmaakVraag): string | null {
+  if (q.vraagstuk) return q.vraagstuk.eerste ? q.vraagstuk.titel : null;
+  return q.titel ?? null;
+}
+
+/**
+ * CSE-formulering (vmbo): opdrachten beginnen met een werkwoord in de gebiedende wijs (Bereken, Leg uit, Noteer,
+ * Teken, Construeer, Bepaal, Omcirkel, Toon aan, Geef, Maak …) of zijn een vraag (MC). Verwijzingen als "zie
+ * figuur", "hieronder" of "In de figuur is …" worden in het CSE geschreven als "Je ziet …". Geen figuurnummers.
+ */
+const OPDRACHT = /^(Bereken|Leg uit|Noteer|Teken|Construeer|Bepaal|Omcirkel|Toon|Geef|Maak|Zet|Kruis|Beschrijf|Vergelijk|Leg|Deel)\b/;
+export function formuleringCSE(q: { stam: string; context?: string[]; opties?: string[] }): string[] {
+  const f: string[] = [];
+  const stam = q.stam.trim();
+  if (!OPDRACHT.test(stam) && !stam.endsWith("?")) f.push(`opdracht begint niet met een CSE-werkwoord en is geen vraag: "${stam}"`);
+  if (q.opties && !stam.endsWith("?")) f.push("meerkeuzevraag eindigt niet met een vraagteken");
+  if (/Leg je antwoord uit/.test(stam)) f.push('"Leg je antwoord uit" → CSE: "Leg uit …"');
+  for (const c of q.context ?? []) {
+    if (/\(zie (figuur|schakelschema|tabel|afbeelding)\)/i.test(c)) f.push(`"(zie …)" in de context → CSE: "Je ziet …"`);
+    if (/\bhieronder\b/i.test(c)) f.push(`"hieronder" in de context → CSE: "Je ziet …"`);
+    if (/\b[Ii]n de figuur (is|zijn|staat|staan)\b/.test(c)) f.push(`"In de figuur is …" in de context → CSE: "Je ziet …"`);
+  }
+  if (/\b[Ff]iguur \d/.test([stam, ...(q.context ?? [])].join(" "))) f.push("figuurnummer (vmbo-CSE nummert figuren niet)");
+  for (const o of q.opties ?? []) if (/\.$/.test(o.trim())) f.push(`meerkeuzeoptie eindigt op een punt: "${o}"`);
+  return f;
 }

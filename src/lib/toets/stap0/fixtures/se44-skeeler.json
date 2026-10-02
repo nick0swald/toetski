@@ -1,6 +1,7 @@
 {
  "soort": "vraag",
  "id": "se44-skeeler",
+ "titel": "Skeeleren",
  "vraagtype": {
   "nr": 43,
   "code": "B-DIAG",
@@ -17,7 +18,7 @@
  "punten": 1,
  "leerdoel": "K/8.2 beweging herkennen in een (v,t)-diagram",
  "context": [
-  "Mila skeelert over een vlak fietspad. Ze stopt met afzetten en rolt uit tot ze stilstaat."
+  "Mila skeelert over een vlak fietspad. Ze stopt met afzetten en rolt uit tot ze stilstaat. Je ziet vier (v,t)-diagrammen."
  ],
  "figuur": {
   "type": "grafiek",
