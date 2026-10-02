@@ -57,14 +57,14 @@ describe("sessie 4: tekenvak", () => {
     assert.equal(zetTekenvakken(vragen)[1]!.tekenvak?.schaal, "1 cm ≙ 25 N");
     assert.deepEqual(leesSchaal("schaal: 1 cm staat voor 5 newton"), { tekst: "1 cm ≙ 5 N", perCm: 5, eenheid: "N" });
   });
-  it("blad: tekenvak vervangt de antwoordlijnen; maat begrensd; schema accepteert het veld", () => {
+  it("blad: tekenvak vervangt de antwoordlijnen; maat volle breedte (16 hokjes); schema accepteert het veld", () => {
     const q = vraagSchema.parse({ nummer: 5, type: "open", rtti: "T1", domein: "3.2", leerdoel: "", punten: 3, stam: "Teken de zwaartekracht (1 cm ≙ 10 N).", tekenvak: { soort: "raster", kolommen: 40, rijen: 6, schaal: "1 cm ≙ 10 N" } }) as Vraag;
     assert.equal(q.tekenvak?.soort, "raster");
     assert.equal(q.tekenvak?.kolommen, undefined, "te breed → catch → standaardbreedte");
     const blokken = blokkenVoorVraag(q);
     assert.ok(blokken.includes("tekenvak"));
     assert.ok(!blokken.includes("antwoordlijnen"));
-    assert.deepEqual(tekenvakMaat(q), { kolommen: 14, rijen: 6 });
+    assert.deepEqual(tekenvakMaat(q), { kolommen: 16, rijen: 6 });
     assert.ok(blokkenVoorVraag(v(6, "Leg uit.")).includes("antwoordlijnen"));
   });
 });

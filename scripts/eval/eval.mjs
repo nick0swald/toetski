@@ -3,7 +3,7 @@
  * Offline eval-harnas voor Toetski (zie scripts/eval/README.md).
  *
  *   node scripts/eval/eval.mjs genereer <case> [--naam N] [--base URL]     # 1 generatie via de site (kost API-tokens)
- *   node scripts/eval/eval.mjs genereer <case> --lokaal [--naam N]         # zelfde stappen lokaal (code van deze checkout, XAI_API_KEY)
+ *   node scripts/eval/eval.mjs genereer <case> --lokaal [--naam N]         # zelfde stappen lokaal (code van deze checkout, TOETSKI_XAI_API_KEY)
  *   node scripts/eval/eval.mjs plan <case>                                 # alleen het bouwplan (1 goedkope aanroep)
  *   node scripts/eval/eval.mjs scoor <toets.json> --case <case> [--rechter] [--baseline scores.json]
  *   node scripts/eval/eval.mjs poort <scores-nieuw.json> <scores-baseline.json>
@@ -18,6 +18,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
+
+// Lokale betaalde aanroepen ALLEEN met de Toetski-sleutel (TOETSKI_XAI_API_KEY), nooit met een andere XAI_API_KEY op
+// deze machine. De app-code (src/) leest XAI_API_KEY (zo staat hij in Vercel); hier zetten we die lokaal gelijk.
+// Zonder Toetski-sleutel geen enkele betaalde aanroep (offline scoren/poort werkt wel).
+if (process.env.TOETSKI_XAI_API_KEY) process.env.XAI_API_KEY = process.env.TOETSKI_XAI_API_KEY;
+else delete process.env.XAI_API_KEY;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const jiti = createJiti(import.meta.url, { alias: { "@": join(ROOT, "src") } });
@@ -153,8 +159,8 @@ async function planCmd(caseNaam) {
 async function rechter(toets, input) {
   const R = await jiti.import(join(ROOT, "src/lib/toets/eval/rubric.ts"));
   const { MODELLEN } = await jiti.import(join(ROOT, "src/lib/toets/config.ts"));
-  const key = process.env.XAI_API_KEY;
-  if (!key) throw new Error("XAI_API_KEY ontbreekt (nodig voor --rechter)");
+  const key = process.env.TOETSKI_XAI_API_KEY;
+  if (!key) throw new Error("TOETSKI_XAI_API_KEY ontbreekt (nodig voor --rechter)");
   const r = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },

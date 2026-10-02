@@ -13,6 +13,7 @@ export const FIGUUR_SOORTEN: FiguurSoort[] = [
   "blokschema",
   "pictogram",
   "maatcilinder",
+  "oscilloscoop",
   "sfeerplaat",
 ];
 
@@ -32,6 +33,7 @@ const soortSchema = z
   .string()
   .transform((s) => s.toLowerCase().trim().replace(/\s+/g, ""))
   .transform((s) => {
+    if (/oscillo|scoop|scope/.test(s)) return "oscilloscoop";
     if (/lijn|grafiek/.test(s) && !/staaf|spreid/.test(s)) return "lijngrafiek";
     if (/staaf|bar/.test(s)) return "staafdiagram";
     if (/spreid|scatter|punten/.test(s)) return "spreidingsdiagram";
@@ -183,6 +185,27 @@ const dataSchemas = {
   maatcilinder: z.object({
     maxMl: num.refine((n) => n > 0),
     standen: z.array(z.object({ label: tekst(30), ml: num })).min(1).max(4),
+  }),
+  /** Oscilloscoopscherm (Nova 4GT H13): raster van hokjes (div) met 1–2 sinusvormige trillingen. */
+  oscilloscoop: z.object({
+    hokjesX: z.coerce.number().int().min(6).max(12).default(10),
+    hokjesY: z.coerce.number().int().min(4).max(10).default(8),
+    signalen: z
+      .array(
+        z.object({
+          /** Trillingstijd in hokjes (horizontaal). */
+          trillingstijdHokjes: num.refine((n) => n >= 0.5 && n <= 12, "trillingstijd 0,5–12 hokjes"),
+          /** Amplitude in hokjes (verticaal, vanaf de middenlijn). */
+          amplitudeHokjes: num.refine((n) => n > 0 && n <= 5, "amplitude 0–5 hokjes"),
+          naam: tekst(20).optional(),
+        }),
+      )
+      .min(1)
+      .max(2),
+    /** Bijv. "2 ms/div"; alleen tonen als de vraag ermee rekent. */
+    tijdbasis: tekst(20).optional(),
+    /** Bijv. "5 mV/div". */
+    gevoeligheid: tekst(20).optional(),
   }),
   sfeerplaat: z.object({
     /** Scènebeschrijving voor het beeldmodel (liefst Engels). */
@@ -490,6 +513,7 @@ export function altTekst(spec: FiguurSpec): string {
     blokschema: "Blokschema",
     pictogram: "Gevarensymbool",
     maatcilinder: "Maatcilinder",
+    oscilloscoop: "Oscilloscoopbeeld",
     sfeerplaat: "Illustratie",
   };
   return spec.titel ? `${naam[spec.soort]}: ${spec.titel}` : naam[spec.soort];
@@ -509,8 +533,8 @@ function woorden(s: string): string[] {
  * vraag bevat: ongeveer even lang, en de vraagzin (laatste zin) en getallen van de oude stam staan erin.
  * Anders blijft de oude stam staan (bijv. planner gaf alleen "Bekijk de grafiek.").
  */
-export function veiligeNieuweStam(oud: string, nieuw: string | undefined): string | undefined {
-  const n = nieuw?.trim();
+export function veiligeNieuweStam(oud: string, nieuw: string | undefined, context?: string): string | undefined {
+  const n = leerlingWoorden(zonderContext(nieuw?.trim(), context));
   if (!n || n === oud.trim()) return undefined;
   if (n.length < Math.min(oud.trim().length * 0.6, oud.trim().length - 10)) return undefined;
   const zinnen = oud.trim().split(/(?<=[.?!])\s+/).filter(Boolean);
@@ -521,4 +545,22 @@ export function veiligeNieuweStam(oud: string, nieuw: string | undefined): strin
   const getallen = oud.match(/\d+(?:[.,]\d+)?/g) ?? [];
   if (getallen.some((g) => !n.includes(g))) return undefined;
   return n;
+}
+
+/** De planner zet de context soms vóór de nieuwe stam; die staat al boven de vraag en mag niet dubbel. */
+function zonderContext(stam: string | undefined, context: string | undefined): string | undefined {
+  const c = context?.trim();
+  if (!stam || !c) return stam;
+  let s = stam;
+  if (s.startsWith(c)) s = s.slice(c.length);
+  else for (const zin of c.split(/(?<=[.?!])\s+/).filter((z) => z.length > 25)) s = s.replace(zin, "");
+  return s.replace(/\s{2,}/g, " ").trim() || stam;
+}
+
+/** Interne figuursoortnamen horen niet in de leerlingtekst ("de sfeerplaat" → "de afbeelding"). */
+function leerlingWoorden(stam: string | undefined): string | undefined {
+  return stam
+    ?.replace(/\b([Dd])e sfeerplaat\b/g, "$1e afbeelding")
+    .replace(/\bsfeerplaat\b/gi, "afbeelding")
+    .replace(/\b([Dd])e staafdiagram\b/g, (_m, d: string) => (d === "D" ? "Het" : "het") + " staafdiagram");
 }

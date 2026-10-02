@@ -59,8 +59,8 @@ export function blokkenVoorVraag(q: Vraag, opts: { pijplijn?: boolean } = {}): B
   return out;
 }
 
-/** Afmetingen van het tekenvak (hokjes van 1 cm), begrensd tot de bladbreedte. */
+/** Afmetingen van het tekenvak: altijd de volle tekstbreedte (16 hokjes van 1 cm); hoogte 5–12 hokjes. */
 export function tekenvakMaat(q: Vraag): { kolommen: number; rijen: number } {
   const t = q.tekenvak;
-  return { kolommen: Math.min(16, Math.max(4, t?.kolommen ?? 14)), rijen: Math.min(12, Math.max(3, t?.rijen ?? 8)) };
+  return { kolommen: 16, rijen: Math.min(12, Math.max(5, t?.rijen ?? 8)) };
 }

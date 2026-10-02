@@ -668,6 +668,41 @@ function maatcilinder(spec: FiguurSpec): { svg: string; W: number; H: number } {
   return { svg, W: 300, H: 340 };
 }
 
+
+/** Oscilloscoopscherm (Nova-stijl, printvriendelijk): licht raster van hokjes, middenlijn met streepjes, sinus(sen) van links. */
+function oscilloscoop(spec: FiguurSpec): { svg: string; W: number; H: number } {
+  const d = parseSpecData("oscilloscoop", spec.data);
+  const cel = 40;
+  const top = spec.titel ? 40 : 14;
+  const x0 = 24;
+  const Wr = d.hokjesX * cel;
+  const Hr = d.hokjesY * cel;
+  const instel = [d.tijdbasis ? `tijdbasis: ${d.tijdbasis}` : "", d.gevoeligheid ? `gevoeligheid: ${d.gevoeligheid}` : ""].filter(Boolean);
+  const W = Wr + 2 * x0;
+  const H = top + Hr + (instel.length ? 40 : 16);
+  const out: string[] = [];
+  out.push(`<rect x="${x0 - 6}" y="${top - 6}" width="${Wr + 12}" height="${Hr + 12}" rx="10" fill="#5b6770"/>`);
+  out.push(`<rect x="${x0}" y="${top}" width="${Wr}" height="${Hr}" fill="#f3f8f4"/>`);
+  for (let i = 0; i <= d.hokjesX; i++) out.push(lijn(x0 + i * cel, top, x0 + i * cel, top + Hr, { w: 1, kleur: "#a9c3b3" }));
+  for (let j = 0; j <= d.hokjesY; j++) out.push(lijn(x0, top + j * cel, x0 + Wr, top + j * cel, { w: 1, kleur: "#a9c3b3" }));
+  const ym = top + Hr / 2;
+  const xm = x0 + Wr / 2;
+  // Fijne verdeling (5 per hokje) op de middenassen, zoals op een echt scherm.
+  for (let k = 0; k <= d.hokjesX * 5; k++) out.push(lijn(x0 + (k * cel) / 5, ym - 3, x0 + (k * cel) / 5, ym + 3, { w: 1, kleur: "#6f8f7c" }));
+  for (let k = 0; k <= d.hokjesY * 5; k++) out.push(lijn(xm - 3, top + (k * cel) / 5, xm + 3, top + (k * cel) / 5, { w: 1, kleur: "#6f8f7c" }));
+  const kleuren = ["#111111", "#b03a2e"];
+  d.signalen.forEach((sig, si) => {
+    const A = Math.min(sig.amplitudeHokjes, d.hokjesY / 2) * cel;
+    const T = sig.trillingstijdHokjes * cel;
+    const pts: string[] = [];
+    for (let px = 0; px <= Wr; px += 2) pts.push(`${(x0 + px).toFixed(1)},${(ym - A * Math.sin((2 * Math.PI * px) / T)).toFixed(1)}`);
+    out.push(`<polyline points="${pts.join(" ")}" fill="none" stroke="${kleuren[si % 2]}" stroke-width="2.6"/>`);
+    if (sig.naam && d.signalen.length > 1) out.push(tekst(x0 + 8, top + 18 + si * 18, sig.naam, { size: 13, anchor: "start", kleur: kleuren[si % 2], bold: true }));
+  });
+  if (instel.length) out.push(tekst(W / 2, top + Hr + 30, instel.join("     "), { size: 14 }));
+  return { svg: wrap(W, H, out.join(""), spec.titel), W, H };
+}
+
 const TEKENAARS: Record<Exclude<FiguurSpec["soort"], "sfeerplaat">, (s: FiguurSpec) => { svg: string; W: number; H: number }> = {
   lijngrafiek,
   staafdiagram,
@@ -679,6 +714,7 @@ const TEKENAARS: Record<Exclude<FiguurSpec["soort"], "sfeerplaat">, (s: FiguurSp
   blokschema,
   pictogram,
   maatcilinder,
+  oscilloscoop,
 };
 
 function unesc(s: string): string {

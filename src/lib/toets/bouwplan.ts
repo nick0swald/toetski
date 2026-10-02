@@ -13,7 +13,8 @@ import { vormAantallen } from "./kalibratie.ts";
 import type { RttiVerdeling } from "./types";
 import { PLAN, VOORNAMEN } from "./config.ts";
 import { CACHE_GRENS, berichten, vraagJson, type Kosten } from "./llm.ts";
-import { kernbegrippen, type Kernbegrip } from "./samenhang.ts";
+import { boekEigennamen, kernbegrippen, type Kernbegrip } from "./samenhang.ts";
+import { buitenStammenVoor, buitenWoord } from "./examen-checks.ts";
 
 export type PlanVorm = "jn" | "mc" | "kort" | "invul" | "uitleg" | "reken" | "teken";
 export const PLAN_VORMEN: PlanVorm[] = ["jn", "mc", "kort", "invul", "uitleg", "reken", "teken"];
@@ -75,6 +76,17 @@ export interface PlanQuota {
   kern?: Kernbegrip[];
   /** Plan ingekort tot wat in de toetstijd past (was: kalibratie-aantal). */
   ingekortVan?: number;
+  /**
+   * Examenvorm (klas 4 GT/TL, kalibratie-opbouw "cse"): contextblokken met een korte titel en inleiding, 3–5
+   * deelvragen per blok (ook meerkeuze), zoals in het CSE NaSk1.
+   */
+  examen?: { blokken: number; vragenPer: [number, number]; introWoorden: [number, number] };
+  /** Wat de leerling volgens de lesstof kan tekenen (krachtpijl, grafiek, …); leeg = geen tekenvragen. */
+  tekenSoorten?: string[];
+  /** Eigennamen uit de lesstof (plaatsen, centrales, bedrijven): nooit overnemen in de toets. */
+  eigennamen?: string[];
+  /** Onderwerpen die niet in de lesstof staan (stammen, zie examen-checks): geen vragen over. */
+  buitenStammen?: string[];
 }
 
 /** Grootste-restmethode: verdeel totaal naar gewicht, elk minstens min. */
@@ -118,6 +130,8 @@ export function maakQuota(input: {
   doelPunten: number;
   rttiDoel: RttiVerdeling;
   kal: Kalibratie;
+  /** Antwoordenboek (alleen voor eigennamen die niet in de toets mogen). */
+  antwoorden?: string;
 }): PlanQuota {
   const tijd = aantalVoorTijd(input.aantalVragen, input.kal);
   const N = tijd;
@@ -139,9 +153,31 @@ export function maakQuota(input: {
   }
   const vorm = vormAantallen({ ...input.kal, items: N }) as Record<PlanVorm, number>;
   const kern = kernbegrippen(input.bron).slice(0, 12);
+  const examen = examenVorm(input.kal, N);
+  const teken = tekenSoortenUit(input.bron);
+  const namen = boekEigennamen(`${input.bron}\n${input.antwoorden ?? ""}`);
+  const buiten = input.bron.length > 5000 ? buitenStammenVoor(`${input.bron}\n${input.antwoorden ?? ""}`) : [];
+  if (examen) {
+    // Examenstijl (Nicks archief ~6 % uitleggen, CSE meer): minstens 2 uitlegvragen, ten koste van kort/mc.
+    const doel = Math.max(2, Math.round(N * 0.07));
+    while (vorm.uitleg < doel && (vorm.kort > 1 || vorm.mc > 2)) {
+      if (vorm.kort > 1) vorm.kort--;
+      else vorm.mc--;
+      vorm.uitleg++;
+    }
+  }
+  if (!teken.length) {
+    // Niets tekenbaars in de lesstof (bijv. geen krachten of grafieken): geen tekenvragen, die worden korte open vragen.
+    vorm.kort += vorm.teken;
+    vorm.teken = 0;
+  }
   return {
     ...(N < input.aantalVragen ? { ingekortVan: input.aantalVragen } : {}),
     ...(kern.length ? { kern } : {}),
+    ...(examen ? { examen } : {}),
+    tekenSoorten: teken,
+    ...(namen.length ? { eigennamen: namen } : {}),
+    ...(buiten.length ? { buitenStammen: buiten } : {}),
     aantal: N,
     punten: input.doelPunten,
     paragrafen: pars.map((p, i) => ({ ...p, aantal: perPar[i]! })),
@@ -149,6 +185,46 @@ export function maakQuota(input: {
     vorm,
     reserve: PLAN.reserve,
   };
+}
+
+
+/**
+ * Examenvorm voor klas 4 GT/TL (kalibratie-opbouw "cse"), zoals Nicks eigen 4GT-toetsen (2018-19: 15–20 vragen in
+ * 7–11 genummerde contexten met titel, 1–4 deelvragen) en het CSE: blokken van 2–4 (examenniveau 4–5) deelvragen,
+ * samen ~85 % van de vragen; de rest staat los.
+ */
+export function examenVorm(kal: Pick<Kalibratie, "opbouw" | "contexten" | "leerjaar">, aantal: number): PlanQuota["examen"] | undefined {
+  if (kal.opbouw !== "cse" || !kal.contexten || kal.leerjaar !== 4) return undefined;
+  const per: [number, number] = [Math.max(2, kal.contexten.vragenPer[0]), Math.max(3, kal.contexten.vragenPer[1])];
+  const gem = (per[0] + per[1]) / 2;
+  const blokken = Math.max(2, Math.min(kal.contexten.aantal[1], Math.floor((aantal * 0.85) / gem)));
+  return { blokken, vragenPer: per, introWoorden: kal.contexten.introWoorden };
+}
+
+/** Tekensoorten die de lesstof echt behandelt; een tekenvraag buiten de lesstof (bijv. krachtpijl in een energietoets) is buiten de toetsstof. */
+export function tekenSoortenUit(bron: string): string[] {
+  const t = bron.toLowerCase();
+  const uit: string[] = [];
+  if (/krachtpijl|pijl op schaal|teken de kracht|krachtenschaal|1 cm (?:≙|=) \d+ n\b/.test(t)) uit.push("krachtpijl op schaal");
+  if (/(?:diagram|grafiek)/.test(t) && /\b(?:as|assen|horizontaal|verticaal|tabel)\b/.test(t)) uit.push("grafiek/diagram uit een tabel");
+  if (/energiestroomdiagram|energie-stroomdiagram|stroomdiagram/.test(t)) uit.push("energiestroomdiagram");
+  if (/schakelschema/.test(t)) uit.push("schakelschema");
+  if (/oscilloscoop/.test(t)) uit.push("oscilloscoopbeeld (trilling in een raster)");
+  if (/deeltjesmodel/.test(t)) uit.push("deeltjesmodel (moleculen als bolletjes)");
+  if (/lichtstra(?:al|len)|spiegelbeeld/.test(t)) uit.push("lichtstralen");
+  return uit;
+}
+
+/** Contexttitel zoals in het examen: kort zelfstandig naamwoord(groep), zonder gegevens ("Krat m=12 kg …" → "Krat"). */
+export function netteTitel(t: string): string {
+  let x = t.replace(/\s+/g, " ").trim();
+  x = x.split(/\s*[;:=(]\s*|\s+[-–]\s+/)[0]!.trim();
+  // Geen getallen/eenheden in de titel.
+  x = x.replace(/\s*\b\d+(?:[.,]\d+)?\s*[a-zA-Z%°³²/]*\b.*$/, "").trim();
+  const woorden = x.split(" ").filter(Boolean).slice(0, 5);
+  while (woorden.length > 1 && /^(?:\p{Ll}{1,2}|van|op|het|de|een|bij|met|in|en|na|voor|aan|uit|naar|over|door|tot)$/u.test(woorden[woorden.length - 1]!)) woorden.pop();
+  x = woorden.join(" ").replace(/[.,;:!?-]+$/, "");
+  return x ? x.charAt(0).toUpperCase() + x.slice(1) : t.trim().slice(0, 40);
 }
 
 /**
@@ -191,8 +267,10 @@ Vaste aantallen (verplicht, tel na):
 - ${q.aantal} vragen, samen ${q.punten} punten.
 - Per paragraaf: ${parRegels}.${doelRegels}
 - Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt; nooit meer dan ${gesloten + 1} gesloten vragen${q.vorm.jn ? "" : ", geen juist/onjuist (jn)"}.
-- Contextblokken: ${blokken} groepen (g) van 2–3 open vragen bij één situatie, zoals in een schooltoets: eerst een berekening in die situatie (reken; of toepassen als er niets te rekenen valt), daarna een redeneer-/uitlegvraag (uitleg, T2 of I) die op dezelfde situatie voortbouwt. Zelfde groepstitel, aaneen.
-- RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I}${q.rttiPunten.I ? " (I = nieuwe situatie, eigen redenering, 2–3 p)" : ""}.
+${q.examen
+    ? `- EXAMENVORM (zoals het CSE NaSk1): ${blokken} contextblokken (g), elk met een korte titel van 1–4 woorden (een onderwerp, bijv. "Zonneboiler", "Koelcel", "Optreden in de sporthal"; geen gegevens, geen persoonsnaam) en ${q.examen.vragenPer[0]}–${q.examen.vragenPer[1]} deelvragen bij die ene situatie (meerkeuze mag ook in een blok). Binnen een blok oplopend: herkennen/aflezen → berekenen (met gegevens uit de inleiding of een tabel; formule zelf kiezen, Binas mag) → redeneren/uitleggen. Een blok mag stof uit meer paragrafen combineren als dat natuurlijk is. Laat waar de stof dat toelaat een paar vragen een Binas-tabel gebruiken (bijv. dichtheid, smelt-/kookpunt, geluidssnelheid, gehoorgevoeligheid, verbrandingswarmte; noem de tabel in de vraag). Vrijwel elke vraag hoort bij een blok (zoals in de schooltoetsen); hooguit een paar losse vragen, zonder titel.`
+    : `- Contextblokken: ${blokken} groepen (g) van 2–3 open vragen bij één situatie, zoals in een schooltoets: eerst een berekening in die situatie (reken; of toepassen als er niets te rekenen valt), daarna een redeneer-/uitlegvraag (uitleg, T2 of I) die op dezelfde situatie voortbouwt. Zelfde groepstitel, aaneen.`}
+- RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I} (verplicht, tel na). R = feit/begrip reproduceren; T1 = een geleerde regel/formule toepassen in een bekende situatie (één stap); T2 = toepassen in een nieuwe situatie of in meer stappen (gegevens zelf selecteren, eerst omrekenen of aflezen, dan berekenen of een gevolg afleiden)${q.rttiPunten.I ? "; I = nieuwe situatie, eigen redenering, 2–3 p" : ""}.
 - Elk kernbegrip of elke regel één keer: niet twee vragen over dezelfde regel of tabel (bijv. twee keer veilige tijd bij een geluidsniveau) en niet twee vragen over dezelfde onderdelen (bijv. twee keer de delen van het oor).${kernRegel}
 - Plus ${q.reserve} reservevragen (andere begrippen/situaties, verschillende paragrafen) in "reserve".
 
@@ -202,18 +280,22 @@ Regels voor het plan:
 - Ook gesloten en korte vragen krijgen bij voorkeur een korte, concrete situatie of gegeven (zoals in schooltoetsen), niet alleen "Wat is X?". Hooguit de helft van de vragen heeft een persoon.
 - Persoon (w): kies uit ${VOORNAMEN.join(", ")}; elke naam hooguit één item (of één groep). Niet elke vraag heeft een persoon nodig. Nooit een schoolnaam.
 - Verwacht antwoord (a) in steekwoorden. Geen enkel ander item mag dat antwoord in zijn situatie of vraag noemen (geen weggevers): plan de vragen zo dat ze los van elkaar te maken zijn.
-- Groep (g): alleen als 2–4 vragen echt één doorlopende context delen (zelfde titel); die staan dan aaneen.
-- Volgorde: eerst alle gesloten vragen (jn, mc), daarna open/berekening/tekenen; groepen aaneen.
+- Groep (g): alleen als 2–5 vragen echt één doorlopende context delen (zelfde titel); die staan dan aaneen.
+${q.examen ? "- Volgorde: losse vragen en blokken door elkaar in de volgorde van de lesstof; elk blok aaneen." : "- Volgorde: eerst alle gesloten vragen (jn, mc), daarna open/berekening/tekenen; groepen aaneen."}
 - Rekenvragen: realistische getallen; g = 10 N/kg als zwaartekracht nodig is (één waarde voor g in de hele toets).
-- Tekenen (teken): de leerling tekent zelf, zonder plaatje: bijv. een krachtpijl op schaal, een lijn in een diagram uit een tabel, een schakelschema. Zet in "wat wordt gevraagd" wat er getekend moet worden.
+${q.tekenSoorten?.length ? `- Tekenen (teken): de leerling tekent zelf, zonder plaatje, en ALLEEN iets wat de lesstof behandelt: ${q.tekenSoorten.join("; ")}. Zet in "wat wordt gevraagd" wat er getekend moet worden.` : "- Geen tekenvragen: de lesstof behandelt niets wat de leerling op schaal of in een diagram tekent."}
+- Alles binnen de lesstof: geen onderwerpen uit andere hoofdstukken (bijv. geen krachten tekenen of berekenen als krachten niet in de lesstof staan). Een formule die alleen terloops in de lesstof voorkomt, is geen toetsstof.${q.buitenStammen?.length ? ` Staat NIET in deze lesstof, dus geen vragen over: ${q.buitenStammen.map(buitenWoord).join(", ")}.` : ""}${q.eigennamen?.length ? `
+- Neem geen eigennamen uit de lesstof over (plaatsen, centrales, bedrijven, gebouwen): ${q.eigennamen.slice(0, 20).join(", ")}. Verzin een algemene situatie ("een gascentrale aan de kust"). Geen merknamen.` : "\n- Geen merknamen."}
+- Neem geen opdrachten uit het boek of het antwoordenboek 1-op-1 over: andere situatie, andere getallen.
 
 Antwoord met ALLEEN dit JSON-object. Elke vraag is één rij (array) met precies deze 10 velden in deze volgorde. "Wat wordt gevraagd" is de bedoeling van de vraag in steekwoorden (wat de leerling moet doen/laten zien), niet de letterlijke vraagzin; de schrijver maakt er een volwaardige vraag van. Situatie kort en concreet.
 [paragraafcode, vorm (jn|mc|kort|invul|uitleg|reken|teken), rtti (R|T1|T2|I), punten, kernbegrip, situatie of "", voornaam of "", wat wordt gevraagd, verwacht antwoord, groepstitel of ""]
 {"items":[["11.1","mc","R",1,"wrijving","fietser op nat wegdek","Daan","welke kracht remt de fiets af","wrijvingskracht",""]],"reserve":[ …zelfde rijen… ]}`;
 }
 
-/** Aantal contextblokken (situatie → berekening → redeneren) dat het plan moet hebben: 2, bij ≥ 22 vragen 3. */
-export function contextBlokkenDoel(q: Pick<PlanQuota, "aantal">): number {
+/** Aantal contextblokken (situatie → berekening → redeneren): examenvorm volgens de kalibratie, anders 2, bij ≥ 22 vragen 3. */
+export function contextBlokkenDoel(q: Pick<PlanQuota, "aantal" | "examen">): number {
+  if (q.examen) return q.examen.blokken;
   return q.aantal >= 22 ? 3 : 2;
 }
 
@@ -266,7 +348,7 @@ function itemVan(x: unknown, i: number): PlanItem | null {
     ...(persoon && persoon !== "-" ? { persoon } : {}),
     kern,
     antwoord: s(o.a ?? o.antwoord, 120),
-    ...(groep && groep !== "-" ? { groep } : {}),
+    ...(groep && groep !== "-" ? { groep: netteTitel(groep) } : {}),
   };
 }
 

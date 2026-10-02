@@ -4,6 +4,7 @@ import { herstelGroepen } from "./context-groepen.ts";
 import { herbouwMatrijs } from "./rtti.ts";
 import { cesuurPunten, formuleTekst } from "./cijfer.ts";
 import type { GegenereerdeToets } from "./types";
+import { herstelMcOpties, herstelTitels } from "./examen-checks.ts";
 
 /**
  * Laatste bewaking vóór het blad: geen verwijzing naar een figuur die er niet staat.
@@ -37,9 +38,13 @@ export function eindControle(toets0: GegenereerdeToets): GegenereerdeToets {
     const kopie = { ...q, opties: q.opties?.map((o) => ({ ...o })) };
     repareerSchoolnamen(kopie, nk.find((n) => n.nummer === q.nummer));
     const h = herstelZinsbreuk(kopie);
+    // Nooit figuur + tekenvak: een geplaatste figuur blijft onaangetast, het tekenvak vervalt.
+    if (h.figuur && h.tekenvak) delete h.tekenvak;
     return { ...h, context: hoofdletterNaPunt(h.context), stam: hoofdletterNaPunt(h.stam) ?? h.stam };
   });
-  const toets = { ...toets0, vragen: vr, nakijkmodel: nk };
+  // Laatste bewaking: geen dubbele MC-opties; titels alleen op contextblokken (≥ 2 vragen).
+  const mc = herstelMcOpties(herstelTitels(vr), nk);
+  const toets = { ...toets0, vragen: mc.vragen, nakijkmodel: mc.nakijkmodel };
   const b = borgFiguurVerwijzingen(toets.vragen, toets.nakijkmodel);
   if (!b.meldingen.length) return toets;
   const rapport = toets.figuurRapport ?? { versie: 1 as const, items: [], meldingen: [] };

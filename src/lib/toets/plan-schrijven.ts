@@ -61,7 +61,8 @@ Regels:
 - Vraagt een vraag om meerdere onderdelen (bijv. drie namen), dan is elk onderdeel één punt van de geplande punten; vraag niet meer onderdelen dan er punten zijn.
 - Gebruik geen persoon, situatie of begrip van een andere planregel, en noem nooit het antwoord van een andere planregel in jouw vraagtekst (geen weggevers).
 - "context" = alleen de situatie (1–3 korte zinnen) met de gegevens; de stam is daarna alleen de vraagzin en herhaalt niets uit de context. Staat er in de planregel geen situatie, dan geen context (gewoon een korte vraag).
-- Een groep (contextTitel): de eerste vraag van die groep krijgt de inleiding in "context"; de volgende vragen alleen dezelfde contextTitel.
+- Een groep (contextTitel): de eerste vraag van die groep krijgt de inleiding in "context"${q.examen ? ` (examenstijl: ${q.examen.introWoorden[0]}–${q.examen.introWoorden[1]} woorden, een echte situatie met de gegevens die het hele blok nodig heeft)` : ""}; de volgende vragen alleen dezelfde contextTitel (eventueel één extra gegeven in hun eigen context). Gebruik de contextTitel precies zoals in het plan.
+- Geen eigennamen uit de lesstof of het antwoordenboek (plaatsen, centrales, bedrijven) en geen merknamen; neem geen boekopdracht 1-op-1 over.
 - RTTI "I": formuleer als redeneervraag in een nieuwe situatie ("Beredeneer …", "Voorspel … en leg uit", "Geef een advies en onderbouw het", "Leg uit of …").
 - Meerkeuze: afleiders zijn echte misvattingen uit de lesstof, ongeveer even lang als het goede antwoord; geen "alle bovenstaande".
 - Punten precies zoals gepland; de puntenverdeling in het nakijkmodel telt op tot die punten.

@@ -381,7 +381,7 @@ export function poortGemiddeld(cases: PoortCase[], minCases = 5): { ok: boolean;
 }
 
 /** Vaste rechter-prompt (versie hoort bij RUBRIEK_VERSIE). */
-export const RECHTER_VERSIE = "rechter-2026-10-01.1";
+export const RECHTER_VERSIE = "rechter-2026-10-02.1";
 export const RECHTER_SYSTEM = `Je bent een strenge NaSk-docent (vmbo) die een gegenereerde toets beoordeelt met een VASTE rubriek. Wees consequent en kritisch; geef geen punten uit beleefdheid.
 Scoor elk punt 0 (slecht), 1 (matig) of 2 (goed):
 1 rekenen: alle uitkomsten en eenheden kloppen (reken zelf na), één waarde voor g, deelpunten per stap.
@@ -401,7 +401,12 @@ Antwoord ALLEEN met JSON: { "punten": { "1": {"score": 0|1|2, "opmerking": strin
 
 export function rechterPrompt(t: GegenereerdeToets, input: EvalInput): string {
   const d = effectiefDoel(t, input);
-  return `LESSTOF:\n${input.bronmateriaal.slice(0, 20000)}\n\nTOETS (doel: ${input.leerweg} klas ${input.leerjaar}, ${input.duurMinuten} min, ± ${d.punten} punten${d.bron === "kalibratie" ? ", lengte automatisch volgens echte schooltoetsen van deze klas" : ""}):\n${toetsAlsTekst(t)}`;
+  // Volledige lesstof (geen afkapping: bij lange lesstof zag de rechter anders alleen de eerste paragrafen en
+  // rekende hij vragen over latere paragrafen als "buiten de lesstof").
+  const examen = input.leerjaar === 4
+    ? `\n\nEXAMENNIVEAU (klas 4): beoordeel deze toets als schoolexamentoets op CSE-niveau NaSk1 ${input.leerweg}. Vergelijk bij 7 en 9 met het centraal examen en met echte 4${input.leerweg}-schooltoetsen: contextblokken met een korte titel en inleiding, deelvragen bij één situatie, punten per vraag, mix van meerkeuze/open/berekening/uitleggen, formules zelf kiezen (Binas), figuren/tabellen/oscilloscoopbeelden waar de vraag ze nodig heeft. Te makkelijke, losse reproductievragen of te weinig rekenwerk zijn een minpunt.`
+    : "";
+  return `LESSTOF:\n${input.bronmateriaal}${examen}\n\nTOETS (doel: ${input.leerweg} klas ${input.leerjaar}, ${input.duurMinuten} min, ± ${d.punten} punten${d.bron === "kalibratie" ? ", lengte automatisch volgens echte schooltoetsen van deze klas" : ""}):\n${toetsAlsTekst(t)}`;
 }
 
 export function parseRechter(raw: string): RechterOordeel | undefined {

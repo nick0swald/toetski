@@ -9,6 +9,7 @@ const SOORT: Record<string, string> = {
   hefboom: "hefboom",
   krachtenschema: "krachten",
   blokschema: "blokschema",
+  oscilloscoop: "oscilloscoopbeeld",
   maatcilinder: "maatcilinder",
   pictogram: "pictogram",
   sfeerplaat: "sfeerplaat",

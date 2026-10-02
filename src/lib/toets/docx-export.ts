@@ -6,6 +6,7 @@ import {
   ImageRun,
   Packer,
   PageBreak,
+  TableLayoutType,
   PageNumber,
   Paragraph,
   Table,
@@ -186,30 +187,39 @@ function tabelBlocks(q: Vraag): DocChild[] {
   return [vraagTabelDocx(q.tabel), p("", { after: 80 })];
 }
 
-/** Tekenvak: raster van 1 cm-hokjes als Word-tabel (door code getekend, geen beeld), met schaal/aslabels. */
+/**
+ * Tekenvak: raster van vierkante 1 cm-hokjes als Word-tabel (door code getekend, geen beeld), met schaal/aslabels.
+ * Vaste opmaak zodat Word, LibreOffice en iOS-viewers niet autofitten: tblLayout fixed, expliciete gridCol- en
+ * celbreedtes, celmarges 0, exacte rijhoogte, lege alinea van 1 pt. Rijen splitsen niet en het vak blijft bij elkaar.
+ */
+export const TEKENVAK_CEL = 566; // twips ≈ 1,0 cm; 16 kolommen = 9056 twips < tekstbreedte 9070 (A4, marges 2,5 cm)
 function tekenvakBlocks(q: Vraag): DocChild[] {
   const { kolommen, rijen } = tekenvakMaat(q);
-  const cm = 567; // 1 cm in twips
+  const cm = TEKENVAK_CEL;
   const raster = q.tekenvak?.soort !== "leeg";
-  const lijn = { style: BorderStyle.SINGLE, size: raster ? 2 : 0, color: raster ? "B0B0B0" : "FFFFFF" };
-  const rand = { style: BorderStyle.SINGLE, size: 8, color: INK };
+  const lijn = { style: BorderStyle.SINGLE, size: raster ? 2 : 0, color: raster ? "BFBFBF" : "FFFFFF" };
+  const rand = { style: BorderStyle.SINGLE, size: 6, color: "808080" };
+  const leeg = (laatsteRij: boolean) =>
+    new Paragraph({ spacing: { before: 0, after: 0, line: 20, lineRule: "exact" }, keepNext: !laatsteRij || undefined, children: [new TextRun({ text: "", size: 2 })] });
   const rows = Array.from(
     { length: rijen },
     (_, r) =>
       new TableRow({
         height: { value: cm, rule: HeightRule.EXACT },
+        cantSplit: true,
         children: Array.from(
           { length: kolommen },
           (_, c) =>
             new TableCell({
               width: { size: cm, type: WidthType.DXA },
+              margins: { top: 0, bottom: 0, left: 0, right: 0 },
               borders: {
                 top: r === 0 ? rand : lijn,
                 bottom: r === rijen - 1 ? rand : lijn,
                 left: c === 0 ? rand : lijn,
                 right: c === kolommen - 1 ? rand : lijn,
               },
-              children: [new Paragraph({ children: [] })],
+              children: [leeg(r === rijen - 1)],
             }),
         ),
       }),
@@ -217,14 +227,25 @@ function tekenvakBlocks(q: Vraag): DocChild[] {
   const out: DocChild[] = [];
   const t = q.tekenvak;
   const bijschrift = [t?.schaal ? `Schaal: ${t.schaal}` : "", t?.yLabel ? `verticaal: ${t.yLabel}` : "", t?.xLabel ? `horizontaal: ${t.xLabel}` : ""].filter(Boolean).join("   ");
-  if (bijschrift) out.push(p(bijschrift, { size: SMALL_SIZE, before: 60, after: 40 }));
-  out.push(new Table({ width: { size: kolommen * cm, type: WidthType.DXA }, columnWidths: Array.from({ length: kolommen }, () => cm), rows }));
+  if (bijschrift) out.push(p(bijschrift, { size: SMALL_SIZE, before: 60, after: 40, keepNext: true }));
+  out.push(
+    new Table({
+      width: { size: kolommen * cm, type: WidthType.DXA },
+      columnWidths: Array.from({ length: kolommen }, () => cm),
+      layout: TableLayoutType.FIXED,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      borders: { top: rand, bottom: rand, left: rand, right: rand, insideHorizontal: lijn, insideVertical: lijn },
+      rows,
+    }),
+  );
   out.push(p("", { after: 80 }));
   return out;
 }
 
-function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number; before?: number }) {
+function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boolean; after?: number; before?: number; nieuwePagina?: boolean; keepNext?: boolean }) {
   return new Paragraph({
+    pageBreakBefore: opts?.nieuwePagina || undefined,
+    keepNext: opts?.keepNext || undefined,
     spacing: { before: opts?.before, after: opts?.after ?? 120, line: 276, lineRule: "auto" },
     children: [
       new TextRun({
@@ -239,9 +260,10 @@ function p(text: string, opts?: { bold?: boolean; size?: number; italics?: boole
   });
 }
 
-function heading(text: string) {
+function heading(text: string, nieuwePagina = false) {
   return new Paragraph({
     heading: HeadingLevel.HEADING_1,
+    pageBreakBefore: nieuwePagina || undefined,
     spacing: { before: 200, after: 160 },
     children: [new TextRun({ text, font: "Arial", size: 32, bold: true, color: GREEN })],
   });
@@ -430,15 +452,19 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
   for (const [qi, q] of t.vragen.entries()) {
     const stam = (q.stam || "").trim();
     // Doorlopende context (examenstijl): titel (+ bronvermelding) boven de eerste vraag van de context.
-    const groepTitel = startGroep(t.vragen, qi);
+    // Alleen een blok (≥ 2 vragen) krijgt een titel; een losse vraag niet. Elk blok na het eerste begint op een
+    // nieuwe pagina (examenstijl: één vraagstuk per pagina), titel + inleiding blijven bij de eerste vraag.
+    const titel0 = startGroep(t.vragen, qi);
+    const groepTitel = titel0 && t.vragen[qi + 1]?.contextTitel?.trim().toLowerCase() === titel0.trim().toLowerCase() ? titel0 : undefined;
     if (groepTitel) {
-      out.push(p(groepTitel, { bold: true, size: BODY_SIZE + 4, before: 360, after: 40 }));
+      const nieuwePagina = t.vragen.slice(0, qi).some((x) => x.contextTitel?.trim());
+      out.push(p(groepTitel, { bold: true, size: BODY_SIZE + 4, before: nieuwePagina ? 0 : 360, after: 40, keepNext: true, nieuwePagina }));
       if (q.bronvermelding) out.push(p(`(${q.bronvermelding})`, { size: SMALL_SIZE, italics: true, after: 60 }));
     }
     // context → (oude) stimulusfiguur → punten/nummer/stam → goedgekeurde figuur → tabel. Invultabel = antwoordgebied.
     for (const blok of blokkenVoorVraag(q, { pijplijn })) {
       if (blok === "context" && q.context?.trim()) {
-        out.push(p(q.context.trim(), { size: BODY_SIZE, before: 200, after: 80 }));
+        out.push(p(q.context.trim(), { size: BODY_SIZE, before: 200, after: 80, keepNext: true }));
       } else if (blok === "stimulus") {
         out.push(...(await stimulusBlocks(q)));
       } else if (blok === "figuur") {
@@ -446,6 +472,9 @@ async function toetsParagrafen(toets: GegenereerdeToets): Promise<DocChild[]> {
       } else if (blok === "stam") {
         out.push(
           new Paragraph({
+            // Tekenvraag: vraagzin, bijschrift en tekenvak samen op één pagina.
+            keepNext: q.tekenvak ? true : undefined,
+            keepLines: q.tekenvak ? true : undefined,
             spacing: {
               before: q.context?.trim() || (!pijplijn && (q.grafiek || q.schemaFiguur || q.pictogram || q.maatcilinder)) ? 40 : 200,
               after: 80,
@@ -509,7 +538,7 @@ function nakijkParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const nummers = figuurNummers(t);
   const max = totaalPunten(t.vragen);
   const out: (Paragraph | Table)[] = [
-    p(`Nakijkmodel · ${t.meta.titel}`, { bold: true, size: 28, after: 80 }),
+    p(`Nakijkmodel · ${t.meta.titel}`, { bold: true, size: 28, after: 80, nieuwePagina: true }),
     p("Niet voor leerlingen", { size: SMALL_SIZE, italics: true, after: 40 }),
     p(
       `${t.meta.vak} · ${t.meta.leerweg} klas ${t.meta.leerjaar} · versie ${t.meta.versie}`,
@@ -688,7 +717,7 @@ function matrijsBlocks(toets: GegenereerdeToets): (Paragraph | Table)[] {
   );
 
   const out: (Paragraph | Table)[] = [
-    heading("Toetsmatrijs · schriftelijke toets"),
+    heading("Toetsmatrijs · schriftelijke toets", true),
     sub(`RTTI · versie ${t.meta.versie}`),
     meta,
     p("", { after: 120 }),
@@ -776,7 +805,7 @@ function kwaliteitParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   return out;
 }
 
-function cijferParagrafenVan(max: number, norm: CijferNorm, titel: string, subregel: string): (Paragraph | Table)[] {
+function cijferParagrafenVan(max: number, norm: CijferNorm, titel: string, subregel: string, nieuwePagina = false): (Paragraph | Table)[] {
   const tabel = omzetTabel(max, norm);
   const rows: TableRow[] = [
     new TableRow({ children: [cell("Punten", { bold: true, fill: "E8F0EA" }), cell("Cijfer", { bold: true, fill: "E8F0EA" })] }),
@@ -785,7 +814,7 @@ function cijferParagrafenVan(max: number, norm: CijferNorm, titel: string, subre
     rows.push(new TableRow({ children: [cell(String(rij.punten)), cell(rij.cijfer.toFixed(1).replace(".", ","))] }));
   }
   return [
-    heading(titel),
+    heading(titel, nieuwePagina),
     sub(subregel),
     p(formuleTekst(norm, max), { bold: true }),
     p(voldoendeHint(norm)),
@@ -797,7 +826,7 @@ function cijferParagrafenVan(max: number, norm: CijferNorm, titel: string, subre
 function cijferParagrafen(toets: GegenereerdeToets): (Paragraph | Table)[] {
   const t = withDefaults(toets);
   const max = totaalPunten(t.vragen);
-  return cijferParagrafenVan(max, t.cijferNorm, `Cijferomzetting · ${t.meta.titel}`, modelLabel(t.cijferNorm.model));
+  return cijferParagrafenVan(max, t.cijferNorm, `Cijferomzetting · ${t.meta.titel}`, modelLabel(t.cijferNorm.model), true);
 }
 
 function docOf(children: (Paragraph | Table)[]) {
@@ -863,11 +892,14 @@ export async function pakketDocument(toets: GegenereerdeToets): Promise<Document
   const leerling = await toetsParagrafen(t);
   return new Document({
     styles: { default: { document: { run: { font: FONT, size: BODY_SIZE } } } },
+    // Eén sectie; elk deel begint met pageBreakBefore. Losse secties gaven een lege sectie-alinea die
+    // iOS/Word-viewers als een los vierkantje tonen (vóór "Nakijkmodel").
     sections: [
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: leerling },
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: nakijkParagrafen(t) },
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: matrijsBlocks(t) },
-      { properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } }, ...pageNumberChrome(), children: cijferParagrafen(t) },
+      {
+        properties: { page: { size: PAGE_A4, margin: PAGE_MARGINS } },
+        ...pageNumberChrome(),
+        children: [...leerling, ...nakijkParagrafen(t), ...matrijsBlocks(t), ...cijferParagrafen(t)],
+      },
     ],
   });
 }

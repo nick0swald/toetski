@@ -1,6 +1,9 @@
 import type { NakijkItem, Vraag } from "./types";
 import type { ItemIssue } from "./item-kwaliteit";
 import { findCorrectOptionIndex } from "./mc-balance.ts";
+import { VOORNAMEN } from "./config.ts";
+
+const VOORNAMEN_KLEIN = VOORNAMEN.map((n) => n.toLowerCase());
 
 /**
  * Samenhang over de geschreven toets (deterministisch, geen modelaanroep):
@@ -278,4 +281,42 @@ export function dubbelsWeg(vragen: Vraag[], nakijk: NakijkItem[], opts: { minVra
     punten -= 1;
   }
   return weg;
+}
+
+/** Hoofdletterwoorden die geen herkenbare plek/bedrijf uit het boek zijn (land, eenheid, methode, taal …). */
+const GEEN_EIGENNAAM = new Set(
+  "nederland nederlandse nederlanders nederlander europa europese aarde zon maan noordzee waddenzee binas nova celsius kelvin fahrenheit newton joule watt hertz volt ampère ampere ohm pascal decibel engels engelse griekse grieks latijn latijnse duits duitse frans franse duitsland belgië frankrijk amerika amerikaanse proef opdracht figuur afbeelding tabel paragraaf hoofdstuk leerdoelen vaardigheid voorbeeldopdracht oefen flitskaarten extra let ook bekijk reken bereken bepaal test noem leg geef teken kies lees schrijf vul zet controleer vergelijk dat dit deze die het een".split(" "),
+);
+
+/**
+ * Eigennamen uit de lesstof (plaatsen, centrales, bedrijven, gebouwen): een woord met hoofdletter midden in een
+ * zin (na een woord met kleine letter), dat geen land/eenheid/methode is. Nick: niets uit het boek overnemen,
+ * dus deze namen mogen niet in de toets.
+ */
+export function boekEigennamen(bron: string, max = 30): string[] {
+  const tel = new Map<string, number>();
+  const vn = new Set(VOORNAMEN_KLEIN);
+  const klein = new Map<string, boolean>();
+  for (const m of bron.matchAll(/(?<=\p{Ll},? )(\p{Lu}\p{Ll}{3,}(?:[- ]\p{Lu}\p{Ll}{2,})?)/gu)) {
+    const delen = m[1]!.split(/[- ]/);
+    const naam = delen.length === 2 && delen[0] === delen[1] ? delen[0]! : m[1]!;
+    const eerste = naam.split(/[- ]/)[0]!.toLowerCase();
+    if (GEEN_EIGENNAAM.has(eerste) || vn.has(eerste)) continue;
+    if (!klein.has(eerste)) klein.set(eerste, new RegExp(`(?<![\\p{L}])${eerste}(?![\\p{L}])`, "u").test(bron));
+    if (klein.get(eerste)) continue; // komt ook als gewoon woord voor (Bereken, Waarom, Planten)
+    tel.set(naam, (tel.get(naam) ?? 0) + 1);
+  }
+  return [...tel.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([n]) => n);
+}
+
+/** Vragen die een eigennaam uit de lesstof noemen (stam, context, opties of titel). */
+export function boeknaamIssues(vragen: Vraag[], namen: string[]): ItemIssue[] {
+  if (!namen.length) return [];
+  const out: ItemIssue[] = [];
+  for (const q of vragen) {
+    const t = `${q.contextTitel ?? ""} ${q.context ?? ""} ${q.stam} ${(q.opties ?? []).map((o) => o.tekst).join(" ")}`;
+    const hit = namen.find((n) => new RegExp(`(?<![\\p{L}])${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}])`, "u").test(t));
+    if (hit) out.push({ nummer: q.nummer, code: "boeknaam", uitleg: `Noemt "${hit}" uit het lesboek. Vervang die naam door een algemene of verzonnen plek/situatie (geen plaats-, centrale- of bedrijfsnaam uit het boek); verder niets aan de vraag veranderen.` });
+  }
+  return out;
 }

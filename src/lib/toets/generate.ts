@@ -322,7 +322,7 @@ export function planQuotaVoor(v: Awaited<ReturnType<typeof bereidVoor>>): PlanQu
   if (!PLAN.aan || !k || data.feedback?.trim() || data.aantalVragen < PLAN.minVragen) return null;
   const koppen = extractParagrafen(bron, antwoorden);
   const paragrafen = koppen.length >= 2 ? koppen : novaParagrafen(data.titel ?? "", bron, k.leerjaar, k.leerweg);
-  const quota = maakQuota({ bron, paragrafen, aantalVragen: data.aantalVragen, doelPunten: data.doelPunten, rttiDoel: normaliseer(data.rttiDoel), kal: k });
+  const quota = maakQuota({ bron, antwoorden, paragrafen, aantalVragen: data.aantalVragen, doelPunten: data.doelPunten, rttiDoel: normaliseer(data.rttiDoel), kal: k });
   const doelen = novaDoelenPerParagraaf(paragrafen, { titel: data.titel, bron, leerjaar: k.leerjaar, leerweg: k.leerweg });
   return Object.keys(doelen).length ? { ...quota, doelen } : quota;
 }
