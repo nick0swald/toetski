@@ -134,7 +134,11 @@ async function planCmd(caseNaam) {
   if (check?.herstelBouwplan) {
     const h = check.herstelBouwplan(plan, quota);
     uitPlan = h.plan;
-    console.log("Plancontrole:", JSON.stringify(h.issues));
+    console.log("Plancontrole:", JSON.stringify(h.issues.map((i) => `${i.code}: ${i.detail}`)));
+    const t1 = Date.now();
+    const k = await B.kritiseerBouwplan({ system: v.system, voorvoegsel: v.basisPrompt, plan: uitPlan, rest: () => 120_000, kosten });
+    console.log(`Kritiek ${((Date.now() - t1) / 1000).toFixed(1)} s:`, k.vervangen);
+    if (k.vervangen.length) uitPlan = check.herstelBouwplan(k.plan, quota).plan;
   }
   for (const it of uitPlan.items) console.log(B.planRegel(it));
   console.log("reserve:");
@@ -166,7 +170,22 @@ async function scoor(pad) {
   const toets = leesJson(pad);
   const c = caseInput(opt("case"));
   const input = { ...c.input };
-  const oordeel = opt("rechter", false) ? await rechter(toets, input) : undefined;
+  // --rechter [N]: N onafhankelijke rechter-aanroepen (standaard 3), gemiddeld — één oordeel schommelt ±0,75.
+  const r = opt("rechter", false);
+  const n = r === true ? 3 : Number(r) || 0;
+  let oordeel;
+  if (n > 0) {
+    const lijst = (await Promise.all(Array.from({ length: n }, () => rechter(toets, input)))).filter(Boolean);
+    if (lijst.length) {
+      const gem = (xs) => Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) / 100;
+      const punten = {};
+      for (const k of Object.keys(lijst[0].punten ?? {})) {
+        const sc = lijst.map((o) => o.punten?.[k]?.score).filter((x) => typeof x === "number");
+        punten[k] = { ...lijst[0].punten[k], score: sc.length ? gem(sc) : undefined };
+      }
+      oordeel = { ...lijst[0], punten, cijfer: gem(lijst.map((o) => o.cijfer ?? 0)), cijfers: lijst.map((o) => o.cijfer), kostenUsd: gem(lijst.map((o) => o.kostenUsd ?? 0)) * lijst.length, runs: lijst.length };
+    }
+  }
   const kaart = R.scoorToets(toets, input, oordeel);
   const uitPad = typeof opt("uit") === "string" ? opt("uit") : pad.replace(/\.json$/, ".scores.json");
   writeFileSync(uitPad, JSON.stringify({ ...kaart, rechter: oordeel ?? null, bestand: pad, case: c.case }, null, 1));
@@ -174,12 +193,12 @@ async function scoor(pad) {
   for (const x of kaart.criteria) console.log(`${String(x.punt).padStart(2)} ${x.score.toFixed(2)} ${x.naam.padEnd(46)} ${x.bron.padEnd(12)} ${x.detail}`);
   console.log("Harde criteria:");
   for (const h of kaart.hard) console.log(`  ${h.ok ? "OK  " : "FAIL"} ${h.naam} (${h.detail})`);
-  console.log(`Cijfer (rubriek) ${kaart.cijfer}${oordeel?.cijfer != null ? ` · rechter ${oordeel.cijfer}` : ""} · hard ${kaart.hardOk ? "100 %" : "NIET ok"}`);
+  console.log(`Cijfer (rubriek) ${kaart.cijfer}${oordeel?.cijfer != null ? ` · rechter ${oordeel.cijfer}${oordeel.cijfers ? ` (${oordeel.cijfers.join("/")})` : ""}` : ""} · hard ${kaart.hardOk ? "100 %" : "NIET ok"}`);
   if (oordeel?.topProblemen?.length) console.log(`Rechter top-problemen:\n- ${oordeel.topProblemen.join("\n- ")}`);
   const basisPad = opt("baseline");
   if (typeof basisPad === "string") {
     const basis = leesJson(basisPad);
-    const p = R.poort(kaart, basis);
+    const p = R.poort(kaart, basis, { nieuw: oordeel?.cijfer, baseline: basis.rechter?.cijfer });
     console.log(`\nPOORT: ${p.ok ? "GROEN" : "ROOD"}${p.redenen.length ? ` (${p.redenen.join("; ")})` : ""}`);
     for (const x of kaart.criteria) {
       const b = basis.criteria.find((y) => y.id === x.id);
@@ -191,7 +210,30 @@ async function scoor(pad) {
 
 async function poortCmd(nieuwPad, basisPad) {
   const R = await jiti.import(join(ROOT, "src/lib/toets/eval/rubric.ts"));
-  const p = R.poort(leesJson(nieuwPad), leesJson(basisPad));
+  const nieuw = leesJson(nieuwPad);
+  const basis = leesJson(basisPad);
+  const p = R.poort(nieuw, basis, { nieuw: nieuw.rechter?.cijfer, baseline: basis.rechter?.cijfer });
+  console.log(p.ok ? "POORT GROEN" : `POORT ROOD: ${p.redenen.join("; ")}`);
+  process.exit(p.ok ? 0 : 1);
+}
+
+/**
+ * Poort over alle cases: `poort5 <case>=<nieuw.scores.json> … --baseline-dir <map>` (baseline-bestand per case:
+ * <map>/<case>.scores.json). Groen als het gemiddelde rechtercijfer ≥ gemiddelde baseline en elke case hard 100 %.
+ */
+async function poort5Cmd(paren) {
+  const R = await jiti.import(join(ROOT, "src/lib/toets/eval/rubric.ts"));
+  const dir = opt("baseline-dir");
+  if (typeof dir !== "string") throw new Error("--baseline-dir ontbreekt");
+  const cases = paren.map((p) => {
+    const [naam, pad] = p.split("=");
+    const n = leesJson(pad);
+    const b = leesJson(join(dir, `${naam}.scores.json`));
+    return { case: naam, pad, hardOk: n.hardOk, hardFout: n.hard.filter((h) => !h.ok).map((h) => h.id), rechter: n.rechter?.cijfer, baselineRechter: b.rechter?.cijfer };
+  });
+  for (const c of cases) console.log(`${c.case.padEnd(20)} rechter ${String(c.rechter).padEnd(5)} baseline ${String(c.baselineRechter).padEnd(5)} hard ${c.hardOk ? "OK" : "FAIL"}  ${c.pad}`);
+  const p = R.poortGemiddeld(cases);
+  console.log(`Gemiddeld: ${p.gemiddeld} vs baseline ${p.baseline}`);
   console.log(p.ok ? "POORT GROEN" : `POORT ROOD: ${p.redenen.join("; ")}`);
   process.exit(p.ok ? 0 : 1);
 }
@@ -201,7 +243,8 @@ if (cmd === "genereer" && a1) await genereer(a1);
 else if (cmd === "scoor" && a1) await scoor(a1);
 else if (cmd === "plan" && a1) await planCmd(a1);
 else if (cmd === "poort" && a1 && a2) await poortCmd(a1, a2);
+else if (cmd === "poort5" && a1) await poort5Cmd(args.slice(1).filter((x) => x.includes("=") && !x.startsWith("--")));
 else {
-  console.log("Gebruik: genereer <case> [--naam N] [--base URL] | scoor <toets.json> --case <case> [--rechter] [--baseline scores.json] | poort <nieuw> <baseline>");
+  console.log("Gebruik: genereer <case> [--naam N] [--base URL] | scoor <toets.json> --case <case> [--rechter] [--baseline scores.json] | poort <nieuw> <baseline> (per case, indicatief) | poort5 <case>=<scores.json> … --baseline-dir <map> (go-live-poort)");
   process.exit(2);
 }

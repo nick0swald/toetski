@@ -64,6 +64,8 @@ export interface PlanQuota {
   rttiPunten: Record<Rtti, number>;
   vorm: Record<PlanVorm, number>;
   reserve: number;
+  /** Leerdoelen per paragraafcode (Nova, op titel gekoppeld); elke vraag kiest een ander doel. */
+  doelen?: Record<string, string[]>;
 }
 
 /** Grootste-restmethode: verdeel totaal naar gewicht, elk minstens min. */
@@ -145,33 +147,54 @@ export function bouwplanPrompt(q: PlanQuota): string {
   const parRegels = q.paragrafen.length
     ? q.paragrafen.map((p) => `${p.code} ${p.titel}: ${p.aantal} vragen`).join("; ")
     : "(geen paragraafkoppen: kies zelf domeinen uit de lesstof en spreid eerlijk)";
+  const doelRegels = q.doelen && Object.keys(q.doelen).length
+    ? `\nLeerdoelen per paragraaf (kernstof; verdeel de vragen van een paragraaf over VERSCHILLENDE leerdoelen, belangrijkste eerst):\n${q.paragrafen
+        .filter((p) => q.doelen![p.code]?.length)
+        .map((p) => `${p.code}: ${q.doelen![p.code]!.join(" | ")}`)
+        .join("\n")}`
+    : "";
   const vormRegels = PLAN_VORMEN.filter((v) => q.vorm[v] > 0)
     .map((v) => `${v} (${VORM_NAAM[v]}): ${q.vorm[v]}`)
     .join("; ");
+  const gesloten = q.vorm.mc + q.vorm.jn;
+  const blokken = contextBlokkenDoel(q);
   return `OPDRACHT NU: maak nog GEEN vragen, maar eerst het BOUWPLAN van de hele toets (JSON). Het plan wordt daarna door anderen uitgeschreven, dus elke regel moet op zichzelf duidelijk zijn.
 
 Vaste aantallen (verplicht, tel na):
 - ${q.aantal} vragen, samen ${q.punten} punten.
-- Per paragraaf: ${parRegels}.
-- Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt.
+- Per paragraaf: ${parRegels}.${doelRegels}
+- Vraagvormen: ${vormRegels}. Gesloten vragen (jn, mc) = 1 punt; nooit meer dan ${gesloten + 1} gesloten vragen${q.vorm.jn ? "" : ", geen juist/onjuist (jn)"}.
+- Contextblokken: ${blokken} groepen (g) van 2–3 open vragen bij één situatie, zoals in een schooltoets: eerst een berekening in die situatie (reken; of toepassen als er niets te rekenen valt), daarna een redeneer-/uitlegvraag (uitleg, T2 of I) die op dezelfde situatie voortbouwt. Zelfde groepstitel, aaneen.
 - RTTI in punten: R ${q.rttiPunten.R} · T1 ${q.rttiPunten.T1} · T2 ${q.rttiPunten.T2} · I ${q.rttiPunten.I}${q.rttiPunten.I ? " (I = nieuwe situatie, eigen redenering, 2–3 p)" : ""}.
 - Plus ${q.reserve} reservevragen (andere begrippen/situaties, verschillende paragrafen) in "reserve".
 
 Regels voor het plan:
-- Elk item toetst een ANDER kernbegrip (b). Zelfde begrip twee keer alleen als de vragen echt iets anders vragen (bijv. herkennen vs. berekenen), en dan nooit naast elkaar.
+- Elk item toetst een ANDER kernbegrip (b); binnen een paragraaf verschillende onderdelen van die paragraaf (geen varianten van dezelfde regel, zoals krachten optellen én aftrekken als twee vragen). Zelfde begrip twee keer alleen als de vragen echt iets anders vragen (bijv. herkennen vs. berekenen), en dan nooit naast elkaar.
 - Elke situatie (c) is anders: niet twee keer dezelfde plek, hetzelfde voorwerp of dezelfde activiteit (geen twee fietsers, geen twee concerten). Alledaags en realistisch voor een vmbo-leerling.
+- Ook gesloten en korte vragen krijgen bij voorkeur een korte, concrete situatie of gegeven (zoals in schooltoetsen), niet alleen "Wat is X?". Hooguit de helft van de vragen heeft een persoon.
 - Persoon (w): kies uit ${VOORNAMEN.join(", ")}; elke naam hooguit één item (of één groep). Niet elke vraag heeft een persoon nodig. Nooit een schoolnaam.
 - Verwacht antwoord (a) in steekwoorden. Geen enkel ander item mag dat antwoord in zijn situatie of vraag noemen (geen weggevers): plan de vragen zo dat ze los van elkaar te maken zijn.
 - Groep (g): alleen als 2–4 vragen echt één doorlopende context delen (zelfde titel); die staan dan aaneen.
 - Volgorde: eerst alle gesloten vragen (jn, mc), daarna open/berekening/tekenen; groepen aaneen.
 - Rekenvragen: realistische getallen; g = 10 N/kg als zwaartekracht nodig is (één waarde voor g in de hele toets).
-- Tekenen (teken) alleen als het zonder plaatje kan: de leerling tekent in een leeg tekenvak (bijv. pijl, grafiek) of leest af uit een tabel in de vraag.
+- Tekenen (teken): de leerling tekent zelf, zonder plaatje: bijv. een krachtpijl op schaal, een lijn in een diagram uit een tabel, een schakelschema. Zet in "wat wordt gevraagd" wat er getekend moet worden.
 
-Antwoord met ALLEEN dit JSON-object (korte sleutels, korte waarden; k ≤ 15 woorden):
-{"items":[{"n":1,"p":"<paragraafcode>","v":"<jn|mc|kort|invul|uitleg|reken|teken>","r":"<R|T1|T2|I>","pt":1,"b":"<kernbegrip>","c":"<situatie, ≤ 10 woorden, of leeg>","w":"<voornaam of leeg>","k":"<wat wordt gevraagd>","a":"<verwacht antwoord>","g":"<groepstitel of leeg>"}],"reserve":[ …zelfde vorm… ]}`;
+Antwoord met ALLEEN dit JSON-object. Elke vraag is één rij (array) met precies deze 10 velden in deze volgorde. "Wat wordt gevraagd" is de bedoeling van de vraag in steekwoorden (wat de leerling moet doen/laten zien), niet de letterlijke vraagzin; de schrijver maakt er een volwaardige vraag van. Situatie kort en concreet.
+[paragraafcode, vorm (jn|mc|kort|invul|uitleg|reken|teken), rtti (R|T1|T2|I), punten, kernbegrip, situatie of "", voornaam of "", wat wordt gevraagd, verwacht antwoord, groepstitel of ""]
+{"items":[["11.1","mc","R",1,"wrijving","fietser op nat wegdek","Daan","welke kracht remt de fiets af","wrijvingskracht",""]],"reserve":[ …zelfde rijen… ]}`;
+}
+
+/** Aantal contextblokken (situatie → berekening → redeneren) dat het plan moet hebben: 2, bij ≥ 22 vragen 3. */
+export function contextBlokkenDoel(q: Pick<PlanQuota, "aantal">): number {
+  return q.aantal >= 22 ? 3 : 2;
 }
 
 const RTTI_SET = new Set<Rtti>(["R", "T1", "T2", "I"]);
+/** Vrij tekstveld zonder letter of cijfer (bijv. "],[" uit een kapotte rij) telt als leeg. */
+const tekstVeld = (x: unknown, max: number) => {
+  const t = s(x, max);
+  return /[\p{L}\p{N}]/u.test(t) && t !== "-" ? t : "";
+};
 const s = (x: unknown, max = 160) => (typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, max) : typeof x === "number" ? String(x) : "");
 
 function vormVan(x: unknown): PlanVorm {
@@ -186,7 +209,14 @@ function vormVan(x: unknown): PlanVorm {
   return "kort";
 }
 
+/** Rij-formaat (compact, zie bouwplanPrompt) → objectvorm. */
+const RIJ = ["p", "v", "r", "pt", "b", "c", "w", "k", "a", "g"] as const;
+
 function itemVan(x: unknown, i: number): PlanItem | null {
+  if (Array.isArray(x)) {
+    const rij: unknown[] = x;
+    x = Object.fromEntries(RIJ.map((k, j) => [k, rij[j]]));
+  }
   if (!x || typeof x !== "object") return null;
   const o = x as Record<string, unknown>;
   const kern = s(o.k ?? o.kern, 200);
@@ -195,8 +225,8 @@ function itemVan(x: unknown, i: number): PlanItem | null {
   const vorm = vormVan(o.v ?? o.vorm);
   const r = s(o.r ?? o.rtti).toUpperCase() as Rtti;
   const pt = Math.round(Number(o.pt ?? o.punten));
-  const persoon = s(o.w ?? o.persoon, 20);
-  const groep = s(o.g ?? o.groep, 60);
+  const persoon = tekstVeld(o.w ?? o.persoon, 20);
+  const groep = tekstVeld(o.g ?? o.groep, 60);
   return {
     n: Number(o.n) || i + 1,
     par: s(o.p ?? o.par, 12).replace(/^§\s*/, ""),
@@ -204,7 +234,7 @@ function itemVan(x: unknown, i: number): PlanItem | null {
     rtti: RTTI_SET.has(r) ? r : "T1",
     punten: GESLOTEN.includes(vorm) ? 1 : Number.isFinite(pt) && pt > 0 ? Math.min(5, pt) : 2,
     begrip,
-    context: s(o.c ?? o.context, 120),
+    context: tekstVeld(o.c ?? o.context, 120),
     ...(persoon && persoon !== "-" ? { persoon } : {}),
     kern,
     antwoord: s(o.a ?? o.antwoord, 120),
@@ -238,10 +268,69 @@ export async function maakBouwplan(opts: {
   rest: () => number;
   kosten?: Kosten;
 }): Promise<Bouwplan> {
-  return vraagJson("plannen", berichten(opts.system, `${opts.voorvoegsel}${CACHE_GRENS}${bouwplanPrompt(opts.quota)}`), parseBouwplan, {
-    maxTokens: planTokens(opts.quota),
-    rest: () => Math.min(opts.rest(), PLAN.timeoutMs),
-    kosten: opts.kosten,
-    herkansingMinRestMs: 10 ** 9, // geen herkansing: bij een kapot plan valt de app terug op de oude route
-  });
+  const msgs = berichten(opts.system, `${opts.voorvoegsel}${CACHE_GRENS}${bouwplanPrompt(opts.quota)}`);
+  try {
+    return await vraagJson("plannen", msgs, parseBouwplan, {
+      maxTokens: planTokens(opts.quota),
+      rest: () => Math.min(opts.rest(), PLAN.timeoutMs),
+      kosten: opts.kosten,
+      herkansingMinRestMs: 10 ** 9,
+    });
+  } catch (e) {
+    // grok-4.5 is soms traag (gemeten 21–30 s, uitschieters > 70 s): dan het snelle model voor het plan,
+    // zodat het schrijven (wel grok-4.5) op tijd kan starten. Lukt ook dat niet → oude route.
+    if (opts.rest() < PLAN.reserveTimeoutMs + 60_000) throw e;
+    console.warn("[bouwplan] plan-aanroep mislukt, snel model:", e instanceof Error ? e.message.slice(0, 120) : e);
+    return vraagJson("snel", msgs, parseBouwplan, {
+      maxTokens: planTokens(opts.quota),
+      rest: () => Math.min(opts.rest(), PLAN.reserveTimeoutMs),
+      kosten: opts.kosten,
+      herkansingMinRestMs: 10 ** 9,
+    });
+  }
+}
+
+/** Plan als compacte rijen (zelfde formaat als de plan-aanroep), voor de kritiek-aanroep. */
+export function planAlsRijen(plan: Bouwplan): string {
+  return plan.items.map((it) => `${it.n}: ${JSON.stringify([it.par, it.vorm, it.rtti, it.punten, it.begrip, it.context, it.persoon ?? "", it.kern, it.antwoord, it.groep ?? ""])}`).join("\n");
+}
+
+export function kritiekPrompt(plan: Bouwplan): string {
+  return `OPDRACHT NU: controleer dit BOUWPLAN streng op dubbelingen (rijformaat: [paragraaf, vorm, rtti, punten, kernbegrip, situatie, persoon, vraag, antwoord, groep]):
+${planAlsRijen(plan)}
+
+Zoek rijen die hetzelfde toetsen als een eerdere rij: hetzelfde begrip of dezelfde regel/redenering (ook in andere woorden, bijv. "Fres = 0 → stilstand" en "evenwicht"), hetzelfde soort situatie, of een rij die het antwoord van een andere rij verklapt. Vervang telkens de LAATSTE rij van zo'n paar door een nieuwe rij uit DEZELFDE paragraaf over een ander onderdeel/leerdoel uit de lesstof dat nog niet getoetst wordt (zelfde vorm, rtti en punten; nieuwe situatie; persoon uit de namenlijst die nog niet gebruikt is, of leeg).
+Geen dubbelingen gevonden: lege lijst. Antwoord met ALLEEN JSON: {"vervang":[{"n":<rijnummer>,"waarom":"<kort>","rij":[…10 velden…]}]}`;
+}
+
+/** Vervangingen uit de kritiek toepassen (alleen geldige rijen; paragraaf blijft gelijk). */
+export function pasKritiekToe(plan: Bouwplan, u: unknown): { plan: Bouwplan; vervangen: string[] } {
+  const lijst = (u && typeof u === "object" && Array.isArray((u as { vervang?: unknown }).vervang) ? (u as { vervang: unknown[] }).vervang : []).slice(0, Math.ceil(plan.items.length / 3));
+  const items = [...plan.items];
+  const vervangen: string[] = [];
+  for (const v of lijst) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as { n?: unknown; waarom?: unknown; rij?: unknown };
+    const i = items.findIndex((x) => x.n === Number(o.n));
+    const nieuw = itemVan(o.rij, i);
+    if (i < 0 || !nieuw) continue;
+    const oud = items[i]!;
+    items[i] = { ...nieuw, n: oud.n, par: oud.par, vorm: oud.vorm, rtti: oud.rtti, punten: oud.punten, groep: oud.groep };
+    vervangen.push(`${oud.n} (${oud.begrip} → ${nieuw.begrip}): ${s(o.waarom, 80)}`);
+  }
+  return { plan: { ...plan, items }, vervangen };
+}
+
+/** Kritiek-aanroep: semantische dubbelingen die code niet ziet. Mislukt → plan ongewijzigd. */
+export async function kritiseerBouwplan(opts: { system: string; voorvoegsel: string; plan: Bouwplan; rest: () => number; kosten?: Kosten }): Promise<{ plan: Bouwplan; vervangen: string[] }> {
+  try {
+    return await vraagJson("plannen", berichten(opts.system, `${opts.voorvoegsel}${CACHE_GRENS}${kritiekPrompt(opts.plan)}`), (u) => pasKritiekToe(opts.plan, u), {
+      maxTokens: 2500,
+      rest: () => Math.min(opts.rest(), PLAN.kritiekTimeoutMs),
+      kosten: opts.kosten,
+      herkansingMinRestMs: 10 ** 9,
+    });
+  } catch {
+    return { plan: opts.plan, vervangen: [] };
+  }
 }

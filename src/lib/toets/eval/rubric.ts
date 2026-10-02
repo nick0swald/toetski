@@ -10,7 +10,7 @@ import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { rttiDoelVoor } from "../config.ts";
 import type { GegenereerdeToets, NakijkItem, RttiVerdeling, Vraag } from "../types";
 
-export const RUBRIEK_VERSIE = "2026-10-01.1";
+export const RUBRIEK_VERSIE = "2026-10-01.3";
 
 export interface EvalInput {
   titel?: string;
@@ -272,7 +272,9 @@ export function scoorToets(t: GegenereerdeToets, input: EvalInput, rechter?: Rec
   hard.push({ id: "H-dekking", naam: "Alle paragrafen gedekt", ok: leeg.length === 0, detail: leeg.join("; ") || "ok" });
 
   // 11. Figuur-/tabelverwijzingen kloppen (ook teken-/grafiekvragen)
-  const spook = V.filter((q) => /\b(figuur|afbeelding|tabel|diagram|grafiek|tekening)\b/i.test(`${q.context ?? ""} ${q.stam}`) && !heeftFiguurdata(q) && !/\b(teken|schets|maak een (tabel|grafiek|diagram))\b/i.test(q.stam)).map((q) => q.nummer);
+  // Alleen echte verwijzingen ("in de figuur", "deze tabel", "zie grafiek", "hieronder"), niet "een tekening" of "maak een grafiek".
+  const VERWIJS = /\b(?:de|deze|het|die|onderstaande|bovenstaande|zie|in|uit)\s+(?:figuur|afbeelding|tabel|diagram|grafiek|tekening)\b|\b(?:figuur|tabel|afbeelding)\s+\d|\b(?:hieronder|hiernaast|hierboven)\b/i;
+  const spook = V.filter((q) => VERWIJS.test(`${q.context ?? ""} ${q.stam}`) && !heeftFiguurdata(q) && !/\b(teken|schets|maak een (tabel|grafiek|diagram))\b/i.test(q.stam)).map((q) => q.nummer);
   crit.push({ punt: 11, id: "figuren", naam: "Geen verwijzing naar ontbrekende figuur/tabel", score: 1 - Math.min(1, spook.length / 2), bron: "code", detail: spook.length ? `vragen ${spook.join(", ")}` : "ok" });
   hard.push({ id: "H-figuur", naam: "Geen verwijzing naar een ontbrekende figuur/tabel", ok: spook.length === 0, detail: spook.join(", ") || "ok" });
 
@@ -287,13 +289,14 @@ export function scoorToets(t: GegenereerdeToets, input: EvalInput, rechter?: Rec
   hard.push({ id: "H-nakijk", naam: "Nakijkmodel compleet en punten kloppen", ok: nkFout.length === 0, detail: nkFout.join(", ") || "ok" });
 
   // 13. Lengte (punten en vragen voor deze toetsduur)
-  const doelP = input.doelPunten;
+  const lengteDoel = effectiefDoel(t, input);
+  const doelP = lengteDoel.punten;
   const ratio = tot / Math.max(1, doelP);
   const puntScore = ratio >= 0.9 && ratio <= 1.15 ? 1 : Math.max(0, 1 - Math.abs(ratio < 0.9 ? 0.9 - ratio : ratio - 1.15) * 4);
-  const vr = V.length / Math.max(1, input.aantalVragen);
+  const vr = V.length / Math.max(1, lengteDoel.vragen);
   const vraagScore = vr >= 0.85 ? 1 : Math.max(0, 1 - (0.85 - vr) * 4);
   const c13 = Math.min(puntScore, vraagScore);
-  crit.push({ punt: 13, id: "lengte", naam: "Lengte past bij de toetsduur", score: c13, bron: "code", detail: `${V.length} vragen / ${tot} p tegen doel ${input.aantalVragen} / ${doelP}` });
+  crit.push({ punt: 13, id: "lengte", naam: "Lengte past bij de toetsduur", score: c13, bron: "code", detail: `${V.length} vragen / ${tot} p tegen doel ${lengteDoel.vragen} / ${doelP}${lengteDoel.bron === "kalibratie" ? " (automatische lengte)" : ""}` });
   hard.push({ id: "H-lengte", naam: "Punten binnen 85–120 % van het doel", ok: ratio >= 0.85 && ratio <= 1.2, detail: `${tot}/${doelP} = ${Math.round(ratio * 100)} %` });
 
   // Hard: geen schoolnamen en geen onbruikbare vragen meer
@@ -324,11 +327,57 @@ export function scoorToets(t: GegenereerdeToets, input: EvalInput, rechter?: Rec
 }
 
 /** Go-live-poort: nieuw ≥ baseline en alle harde criteria ok. */
-export function poort(nieuw: Scorekaart, baseline?: Scorekaart): { ok: boolean; redenen: string[] } {
+/**
+ * Go-live-poort: harde criteria 100 % én rechtercijfer ≥ baseline (gemiddelde van de rechter-runs; Nick: de
+ * coderubriek alleen is te mild). Zonder rechtercijfers valt de poort terug op het rubriekcijfer.
+ */
+/**
+ * Doel-lengte: bij "automatische lengte" (lengteAuto) kiest de app de lengte uit de kalibratie (echte
+ * schooltoetsen); dan telt die richtwaarde, niet het standaardgetal uit het formulier.
+ */
+export function effectiefDoel(t: GegenereerdeToets, input: EvalInput): { vragen: number; punten: number; bron: "invoer" | "kalibratie" } {
+  if ((input as { lengteAuto?: boolean }).lengteAuto) {
+    const k = t.kwaliteit?.punten?.find((p) => /kalibratie/i.test(p.criterium));
+    const m = k?.toelichting.match(/richtwaarde[^:]*:\s*(\d+)\s*vragen\s*\/\s*(\d+)\s*punten/i);
+    if (m) return { vragen: Number(m[1]), punten: Number(m[2]), bron: "kalibratie" };
+  }
+  return { vragen: input.aantalVragen, punten: input.doelPunten, bron: "invoer" };
+}
+
+export function poort(nieuw: Scorekaart, baseline?: Scorekaart, rechter?: { nieuw?: number | null; baseline?: number | null }): { ok: boolean; redenen: string[] } {
   const redenen: string[] = [];
   if (!nieuw.hardOk) redenen.push(`harde criteria niet 100 %: ${nieuw.hard.filter((h) => !h.ok).map((h) => h.id).join(", ")}`);
-  if (baseline && nieuw.cijfer < baseline.cijfer) redenen.push(`cijfer ${nieuw.cijfer} < baseline ${baseline.cijfer}`);
+  if (rechter?.nieuw != null && rechter.baseline != null) {
+    if (rechter.nieuw < rechter.baseline) redenen.push(`rechter ${rechter.nieuw} < baseline ${rechter.baseline}`);
+  } else if (baseline && nieuw.cijfer < baseline.cijfer) redenen.push(`cijfer ${nieuw.cijfer} < baseline ${baseline.cijfer}`);
   return { ok: redenen.length === 0, redenen };
+}
+
+export interface PoortCase {
+  case: string;
+  hardOk: boolean;
+  hardFout?: string[];
+  rechter: number | null | undefined;
+  baselineRechter: number | null | undefined;
+}
+
+/**
+ * Go-live-poort (Nick, 2 okt 2026): gemiddeld rechtercijfer over ALLE eval-cases ≥ gemiddelde van hun
+ * baselines, plus per case alle harde criteria 100 %. Eén rechter-run varieert ±0,75 en één generatie
+ * nog meer, dus per case vergelijken is ruis; het gemiddelde over 5 cases is de maat.
+ */
+export function poortGemiddeld(cases: PoortCase[], minCases = 5): { ok: boolean; gemiddeld: number; baseline: number; redenen: string[] } {
+  const redenen: string[] = [];
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  const gem = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  if (cases.length < minCases) redenen.push(`maar ${cases.length} van ${minCases} cases`);
+  const zonder = cases.filter((c) => c.rechter == null || c.baselineRechter == null).map((c) => c.case);
+  if (zonder.length) redenen.push(`geen rechtercijfer voor ${zonder.join(", ")}`);
+  for (const c of cases) if (!c.hardOk) redenen.push(`${c.case}: harde criteria niet 100 %${c.hardFout?.length ? ` (${c.hardFout.join(", ")})` : ""}`);
+  const gemiddeld = r2(gem(cases.map((c) => c.rechter ?? 0)));
+  const baseline = r2(gem(cases.map((c) => c.baselineRechter ?? 0)));
+  if (gemiddeld < baseline) redenen.push(`gemiddeld rechtercijfer ${gemiddeld} < baseline ${baseline}`);
+  return { ok: redenen.length === 0, gemiddeld, baseline, redenen };
 }
 
 /** Vaste rechter-prompt (versie hoort bij RUBRIEK_VERSIE). */
@@ -351,7 +400,8 @@ Scoor elk punt 0 (slecht), 1 (matig) of 2 (goed):
 Antwoord ALLEEN met JSON: { "punten": { "1": {"score": 0|1|2, "opmerking": string}, … "13": {…} }, "cijfer": number (1–10), "topProblemen": [string, string, string] }`;
 
 export function rechterPrompt(t: GegenereerdeToets, input: EvalInput): string {
-  return `LESSTOF:\n${input.bronmateriaal.slice(0, 20000)}\n\nTOETS (doel: ${input.leerweg} klas ${input.leerjaar}, ${input.duurMinuten} min, ± ${input.doelPunten} punten):\n${toetsAlsTekst(t)}`;
+  const d = effectiefDoel(t, input);
+  return `LESSTOF:\n${input.bronmateriaal.slice(0, 20000)}\n\nTOETS (doel: ${input.leerweg} klas ${input.leerjaar}, ${input.duurMinuten} min, ± ${d.punten} punten${d.bron === "kalibratie" ? ", lengte automatisch volgens echte schooltoetsen van deze klas" : ""}):\n${toetsAlsTekst(t)}`;
 }
 
 export function parseRechter(raw: string): RechterOordeel | undefined {

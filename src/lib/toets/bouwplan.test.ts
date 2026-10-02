@@ -74,3 +74,20 @@ describe("bouwplan: parsen", () => {
     assert.throws(() => parseBouwplan({ items: [{ k: "x", b: "y" }] }));
   });
 });
+
+describe("bouwplan: rij-formaat", () => {
+  it("rijen (arrays) worden items", () => {
+    const plan = parseBouwplan({
+      items: [
+        ["11.1", "mc", "R", 1, "wrijving", "fietser op nat wegdek", "Daan", "welke kracht remt", "wrijvingskracht", ""],
+        ["11.2", "reken", "T2", 3, "F=m·a", "", "", "bereken de kracht", "600 N", "Bakfiets"],
+        ["13.1", "uitleg", "I", 2, "tussenstof", "ruimte", "", "leg uit", "geen lucht", ""],
+      ],
+      reserve: [["13.2", "jn", "R", 1, "toonhoogte", "", "", "stelling", "juist", ""]],
+    });
+    assert.equal(plan.items[0]!.persoon, "Daan");
+    assert.equal(plan.items[1]!.groep, "Bakfiets");
+    assert.equal(plan.items[1]!.punten, 3);
+    assert.equal(plan.reserve[0]!.vorm, "jn");
+  });
+});

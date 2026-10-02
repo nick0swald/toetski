@@ -116,11 +116,16 @@ export const PLAN = {
   reserve: 3,
   /** Vragen per parallelle schrijf-aanroep. */
   stukGrootte: 5,
-  /** Uitvoertokens per bouwplan-item (kort JSON) + vaste marge (incl. redeneren). */
-  tokensPerItem: 90,
+  /** Uitvoertokens per bouwplan-item (compacte rij) + vaste marge (incl. redeneren). */
+  tokensPerItem: 70,
   tokensMarge: 2500,
-  /** Bouwplan-aanroep duurt nooit langer dan dit (daarna oude route). */
-  timeoutMs: 60_000,
+  /** Bouwplan-aanroep (grok-4.5) duurt nooit langer dan dit. Gemeten 21–30 s, uitschieters > 70 s. */
+  timeoutMs: 55_000,
+  /** Daarna één plan-poging met het snelle model (niet-redenerend, ~15 s); lukt dat niet → oude route. */
+  reserveTimeoutMs: 30_000,
+  /** Tweede plan-aanroep: semantische dubbelingen zoeken en vervangen (aan/uit, max duur). */
+  kritiek: true,
+  kritiekTimeoutMs: 35_000,
 } as const;
 
 /**

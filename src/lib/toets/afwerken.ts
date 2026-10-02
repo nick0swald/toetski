@@ -13,6 +13,7 @@ import { extractParagrafen, paragraafDekking, type Paragraaf } from "./leerdoele
 import { rttiHerschrijfPlan } from "./rtti-balans.ts";
 import { groepIntro, herstelGroepen, type Volgorde } from "./context-groepen.ts";
 import { labelRtti } from "./rtti-regels.ts";
+import { kapPunten } from "./plan-schrijven.ts";
 import { LIMIETEN, TIJD } from "./config.ts";
 import { CACHE_GRENS } from "./llm.ts";
 
@@ -48,7 +49,23 @@ function reparatiePrompt(vragen: Vraag[], nakijk: NakijkItem[], issues: ItemIssu
   return `Lesstof (kader, niet kopiëren):\n${bron.slice(0, LIMIETEN.reparatieLesstof)}${CACHE_GRENS}Verbeter alleen deze vragen. Houd het nummer. Lever ze compleet terug.\n\n${blok}`;
 }
 
-/** Contexttitel, bronvermelding en vraagtype blijven bij een reparatie staan (het model laat ze vaak weg). */
+/**
+ * Plan-first: reparatie en puntennormalisatie (1 punt per criterium) mogen de geplande punten niet
+ * verhogen; anders groeit de toets voorbij het lengtedoel. Te veel criteria worden samengevoegd.
+ */
+export function houdPlanPunten(p: { vragen: Vraag[]; nakijkmodel: NakijkItem[] }): { vragen: Vraag[]; nakijkmodel: NakijkItem[] } {
+  const nakijkmodel = [...p.nakijkmodel];
+  const vragen = p.vragen.map((q) => {
+    if (!q.puntenPlan || q.punten <= q.puntenPlan) return q;
+    const i = nakijkmodel.findIndex((n) => n.nummer === q.nummer);
+    const r = kapPunten(q, i >= 0 ? nakijkmodel[i] : undefined, q.puntenPlan);
+    if (r.n && i >= 0) nakijkmodel[i] = r.n;
+    return r.v;
+  });
+  return { vragen, nakijkmodel };
+}
+
+/** Contexttitel, bronvermelding, vraagtype en plan-RTTI blijven bij een reparatie staan (het model laat ze vaak weg). */
 function behoudGroep(oud: Vraag, nieuw: Vraag): Vraag {
   return {
     ...nieuw,
@@ -56,6 +73,8 @@ function behoudGroep(oud: Vraag, nieuw: Vraag): Vraag {
     bronvermelding: oud.bronvermelding ?? nieuw.bronvermelding,
     vraagtype: nieuw.vraagtype ?? oud.vraagtype,
     leerdoelId: nieuw.leerdoelId ?? oud.leerdoelId,
+    rttiPlan: oud.rttiPlan ?? nieuw.rttiPlan,
+    puntenPlan: oud.puntenPlan ?? nieuw.puntenPlan,
   };
 }
 
@@ -410,7 +429,7 @@ export async function werkVragenAf(input: {
     }
   }
 
-  const punten = repareerPunten(vragen, nakijk);
+  const punten = houdPlanPunten(repareerPunten(vragen, nakijk));
   const figMode = input.figuren ?? "nodig";
   vragen =
     figMode === "geen"

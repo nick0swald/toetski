@@ -138,7 +138,17 @@ export function labelRtti(vragen: Vraag[]): Vraag[] {
   return vragen.map((q) => {
     // Alleen bij een vraagtype (NaSk-taxonomie); andere vakken houden het modellabel.
     if (!q.vraagtype?.trim()) return q;
-    const o = rttiVolgensRegels(q);
+    let o = rttiVolgensRegels(q);
+    // Gepland als I (bouwplan) en de regel zegt T2 bij een redeneer-/verklaaropdracht van ≥ 2 punten:
+    // het grensgeval valt naar het geplande I (nieuwe situatie + eigen redenering), anders verdwijnt elke I-vraag.
+    if (q.rtti === "I" && o.rtti === "T2" && (q.punten ?? 1) >= 2 && INZICHT.test(opdracht(q.stam ?? ""))) {
+      o = { rtti: "I", reden: `${o.reden}; gepland als I: redeneren in een nieuwe situatie` };
+    }
+    // Plan-first: het bouwplan verdeelt de RTTI over de toets (klasdoel). De regel overschrijft dat
+    // alleen bij een duidelijke tegenspraak (≥ 2 stappen, bv. gepland I maar het is een R-feitvraag).
+    if (q.rttiPlan && q.rttiPlan !== o.rtti && Math.abs(RTTI_VOLGORDE.indexOf(q.rttiPlan) - RTTI_VOLGORDE.indexOf(o.rtti)) <= 1) {
+      o = { rtti: q.rttiPlan, reden: `${o.reden}; volgens bouwplan ${q.rttiPlan} (regel: ${o.rtti})` };
+    }
     const anders = q.rtti && q.rtti !== o.rtti ? ` (model: ${q.rtti})` : "";
     return { ...q, rtti: o.rtti, rttiUitleg: `${o.rtti}: ${o.reden}${anders}` };
   });
