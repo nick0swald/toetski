@@ -12,7 +12,9 @@ const SCHAAL_RE = /1\s*cm\s*(?:≙|=|≡|komt overeen met|staat voor|is)\s*(\d+(
 export function isTekenvraag(q: Vraag): boolean {
   if (q.opties?.length) return false;
   if (q.figuur || q.figuurId || q.grafiek || q.schemaFiguur) return false;
-  return q.vormPlan === "teken" || TEKEN_OPDRACHT.test(q.stam);
+  if (TEKEN_OPDRACHT.test(q.stam)) return true;
+  // Gepland als tekenvraag maar uitgeschreven als reken-/uitlegvraag (plan5 energie v21 "Bereken de nettokracht"): geen tekenvak.
+  return q.vormPlan === "teken" && !/\b(bereken|noteer|noem|leg uit|verklaar|hoe groot|hoeveel)\b/i.test(q.stam);
 }
 
 /** Schaal uit de stam/context ("1 cm ≙ 10 N"), genormaliseerd. */

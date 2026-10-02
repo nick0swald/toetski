@@ -247,3 +247,37 @@ describe("sessie 4: afwerken", () => {
     assert.match(res.nakijkmodel.find((n) => /343/.test(n.modelantwoord))!.modelantwoord, /1372 m/);
   });
 });
+
+describe("sessie 4: één g na de gate (krachten plan5 v11)", () => {
+  it("g = 10 in de vraag bij g = 9,8 in de lesstof → vraag en uitwerking gelijkgetrokken, 80 N wordt 78,4 N", () => {
+    const vragen = [v(11, "Bereken de zwaartekracht op het krat.", { context: "Lotte tilt een melkkrat. De massa van het krat is 8 kg. Gebruik g = 10 N/kg.", punten: 2 })];
+    const r = controleerBerekeningen(vragen, [nk(11, "Fz = m × g; Fz = 8 × 10 = 80 N", 2)], { g: 9.8 });
+    assert.match(r.vragen[0]!.context!, /g = 9,8 N\/kg/);
+    assert.match(r.nakijkmodel[0]!.modelantwoord, /8 × 9,8 = 78,4 N|8 × 9,8 = 78 N/);
+    assert.doesNotMatch(r.nakijkmodel[0]!.modelantwoord.split(/ook goed/i)[0]!, /\b80 N/);
+    assert.deepEqual(r.issues, []);
+    assert.ok(r.hersteld.includes(11));
+  });
+  it("zonder g-omzetting blijft 180 voor 176,4 goed (significante cijfers)", () => {
+    assert.ok(goedAfgerond("180", 176.4));
+    assert.ok(!goedAfgerond("180", 176.4, true));
+  });
+});
+
+describe("sessie 4: tekenvak alleen bij een echte tekenopdracht (plan5 energie v21)", () => {
+  it("geplande tekenvraag die als rekenvraag is uitgeschreven krijgt geen tekenvak", () => {
+    assert.equal(isTekenvraag(v(21, "Bereken de nettokracht op de trekker. Geef ook de richting.", { vormPlan: "teken" })), false);
+    assert.equal(isTekenvraag(v(22, "Geef de krachten aan op de kar.", { vormPlan: "teken" })), true);
+  });
+});
+
+describe("sessie 4: letterlijke kopie na reparatie (plan5 stoffen v1 = v2)", () => {
+  it("twee identieke juist/onjuist-stellingen → dubbel; de 1-puntsvraag kan eraf", () => {
+    const jo = { type: "juist-onjuist" as const, opties: [{ letter: "A", tekst: "Juist" }, { letter: "B", tekst: "Onjuist" }] };
+    const vr = [v(1, "Verdampen is de overgang van vloeibaar naar gas.", jo), v(2, "Verdampen is de overgang van vloeibaar naar gas.", jo), v(3, "Een suspensie is troebel.", jo)];
+    const n = [nk(1, "A. Juist"), nk(2, "A. Juist"), nk(3, "A. Juist")];
+    assert.ok(vindDubbels(vr, n).some((d) => d.detail === "letterlijk dezelfde vraag"));
+    assert.equal(dubbelsWeg(vr, n, { minVragen: 2, minPunten: 0 }).length, 1);
+    assert.match(samenhangIssues(vr, n, { max: 2 })[0]!.uitleg, /blijft staan: "Verdampen/);
+  });
+});

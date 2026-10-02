@@ -82,13 +82,13 @@ export function reken(expr: string): number | null {
 }
 
 /** Klopt `geclaimd` met `waarde` als correct afgeronde uitkomst (op decimalen óf op significante cijfers)? */
-export function goedAfgerond(geclaimdTekst: string, waarde: number): boolean {
+export function goedAfgerond(geclaimdTekst: string, waarde: number, strikt = false): boolean {
   const c = leesGetal(geclaimdTekst);
   const d = decimalen(geclaimdTekst);
   const eps = 1e-9 + Math.abs(waarde) * 1e-9;
   if (Math.abs(c - waarde) <= 0.5 * 10 ** -d + eps) return true;
   // Significante cijfers: 180 voor 176,4 (2 sig.) is afronden, geen fout.
-  if (d === 0 && c !== 0) {
+  if (!strikt && d === 0 && c !== 0) {
     const nullen = (String(Math.round(c)).match(/0+$/)?.[0].length ?? 0);
     if (nullen > 0 && Math.abs(c - waarde) <= 0.5 * 10 ** nullen + eps) return true;
   }
@@ -114,6 +114,27 @@ export function controleerBerekeningen(vragen: Vraag[], nakijk: NakijkItem[], op
   const issues: ItemIssue[] = [];
   const hersteld: number[] = [];
   const uitN = nakijk.map((n) => ({ ...n, puntenverdeling: (n.puntenverdeling ?? []).map((p) => ({ ...p })) }));
+  // 0) Eén g in de hele toets: "g = 10 N/kg" in een vraag of modelantwoord wordt de g van de toets (hard criterium).
+  const gTekst = nl(g, g === 10 ? 0 : g === 9.8 ? 1 : 2);
+  const G_RE = /\b(g\s*=\s*)(9[.,]81|9[.,]8|10)(\s*N\s*\/\s*kg)/gi;
+  const metG = (t: string | undefined) => t?.replace(G_RE, (heel, a: string, w: string, b: string) => (leesGetal(w) === g ? heel : `${a}${gTekst}${b}`));
+  const gGewijzigd = new Set<number>();
+  vragen = vragen.map((q) => {
+    const context = metG(q.context);
+    const stam = metG(q.stam)!;
+    if (context === q.context && stam === q.stam) return q;
+    gGewijzigd.add(q.nummer);
+    return { ...q, stam, ...(q.context !== undefined ? { context } : {}) };
+  });
+  for (const n of uitN) {
+    // "Ook goed: … (met g = 10 N/kg)" noemt bewust een andere g; alleen het deel ervóór gelijktrekken.
+    const i = (n.modelantwoord ?? "").search(/ook goed/i);
+    const ma = n.modelantwoord && i > 0 ? `${metG(n.modelantwoord.slice(0, i))}${n.modelantwoord.slice(i)}` : metG(n.modelantwoord);
+    if (ma !== undefined && ma !== n.modelantwoord) {
+      n.modelantwoord = ma;
+      gGewijzigd.add(n.nummer);
+    }
+  }
   for (const q of vragen) {
     if (q.opties?.length) continue;
     const n = uitN.find((x) => x.nummer === q.nummer);
@@ -126,14 +147,18 @@ export function controleerBerekeningen(vragen: Vraag[], nakijk: NakijkItem[], op
       const andere = [9.81, 9.8, 10].filter((x) => x !== g);
       for (const a of andere) {
         const re = new RegExp(String.raw`(${GETAL})\s*([×x·*])\s*${nl(a, a === 10 ? 0 : a === 9.8 ? 1 : 2).replace(",", "[.,]")}(?![\d,.])`, "g");
-        ma = ma.replace(re, (_m, m: string, op: string) => `${m} ${op} ${nl(g, g === 10 ? 0 : g === 9.8 ? 1 : 2)}`);
+        ma = ma.replace(re, (_m, m: string, op: string) => {
+          gGewijzigd.add(q.nummer);
+          return `${m} ${op} ${gTekst}`;
+        });
       }
     }
     // 2) Elke rekenketen narekenen.
     let fout = "";
     ma = ma.replace(KETEN, (heel: string, expr: string, geclaimd: string) => {
       const w = reken(expr);
-      if (w === null || goedAfgerond(geclaimd, w)) return heel;
+      // Na een g-omzetting telt de oude uitkomst niet als "afgerond" (8 × 9,8 = 80 is fout, niet 2 sig. cijfers).
+      if (w === null || goedAfgerond(geclaimd, w, gGewijzigd.has(q.nummer))) return heel;
       const d = decimalen(geclaimd);
       const juist = nl(w, d);
       const rel = Math.abs(leesGetal(geclaimd) - w) / Math.max(1e-9, Math.abs(w));
@@ -152,9 +177,9 @@ export function controleerBerekeningen(vragen: Vraag[], nakijk: NakijkItem[], op
       fzWaarde = m * g;
       const eind = ma.match(new RegExp(`(${GETAL})\\s*N\\b(?!\\s*\\/)`, "g"));
       const laatste = eind?.at(-1)?.match(new RegExp(GETAL))?.[0];
-      if (laatste && !goedAfgerond(laatste, fzWaarde)) {
+      if (laatste && !goedAfgerond(laatste, fzWaarde, gGewijzigd.has(q.nummer))) {
         const rel = Math.abs(leesGetal(laatste) - fzWaarde) / fzWaarde;
-        if (rel <= 0.03) {
+        if (rel <= 0.03 || (gGewijzigd.has(q.nummer) && rel <= 0.05)) {
           const juist = nl(fzWaarde, decimalen(laatste));
           vervangen.push([laatste, juist]);
           ma = ma.replace(new RegExp(`${laatste.replace(/[.,]/, "[.,]")}(\\s*N\\b)(?![\\s\\S]*${laatste.replace(/[.,]/, "[.,]")}\\s*N\\b)`), `${juist}$1`);
@@ -169,7 +194,7 @@ export function controleerBerekeningen(vragen: Vraag[], nakijk: NakijkItem[], op
       const eigen = nl(m * g, d);
       ma = `${ma.replace(/\s+$/, "")}${/[.!]$/.test(ma.trim()) ? "" : "."} Ook goed: ${[...new Set(alt)].filter((a) => !a.startsWith(`${eigen} N`)).join(" of ")}.`;
     }
-    if (ma !== n.modelantwoord) {
+    if (ma !== n.modelantwoord || gGewijzigd.has(q.nummer)) {
       // Hetzelfde getal in de rubriek meenemen (bijv. "juiste uitkomst: 176 N").
       n.modelantwoord = ma;
       for (const [oud, nieuw] of vervangen) {

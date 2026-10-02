@@ -167,6 +167,11 @@ export function vindDubbels(vragen: Vraag[], nakijk: NakijkItem[]): Dubbel[] {
       const A = info[i]!;
       const B = info[j]!;
       if (zelfdeGroep(A.q, B.q)) continue;
+      // 0) Letterlijk dezelfde vraag (ook juist/onjuist; plan5 stoffen v1 = v2 na een reparatie).
+      if (norm(`${A.q.context ?? ""} ${A.q.stam}`).replace(/\W+/g, " ").trim() === norm(`${B.q.context ?? ""} ${B.q.stam}`).replace(/\W+/g, " ").trim()) {
+        out.push({ a: A.q.nummer, b: B.q.nummer, soort: "zelfde-antwoord", slachtoffer: kies(B.q, A.q), detail: "letterlijk dezelfde vraag" });
+        continue;
+      }
       // 1) Zelfde antwoord (niet triviaal) én dezelfde soort vraag.
       if (A.antN.length >= 3 && A.antN === B.antN && !TRIVIAAL.test(A.antN) && (A.antT.size > 0 || A.getallen.length > 0)) {
         out.push({ a: A.q.nummer, b: B.q.nummer, soort: "zelfde-antwoord", slachtoffer: kies(B.q, A.q), detail: `zelfde antwoord "${A.ant.slice(0, 40)}"` });
@@ -249,7 +254,7 @@ export function samenhangIssues(
     issues.push({
       nummer: q.nummer,
       code: d.soort === "verklapt" ? "verklapt" : "herhaling",
-      uitleg: `${d.soort === "verklapt" ? `Weggever: ${d.detail}.` : `Vraag ${q.nummer} toetst hetzelfde als vraag ${ander} (${d.detail}).`} Vervang vraag ${q.nummer} door een NIEUWE vraag ${onderwerp}. Zelfde vorm (open/meerkeuze), ${q.punten ?? 1} punt${(q.punten ?? 1) === 1 ? "" : "en"} en rtti ${q.rtti}; andere situatie; het antwoord mag nergens anders in de toets staan.`,
+      uitleg: `${d.soort === "verklapt" ? `Weggever: ${d.detail}.` : `Vraag ${q.nummer} toetst hetzelfde als vraag ${ander} (${d.detail}).`} Vraag ${ander} blijft staan: "${(vragen.find((x) => x.nummer === ander)?.stam ?? "").slice(0, 120)}" — schrijf daar géén variant of kopie van. Vervang vraag ${q.nummer} door een NIEUWE vraag ${onderwerp}. Zelfde vorm (open/meerkeuze), ${q.punten ?? 1} punt${(q.punten ?? 1) === 1 ? "" : "en"} en rtti ${q.rtti}; andere situatie; het antwoord mag nergens anders in de toets staan.`,
     });
   }
   return issues;
