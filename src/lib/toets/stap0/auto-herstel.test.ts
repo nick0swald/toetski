@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { andereWaarde, autoHerstel, autoHerstelVraagstuk, leidJuistAf, pasKrachtenKader, rondSig } from "./auto-herstel.ts";
-import { genereerSpec, hoofdstukNaam, isServerfout, keurGeneratie, specPrompt, type ChatFn, type SpecInvoer } from "./grok-spec.ts";
+import { genereerSpec, hoofdstukNaam, kortLabel, isServerfout, keurGeneratie, specPrompt, type ChatFn, type SpecInvoer } from "./grok-spec.ts";
 import { afrondFouten, bloklijstRegel, paragraafKern, zoekGegevenWeggevers, raaktKern, zoekBegripHerhaling, zoekGetalWeggevers } from "./inhoud-keuring.ts";
 import { controleerBerekeningen, leesNl } from "./reken.ts";
 import { laadFixtures } from "./laad.ts";
@@ -266,6 +266,11 @@ describe("stap 0: first-time-right (offline)", () => {
     assert.equal(hoofdstukNaam("H13", "Hoofdstuk 11 Kracht\nHoofdstuk 13 Geluid\n13.1 …"), "H13 Geluid");
     assert.equal(hoofdstukNaam("13 Geluid", "x"), "13 Geluid");
     assert.equal(hoofdstukNaam("6", "6.1 Geluid maken"), "H6");
+    // matrijslabels kort: tot het eerste scheidingsteken, anders hoogstens 40 tekens op een woordgrens
+    assert.equal(hoofdstukNaam("Materie: dichtheid berekenen met de formule ρ = m / V en Binas-tabellen", "x"), "Materie");
+    assert.equal(hoofdstukNaam("4", "Hoofdstuk 4 Energie omzetten in huis en in het verkeer met rendement en vermogen\n4.1"), "H4 Energie omzetten in huis en in het…");
+    assert.equal(kortLabel("Elektriciteit en energie in huis, kosten en rendement van apparaten"), "Elektriciteit en energie in huis");
+    assert.ok(kortLabel("a".repeat(80)).length <= 40);
     const inv: SpecInvoer = { titel: "H3", leerweg: "GT", leerjaar: 3, duurMinuten: 45, bronmateriaal: "Hoofdstuk 3 Krachten\n3.1 Soorten\nx", rttiDoel: { R: 25, T1: 40, T2: 27, I: 8 } };
     const r = keurGeneratie({ titel: "x", vraagstukken: [autoHerstelVraagstuk(krat()).v] }, inv, { items: 3, punten: 6 });
     assert.ok(r.res.vragen.every((q) => q.hoofdstuk === "H3 Krachten"));
