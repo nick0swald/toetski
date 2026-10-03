@@ -172,7 +172,17 @@ export function andereWaarde(u: string): string {
   return formatZoals(x * 2, u);
 }
 
-function herrekenDeelvraag(b: Deelvraag, extra: Parameter[]): boolean {
+/** Vervang losse getallen (niet midden in een ander getal) in één keer, zodat vervangingen niet op elkaar doorwerken. */
+function vervangGetallen(t: string, paren: [string, string][]): string {
+  let uit = t;
+  paren.forEach(([o], i) => {
+    uit = uit.replace(new RegExp(`(^|[^0-9,])${esc(o)}(?![0-9]|,[0-9])`, "g"), `$1\u0000${i}\u0000`);
+  });
+  return uit.replace(/\u0000(\d+)\u0000/g, (_, i) => paren[Number(i)]![1]);
+}
+
+/** Herreken B; `invoer` = gewijzigde gegeven waarden [oud, nieuw] die ook in antwoordmodel en scorestappen veranderen. */
+function herrekenDeelvraag(b: Deelvraag, extra: Parameter[], invoer: [string, string][] = []): boolean {
   const vars: Record<string, number> = {};
   for (const p of [...extra, ...(b.parameters ?? [])]) vars[p.naam] = p.waarde;
   const oudNieuw: [string, string][] = [];
@@ -191,10 +201,10 @@ function herrekenDeelvraag(b: Deelvraag, extra: Parameter[]): boolean {
     nieuw.push({ ...bk, waarde: w, ...(af ? { afgerond: af } : {}) });
   }
   b.berekeningen = nieuw.length ? nieuw : b.berekeningen;
-  for (const [o, n] of oudNieuw) {
-    const re = new RegExp(`(^|[^0-9,])${esc(o)}(?![0-9]|,[0-9])`, "g");
-    b.antwoordmodel.regels = b.antwoordmodel.regels.map((r) => r.replace(re, `$1${n}`));
-    b.scorestappen = b.scorestappen.map((s) => ({ ...s, omschrijving: s.omschrijving.replace(re, `$1${n}`) }));
+  const paren = [...invoer, ...oudNieuw];
+  if (paren.length) {
+    b.antwoordmodel.regels = b.antwoordmodel.regels.map((r) => vervangGetallen(r, paren));
+    b.scorestappen = b.scorestappen.map((s) => ({ ...s, omschrijving: vervangGetallen(s.omschrijving, paren) }));
   }
   return true;
 }
@@ -238,7 +248,7 @@ function fixGetalWeggevers(v: VraagstukSpec, stappen: AutoStap[]): void {
             .map((z) => (re.test(kaal(z)) ? (/[?]\s*$/.test(z) ? z.replace(re, `$1${nieuw} ${eenheid}`) : gaUitVan(z, u, nieuw, eenheid)) : z))
             .join(" ");
           kopie.parameters = (kopie.parameters ?? []).map((p) => (p === pb ? { ...p, waarde: leesNl(nieuw), weergave: nieuw } : p));
-          if (!herrekenDeelvraag(kopie, v.parameters ?? [])) return;
+          if (!herrekenDeelvraag(kopie, v.parameters ?? [], [[u, nieuw]])) return;
           if (!getalInTekst(nieuw, kaal([...(kopie.context ?? []), kopie.stam].join(" ")))) return;
           v.deelvragen[ib] = kopie;
           stappen.push({ id: b0.id, wat: `weggever: "${u} ${eenheid}" (uitkomst van ${a.id}) → "Ga uit van ${nieuw} ${eenheid}", ${b0.id} opnieuw doorgerekend` });
@@ -319,6 +329,18 @@ export function autoHerstelVraagstuk(v0: VraagstukSpec): { v: VraagstukSpec; sta
   const stappen: AutoStap[] = [];
   if (!Array.isArray(v.deelvragen)) return { v, stappen };
   const bekend = new Set([...(v.parameters ?? []), ...v.deelvragen.flatMap((d) => d.parameters ?? [])].map((p) => p.naam));
+  // Lege tekenfiguur op vraagstukniveau (hoort bij de eerste deelvraag) terwijl een latere deelvraag de tekenvraag is
+  // (mét antwoordfiguur, zonder eigen figuur): de figuur verhuist naar die tekenvraag.
+  if (v.figuur && isTekenFiguur(v.figuur)) {
+    const d0 = v.deelvragen[0];
+    const isTeken = (d: Deelvraag) => d.tekenvraag ?? /\b(teken|schets)\b/i.test(d.stam);
+    const j = v.deelvragen.findIndex((d, i) => i > 0 && !d.figuur && d.antwoordmodel?.figuur?.type === v.figuur!.type && isTeken(d));
+    if (d0 && j > 0 && !d0.figuur && !d0.antwoordmodel?.figuur && !isTeken(d0)) {
+      v.deelvragen[j]!.figuur = v.figuur;
+      v.figuur = undefined;
+      stappen.push({ id: v.deelvragen[j]!.id, wat: `lege tekenfiguur van het vraagstuk verplaatst naar tekenvraag ${v.deelvragen[j]!.id}` });
+    }
+  }
   const nOnb = vulOnbekend(v.figuur, bekend);
   if (nOnb) stappen.push({ id: v.id, wat: `${nOnb} figuurcontrole(s) met onbekende parameter → waarde uit de figuur` });
   v.deelvragen.forEach((d, i) => {

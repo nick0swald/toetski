@@ -107,6 +107,43 @@ describe("stap 0: first-time-right (offline)", () => {
     assert.deepEqual(zoekGetalWeggevers([y]), []);
   });
 
+  it("4b. 'Ga uit van' (ronde 5, notenkraker): ook de gegeven waarde in het antwoordmodel verandert mee", () => {
+    const v = krat();
+    v.deelvragen[1] = {
+      ...v.deelvragen[1]!, stam: "Bereken het moment.", antwoordmodel: { regels: ["M = 40 × 12 = 480 N·cm"] },
+      parameters: [{ naam: "F", waarde: 40, bron: "tekst", eenheid: "N", weergave: "40" }, { naam: "r", waarde: 12, bron: "tekst", eenheid: "cm", weergave: "12" }],
+      berekeningen: [{ naam: "M", formule: "F * r", waarde: 480, eenheid: "N·cm", afgerond: "480" }],
+    };
+    v.deelvragen[2] = {
+      ...v.deelvragen[2]!, opties: undefined, stam: "Bereken de kracht op de noot. Ga uit van M = 480 N·cm en arm 3,0 cm.", antwoordmodel: { regels: ["F = M / r = 480 / 3,0 = 160 N"] }, scorestappen: [{ omschrijving: "F = 480 / 3,0", punten: 1 }, { omschrijving: "160 N", punten: 1 }],
+      parameters: [{ naam: "M2", waarde: 480, bron: "tekst", eenheid: "N·cm", weergave: "480" }, { naam: "rn", waarde: 3, bron: "tekst", eenheid: "cm", weergave: "3,0" }],
+      berekeningen: [{ naam: "Fn", formule: "M2 / rn", waarde: 160, eenheid: "N", afgerond: "160" }],
+    };
+    const c = autoHerstelVraagstuk(v).v.deelvragen[2]!;
+    assert.match(c.stam, /M = 580 N·cm/);
+    assert.deepEqual(c.antwoordmodel.regels, ["F = M / r = 580 / 3,0 = 190 N"]);
+    assert.deepEqual(c.scorestappen.map((x) => x.omschrijving), ["F = 580 / 3,0", "190 N"]);
+    assert.deepEqual(fouten(autoHerstelVraagstuk(v).v).filter((f) => /krat-c/.test(f) && !/juiste letter/.test(f)), []);
+  });
+
+  it("4c. lege tekenfiguur op vraagstukniveau, tekenvraag later (ronde 5, krat-duwen) → figuur naar de tekenvraag", () => {
+    const v = krat();
+    const leeg = v.deelvragen[0]!.figuur as KrachtenFiguur;
+    v.figuur = { ...leeg, controle: [{ meting: "pijlen", verwacht: 0 }] };
+    const [a, b, c] = v.deelvragen;
+    v.deelvragen = [
+      { ...b!, id: "krat-a" },
+      { ...c!, id: "krat-b", antwoordmodel: { ...c!.antwoordmodel, juist: "A" } },
+      { ...a!, id: "krat-c", figuur: undefined, tekenvraag: true, antwoordmodel: { regels: ["pijl van 4,0 cm omlaag"], figuur: { ...leeg, pijlen: [{ naam: "Fz", grootteN: 40, hoek: 270, rood: true }], controle: [{ meting: "Fz.N", verwacht: 40 }] } } },
+    ];
+    assert.ok(fouten(v).some((f) => /krat-a: tekenvraag zonder antwoordfiguur/.test(f)));
+    const { v: w, stappen } = autoHerstelVraagstuk(v);
+    assert.equal(w.figuur, undefined);
+    assert.equal(w.deelvragen[2]!.figuur?.type, "krachten");
+    assert.ok(stappen.some((s) => /verplaatst naar tekenvraag krat-c/.test(s.wat)));
+    assert.deepEqual(fouten(w).filter((f) => /tekenvraag/.test(f)), []);
+  });
+
   it("5. krachtenfiguur: kader past om voorwerp en pijlen (bloempot niet afgesneden, geen lege ruimte)", () => {
     const pot: KrachtenFiguur = { type: "krachten", breedteCm: 6, hoogteCm: 7, schaalN: 10, voorwerp: "bloempot", punt: [3, 5], puntLabel: "Z", pijlen: [] };
     const antw: KrachtenFiguur = { ...pot, pijlen: [{ naam: "Fz", grootteN: 20, hoek: 270, rood: true }] };
