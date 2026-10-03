@@ -5,6 +5,7 @@ import {
   alsToetsSpec,
   generatieSchema,
   genereerSpec,
+  inkorten,
   keurGeneratie,
   naarXaiSchema,
   ontbrekendeParagrafen,
@@ -188,5 +189,57 @@ describe("stap 0 + Grok: spec-generatie (offline)", () => {
     const res = verwerkToets({ titel: "x", vragen: [kopie("a").id, kopie("b").id] }, [{ ...kopie("a"), soort: "vraagstuk" } as never, { ...kopie("b"), soort: "vraagstuk" } as never]);
     const g = leerlingGroepen(res.vragen);
     assert.deepEqual(g.map((x) => x.length), [4, 4]);
+  });
+  it("aanvullen: te korte toets en ontbrekende paragraaf worden aangevuld (parallel, nieuwe vraagstukken)", async () => {
+    const inv3 = { ...inv, bronmateriaal: "13.1 Geluid maken\nTrillingen.\n13.2 Toonhoogte\nFrequentie.\n13.3 Trillingstijd\nOscilloscoop." };
+    let n = 0;
+    const chat: ChatFn = async (m, schema) => {
+      if (schema.naam === "toets_spec") return JSON.stringify({ titel: "x", vraagstukken: [kopie("start")] });
+      const p = m.at(-1)!.content;
+      assert.match(p, /NIEUW vraagstuk[\s\S]*13\.1 Geluid maken/);
+      const v = kopie(`nieuw${++n}`);
+      v.deelvragen.forEach((d) => (d.leerdoel = "13.1 geluid maken en trillingen"));
+      return JSON.stringify({ vraagstuk: v });
+    };
+    const g = await genereerSpec(inv3, { items: 8, punten: 12 }, chat);
+    assert.equal(n, 1);
+    assert.deepEqual(g.rapport.fouten, []);
+    assert.deepEqual(g.rapport.feiten.ontbrekendeParagrafen, []);
+    assert.equal(g.rapport.feiten.lengtePct, 100);
+  });
+
+  it("inkorten: te lang → vraagstuk met de laagste waarde deterministisch geschrapt (geen aanroep)", () => {
+    const a = kopie("een");
+    const b = kopie("twee");
+    const c = kopie("drie");
+    for (const v of [a, c]) v.deelvragen.forEach((d) => (d.rtti = "T2"));
+    b.deelvragen.forEach((d) => (d.rtti = "R"));
+    const k = inkorten({ titel: "x", vraagstukken: [a, b, c] }, inv, { items: 8, punten: 12 });
+    assert.deepEqual(k.gen.vraagstukken.map((v) => v.id), ["een", "drie"]);
+    assert.match(k.stappen[0]!.wat, /geschrapt \(te lang/);
+    // binnen 110 %: niets
+    assert.equal(inkorten({ titel: "x", vraagstukken: [a, c] }, inv, { items: 8, punten: 12 }).stappen.length, 0);
+  });
+
+  it("gericht herstel: hoogstens 4 aanroepen tegelijk", async () => {
+    const fouten = ["piet", "quinten", "robin", "sanne", "tomas", "ursula"].map((id) => {
+      const v = kopie(id);
+      v.deelvragen[1]!.berekeningen![2]!.waarde = 1300;
+      return v;
+    });
+    let bezig = 0;
+    let max = 0;
+    const chat: ChatFn = async (m, schema) => {
+      if (schema.naam === "toets_spec") return JSON.stringify({ titel: "x", vraagstukken: fouten });
+      bezig++;
+      max = Math.max(max, bezig);
+      await new Promise((r) => setTimeout(r, 5));
+      bezig--;
+      const id = /zelfde id \("([a-z0-9-]+)"\)/.exec(m.at(-1)!.content)?.[1] ?? "z";
+      return JSON.stringify({ vraagstuk: kopie(id) });
+    };
+    const g = await genereerSpec(inv, { items: 24, punten: 36 }, chat, { maxGericht: 12 });
+    assert.ok(max <= 4 && max >= 2, String(max));
+    assert.deepEqual(g.rapport.fouten, []);
   });
 });

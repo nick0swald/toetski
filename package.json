@@ -19,7 +19,7 @@
     "test": "npm run test:scripts && npm run test:app",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:scripts": "node --test scripts/brand-check.test.mjs scripts/browser-smoke-verdict.test.mjs scripts/check-auth-invariant.test.mjs scripts/preview.test.mjs scripts/sign-out-plan.test.mjs scripts/with-app-env.test.mjs scripts/write-atomic.test.mjs scripts/eval/docx-tekenvak.test.mjs scripts/eval/waakhond.test.mjs",
+    "test:scripts": "node --test scripts/brand-check.test.mjs scripts/browser-smoke-verdict.test.mjs scripts/check-auth-invariant.test.mjs scripts/preview.test.mjs scripts/sign-out-plan.test.mjs scripts/with-app-env.test.mjs scripts/write-atomic.test.mjs scripts/eval/docx-tekenvak.test.mjs scripts/eval/waakhond.test.mjs scripts/eval/stap0-budget.test.mjs",
     "test:app": "node --experimental-strip-types --no-warnings --test 'src/**/*.test.ts'",
     "test:platform": "node --test scripts/grok-pwa-plugin.test.mjs scripts/migration-plan.test.mjs",
     "eval": "node scripts/eval/eval.mjs",

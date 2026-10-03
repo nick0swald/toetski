@@ -81,7 +81,8 @@ export function keurFiguur(f: FiguurSpec, params: Record<string, number>, vraag?
       continue;
     }
     if (gemeten === undefined || Number.isNaN(gemeten)) {
-      fouten.push(`${f.type}: meting ${c.meting} niet gevonden in de figuur`);
+      const kan = Object.keys(m).filter((k) => !["breedteCm", "asfouten"].includes(k)).slice(0, 12);
+      fouten.push(`${f.type}: meting ${c.meting} niet gevonden in de figuur (meetbaar in deze figuur: ${kan.join(", ") || "niets"}; een pijl/lijn die de leerling zelf tekent hoort met zijn controle in antwoordmodel.figuur)`);
       continue;
     }
     const tol = c.tolerantie ?? STANDAARD_TOL[f.type];

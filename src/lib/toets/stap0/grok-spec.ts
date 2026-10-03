@@ -411,10 +411,71 @@ export interface Stap {
  *  1. één aanroep voor de hele toets;
  *  2. elk afgekeurd vraagstuk wordt OPNIEUW gegenereerd (gerichte aanroep met de keurfouten, max 2 pogingen);
  *  3. pas als het dan nog niet goed is, wordt het geschrapt;
- *  4. lengte (90–110 %) en paragraafdekking worden aangevuld met vervangende vraagstukken (elk max 2 pogingen), of
- *     een te lange toets wordt ingekort door één vraagstuk met minder punten opnieuw te laten schrijven.
+ *  4. lengte (90–110 %) en paragraafdekking worden aangevuld met nieuwe vraagstukken (parallel, elk max 2 pogingen);
+ *  5. een te lange toets wordt deterministisch ingekort (vraagstuk met de laagste waarde schrappen, zie `inkorten`).
  * Een mislukte of door het budget geweigerde gerichte aanroep breekt de generatie niet af (staat in `stappen`).
  */
+/** Maximaal zoveel gerichte aanroepen tegelijk. */
+const PARALLEL = 4;
+
+async function pool<T, R>(xs: T[], n: number, f: (x: T) => Promise<R>): Promise<R[]> {
+  const uit: R[] = new Array(xs.length);
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(n, xs.length) }, async () => {
+      while (i < xs.length) {
+        const j = i++;
+        uit[j] = await f(xs[j]!);
+      }
+    }),
+  );
+  return uit;
+}
+
+/** Aantal fouten op vraagstukniveau (zonder de toetsniveau-fouten lengte/dekking). */
+const vraagstukFouten = (r: Keuringsrapport) => Object.entries(r.perId).reduce((s, [id, l]) => s + (id ? l.length : 0), 0);
+const puntenVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0), 0);
+/** "Waarde" van een vraagstuk voor het inkorten: punten op T2/I-niveau (inzicht) tellen het zwaarst. */
+const waardeVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0) * (d.rtti === "T2" || d.rtti === "I" ? 2 : 1), 0);
+
+/**
+ * Deterministisch inkorten tot ≤ 110 %: schrap het vraagstuk waarna de lengte het dichtst bij 100 % komt (≥ 90 %, geen
+ * extra ontbrekende paragraaf, genoeg deelvragen, geen nieuwe fouten); bij gelijke afstand het vraagstuk met de laagste
+ * waarde, daarna het laatste. Lukt dat niet, dan valt de laatste deelvraag van een vraagstuk met 4 deelvragen af.
+ */
+export function inkorten(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): { gen: Generatie; stappen: Stap[] } {
+  let gen = gen0;
+  const stappen: Stap[] = [];
+  for (let n = 0; n < 12; n++) {
+    const r = keurGeneratie(gen, inv, kal);
+    if (r.feiten.lengtePct <= 110) break;
+    const ontbr = r.feiten.ontbrekendeParagrafen.length;
+    const fout0 = vraagstukFouten(r);
+    const minV = Math.ceil(kal.items * 0.85);
+    type Kand = { gen: Generatie; afstand: number; waarde: number; pos: number; wat: string; id: string };
+    const kand: Kand[] = [];
+    const beoordeel = (g: Generatie, wat: string, id: string, waarde: number, pos: number, minPct: number) => {
+      const r2 = keurGeneratie(g, inv, kal);
+      const f2 = r2.feiten;
+      if (f2.lengtePct < minPct || f2.ontbrekendeParagrafen.length > ontbr || f2.vragen < minV || vraagstukFouten(r2) > fout0) return;
+      kand.push({ gen: g, afstand: Math.abs(f2.lengtePct - 100), waarde, pos, wat, id });
+    };
+    gen.vraagstukken.forEach((v, pos) => beoordeel({ ...gen, vraagstukken: gen.vraagstukken.filter((x) => x !== v) }, `geschrapt (te lang, ${puntenVan(v)} p)`, v.id, waardeVan(v), pos, 90));
+    if (!kand.length)
+      gen.vraagstukken.forEach((v, pos) => {
+        if (v.deelvragen.length < 4) return;
+        const d = v.deelvragen.at(-1)!;
+        const v2 = { ...v, deelvragen: v.deelvragen.slice(0, -1) };
+        beoordeel({ ...gen, vraagstukken: gen.vraagstukken.map((x) => (x === v ? v2 : x)) }, `deelvraag ${d.id} geschrapt (te lang, ${d.punten} p)`, v.id, d.punten, pos, 90);
+      });
+    if (!kand.length) break;
+    kand.sort((a, b) => a.afstand - b.afstand || a.waarde - b.waarde || b.pos - a.pos);
+    gen = kand[0]!.gen;
+    stappen.push({ wat: kand[0]!.wat, id: kand[0]!.id, ok: true });
+  }
+  return { gen, stappen };
+}
+
 /** Vraagstuk onder een vaste id, met deelvraag-ids <id>-a, <id>-b … (geen botsing met de rest van de toets). */
 function metId(v: VraagstukSpec, id: string): VraagstukSpec {
   return { ...v, id, deelvragen: v.deelvragen.map((d, i) => ({ ...d, id: `${id}-${String.fromCharCode(97 + i)}` })) };
@@ -452,7 +513,7 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
     const rap = keurGeneratie(gen, inv, kal);
     const fout = gen.vraagstukken.filter((v) => rap.perId[v.id]?.length);
     if (!fout.length) break;
-    const nieuw = await Promise.all(fout.map((v) => vraag(gerichtPrompt({ soort: "herstel", vraagstuk: v, fouten: rap.perId[v.id]!, gen }))));
+    const nieuw = await pool(fout, PARALLEL, (v) => vraag(gerichtPrompt({ soort: "herstel", vraagstuk: v, fouten: rap.perId[v.id]!, gen })));
     fout.forEach((v, i) => {
       const n = nieuw[i];
       if (!n) return;
@@ -467,49 +528,47 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
   for (const id of weg) stappen.push({ wat: "geschrapt", id, ok: false, fouten: rap3.perId[id] });
   gen = { ...gen, vraagstukken: gen.vraagstukken.filter((v) => !weg.includes(v.id)) };
 
-  // 4. lengte en dekking aanvullen
-  for (let ronde = 0; ronde < 3; ronde++) {
+  // 4. lengte en dekking aanvullen: nieuwe vraagstukken parallel (elk max 2 pogingen, met de keurfouten als feedback)
+  let nAanvulling = 0;
+  for (let ronde = 1; ronde <= 3 && !gestopt; ronde++) {
     const r = keurGeneratie(gen, inv, kal);
     const f = r.feiten;
     const pars = f.ontbrekendeParagrafen;
-    const tekort = kal.punten - f.punten;
-    const teLang = f.lengtePct > 110;
-    const teKort = f.lengtePct < 90 || f.vragen < Math.ceil(kal.items * 0.85);
-    if (!teLang && !teKort && !pars.length) break;
-    if (teLang && !pars.length) {
-      // inkorten: het vraagstuk met de meeste punten opnieuw met minder punten
-      const groot = [...gen.vraagstukken].sort((a, b) => b.deelvragen.reduce((s, d) => s + d.punten, 0) - a.deelvragen.reduce((s, d) => s + d.punten, 0))[0];
-      if (!groot) break;
-      const p = groot.deelvragen.reduce((s, d) => s + d.punten, 0);
-      const doel = Math.max(3, p + tekort);
-      const v = await vraag(gerichtPrompt({ soort: "nieuw", id: groot.id, punten: doel, paragrafen: [...new Set(groot.deelvragen.map((d) => (d.leerdoel ?? "").split(" ")[0]!).filter(Boolean))], gen: { ...gen, vraagstukken: gen.vraagstukken.filter((x) => x.id !== groot.id) } }));
-      if (!v) break;
-      const kandidaat = vervang(groot.id, v);
-      const ok = !(keurGeneratie(kandidaat, inv, kal).perId[groot.id] ?? []).length;
-      stappen.push({ wat: `ingekort naar ${doel} p`, id: groot.id, ok });
-      if (ok) gen = kandidaat;
-      else break;
-      continue;
+    const tekortP = Math.max(0, kal.punten - f.punten);
+    const tekortV = Math.max(0, Math.ceil(kal.items * 0.85) - f.vragen);
+    if (f.lengtePct >= 90 && !tekortV && !pars.length) break;
+    const k = Math.min(6, maxGericht - gericht, Math.max(1, Math.ceil(pars.length / 2), Math.ceil(tekortP / 7), Math.ceil(tekortV / 3.5)));
+    if (k <= 0) break;
+    const per = Math.max(3, Math.min(9, Math.round((tekortP || 3 * k) / k)));
+    const taken = Array.from({ length: k }, (_, i) => ({ id: `aanvulling-${++nAanvulling}`, paragrafen: pars.filter((_, j) => j % k === i), vorige: undefined as VraagstukSpec | undefined, fouten: undefined as string[] | undefined, klaar: false }));
+    for (let poging = 1; poging <= 2; poging++) {
+      const open = taken.filter((t) => !t.klaar && (poging === 1 || t.vorige));
+      if (!open.length) break;
+      const nieuw = await pool(open, PARALLEL, (t) => vraag(gerichtPrompt({ soort: "nieuw", id: t.id, punten: per, paragrafen: t.paragrafen, gen, vorige: t.vorige, fouten: t.fouten })));
+      open.forEach((t, i) => {
+        const v = nieuw[i];
+        if (!v) return;
+        const voor = vraagstukFouten(keurGeneratie(gen, inv, kal));
+        const kandidaat: Generatie = { ...gen, vraagstukken: [...gen.vraagstukken, metId(v, t.id)] };
+        const rk = keurGeneratie(kandidaat, inv, kal);
+        const eigen = rk.perId[t.id] ?? [];
+        const ok = eigen.length === 0 && vraagstukFouten(rk) <= voor;
+        const fouten = eigen.length ? eigen : ok ? [] : Object.entries(rk.perId).filter(([id]) => id && id !== t.id).flatMap(([, l]) => l).slice(0, 8);
+        stappen.push({ wat: `aanvulling ${per} p (ronde ${ronde}, poging ${poging})`, id: t.id, ok, fouten });
+        t.vorige = v;
+        t.fouten = fouten;
+        if (ok) {
+          gen = kandidaat;
+          t.klaar = true;
+        }
+      });
     }
-    const punten = Math.max(3, Math.min(9, tekort > 0 ? tekort : 4));
-    const id = `aanvulling-${ronde + 1}`;
-    let vorige: VraagstukSpec | undefined;
-    let fouten: string[] | undefined;
-    let gelukt = false;
-    for (let poging = 1; poging <= 2 && !gelukt; poging++) {
-      const v = await vraag(gerichtPrompt({ soort: "nieuw", id, punten, paragrafen: pars, gen, vorige, fouten }));
-      if (!v) break;
-      const kandidaat: Generatie = { ...gen, vraagstukken: [...gen.vraagstukken, metId(v, id)] };
-      fouten = keurGeneratie(kandidaat, inv, kal).perId[id] ?? [];
-      vorige = v;
-      stappen.push({ wat: `aanvulling ${punten} p (poging ${poging})`, id, ok: fouten.length === 0, fouten });
-      if (!fouten.length) {
-        gen = kandidaat;
-        gelukt = true;
-      }
-    }
-    if (!gelukt) break;
   }
+
+  // 5. te lang → deterministisch inkorten (geen extra aanroep)
+  const kort = inkorten(gen, inv, kal);
+  gen = kort.gen;
+  stappen.push(...kort.stappen);
   const rapport = keurGeneratie(gen, inv, kal);
   return { gen, eerste, rapport, hersteld: stappen.length > 0, stappen, gerichteAanroepen: gericht };
 }

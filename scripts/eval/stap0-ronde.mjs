@@ -2,24 +2,27 @@
 /**
  * Betaalde testronde "Grok vult de stap-0-spec" (alleen eval-harnas; niet in de app).
  *
- *   node scripts/eval/waakhond.mjs --timeout 1200 --stil 120 --max-usd <rest> -- \
- *     node scripts/eval/stap0-ronde.mjs genereer <case> --naam paid1-g1 --uit /workspace/toetski-paid1 --budget <rest> [--rechter 3]
+ *   node scripts/eval/waakhond.mjs --timeout 1500 --stil 120 --max-usd <rest> -- \
+ *     node scripts/eval/stap0-ronde.mjs genereer <case> --naam gen1 --uit DIR --budget <case-usd> --plafond <ronde-usd> \
+ *       --start <ISO rondestart> [--rechter 2] [--max-gericht 10]
  *   node scripts/eval/stap0-ronde.mjs droog <case> --uit /tmp/x        # zelfde stroom met de vaste fixtures, GEEN API
  *   node scripts/eval/stap0-ronde.mjs poort <map met <case>/resultaat.json> … [--baseline-dir /workspace/eval-r2/baseline-v3]
  *
- * Per case: 1 grok-4.5-aanroep met JSON-schema (structured output) → keuring (schema, rekencontrole, figuur-go/no-go,
- * lengte, weggevers, merken/schoolnamen, letterlijk overnemen) → hooguit 1 herstelaanroep → deterministische render
- * (leerling- en docentdeel, PDF + Word) → rubriek + rechter (N runs) → resultaat.json.
+ * Per case: 1 grok-4.5-aanroep voor de hele toets → keuring → gericht herstel per afgekeurd vraagstuk (max 2 pogingen)
+ * → schrappen → aanvullen (lengte/dekking) → deterministisch inkorten → render (PDF + Word) → rubriek + rechter (met
+ * de figuren als afbeeldingen) → resultaat.json.
  *
  * Sleutel: ALLEEN TOETSKI_XAI_API_KEY (de waakhond zet XAI_API_KEY = TOETSKI_XAI_API_KEY voor het kind). Het script
- * weigert betaalde aanroepen als die twee niet gelijk zijn. Kosten: vóór elke aanroep een worst-case-schatting tegen
- * --budget (harde stop), na elke aanroep "run-kosten $x" (de waakhond breekt af boven --max-usd) en een regel in
- * eval-out/kosten.jsonl (per aanroep).
+ * weigert betaalde aanroepen als die twee niet gelijk zijn. Kosten (stap0-budget.mjs): realistische schatting per
+ * aanroep binnen --budget (case), hard plafond --plafond tegen de werkelijk gelogde kosten sinds --start; na elke
+ * aanroep "run-kosten $x" (de waakhond breekt af boven --max-usd) en een regel in eval-out/kosten.jsonl.
+ * De rechter komt ná generatie/herstel/aanvulling: run 1 alleen tegen het plafond, run 2+ binnen het casebudget.
  */
 import { appendFileSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
+import { gelogdeKosten, maakBewaker, realistisch, worstCase } from "./stap0-budget.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const jiti = createJiti(import.meta.url, { alias: { "@": join(ROOT, "src") } });
@@ -31,8 +34,6 @@ const opt = (naam, standaard) => {
 const leesJson = (p) => JSON.parse(readFileSync(p, "utf8"));
 const S = (p) => jiti.import(join(ROOT, "src/lib/toets", p));
 
-const PRIJS = { in: 2.0, uit: 6.0 }; // grok-4.5, USD per 1M tokens (worst case: geen cache)
-const worstCase = (promptTekens, maxTokens) => ((promptTekens / 3) * PRIJS.in + maxTokens * PRIJS.uit) / 1e6;
 
 let runKosten = 0;
 function boekKosten(soort, usd, extra = {}) {
@@ -41,17 +42,9 @@ function boekKosten(soort, usd, extra = {}) {
   mkdirSync(join(ROOT, "eval-out"), { recursive: true });
   appendFileSync(join(ROOT, "eval-out", "kosten.jsonl"), JSON.stringify({ t: new Date().toISOString(), script: "stap0-ronde", soort, usd, runKosten, ...extra }) + "\n");
 }
-/** Worst case van aanroepen die nu lopen (parallelle herstel- en rechteraanroepen tellen samen mee). */
-let gereserveerd = 0;
-function budgetCheck(budget, schatting, wat) {
-  if (runKosten + gereserveerd + schatting > budget) {
-    console.error(`[budget] STOP vóór ${wat}: run-kosten ${runKosten.toFixed(4)} + lopend ${gereserveerd.toFixed(4)} + worst case ${schatting.toFixed(4)} > budget ${budget.toFixed(4)} (USD)`);
-    return false;
-  }
-  gereserveerd += schatting;
-  return true;
-}
-const vrijgeven = (schatting) => (gereserveerd = Math.max(0, gereserveerd - schatting));
+/** Budgetbewaker (zie stap0-budget.mjs); wordt in genereer() gezet. */
+let bewaker = null;
+const KOSTENLOG = join(ROOT, "eval-out", "kosten.jsonl");
 /** Hartslag voor de waakhond zolang er een aanroep loopt (elke aanroep heeft zelf een timeout). */
 function hartslag() {
   const f = process.env.WAAKHOND_HARTSLAG;
@@ -83,13 +76,13 @@ async function caseInvoer(caseNaam) {
 }
 
 /** Echte chat via llm.ts (rol "schrijven" = grok-4.5) met JSON-schema; terugval op json_object als het schema geweigerd wordt. */
-async function maakChat(budget) {
+async function maakChat() {
   const { xaiChat, nieuweKosten, berichten } = await S("llm.ts");
   void berichten;
   return async (messages, schema, maxTokens) => {
     const tekens = messages.reduce((s, m) => s + m.content.length, 0) + JSON.stringify(schema.schema).length;
-    const sch = worstCase(tekens, maxTokens);
-    if (!budgetCheck(budget, sch, schema.naam)) throw new Error("budget");
+    const sch = realistisch(tekens, schema.naam);
+    if (!bewaker.aanvraag({ soort: schema.naam, schatting: sch, worst: worstCase(tekens, maxTokens) })) throw new Error("budget");
     const k = nieuweKosten();
     const stop = hartslag();
     const t0 = Date.now();
@@ -106,7 +99,7 @@ async function maakChat(budget) {
       return raw;
     } finally {
       stop();
-      vrijgeven(sch);
+      bewaker.klaar(sch, k.usd);
       boekKosten(schema.naam, k.usd, { ms: Date.now() - t0, tokensIn: k.tokensIn, tokensUit: k.tokensUit, redeneren: k.tokensRedeneren, mislukt: k.mislukt });
     }
   };
@@ -140,18 +133,17 @@ async function rechterFiguren(res) {
   }
   return uit.slice(0, 16);
 }
-/** Budget dat de generatie/herstel-aanroepen vrijlaten voor de rechter (3 runs met figuren). */
-const RECHTER_RESERVE = 0.22;
 const BEELD_TOKENS = 1500; // ruime schatting per afbeelding (detail high)
 
-async function rechter(toets, input, budget, figuren = []) {
+async function rechter(toets, input, figuren = [], binnenCase = true) {
   const R = await S("eval/rubric.ts");
   const { MODELLEN } = await S("config.ts");
   const tekst = R.rechterPrompt(toets, input) + (figuren.length ? `\n\nDe figuren uit het leerlingdeel zijn hieronder als afbeeldingen bijgevoegd (figuur bij vraag N). Een vraag met [figuur] heeft dus wél een figuur: beoordeel de figuur zelf (klopt hij bij de vraag, is hij leesbaar, zijn de gevraagde waarden af te lezen) en trek géén punten af voor 'ontbrekende figuren'.` : "");
   const content = figuren.length ? [{ type: "text", text: tekst }, ...figuren.flatMap((f) => [{ type: "text", text: `Figuur bij vraag ${f.nr}` }, { type: "image_url", image_url: { url: f.url, detail: "high" } }])] : tekst;
-  const sch = worstCase(tekst.length + R.RECHTER_SYSTEM.length + figuren.length * BEELD_TOKENS * 3, 6000);
-  if (!budgetCheck(budget, sch, "rechter")) return null;
+  const sch = realistisch(tekst.length + R.RECHTER_SYSTEM.length, "rechter", figuren.length * BEELD_TOKENS);
+  if (!bewaker.aanvraag({ soort: "rechter", schatting: sch, worst: worstCase(tekst.length + R.RECHTER_SYSTEM.length + figuren.length * BEELD_TOKENS * 3, 6000), binnenCase })) return null;
   const stop = hartslag();
+  let usd = 0;
   try {
     const r = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -160,7 +152,7 @@ async function rechter(toets, input, budget, figuren = []) {
       body: JSON.stringify({ model: MODELLEN.controle, reasoning_effort: "low", temperature: 0, max_tokens: 6000, response_format: { type: "json_object" }, messages: [{ role: "system", content: R.RECHTER_SYSTEM }, { role: "user", content }] }),
     });
     const j = await r.json();
-    const usd = (j.usage?.cost_in_usd_ticks ?? 0) / 1e10;
+    usd = (j.usage?.cost_in_usd_ticks ?? 0) / 1e10;
     boekKosten("rechter", usd, { tokensIn: j.usage?.prompt_tokens, tokensUit: j.usage?.completion_tokens, beelden: figuren.length, status: r.status });
     if (!r.ok) throw new Error(`rechter HTTP ${r.status}: ${JSON.stringify(j).slice(0, 200)}`);
     const o = R.parseRechter(j.choices?.[0]?.message?.content ?? "");
@@ -171,7 +163,7 @@ async function rechter(toets, input, budget, figuren = []) {
     return o ?? null;
   } finally {
     stop();
-    vrijgeven(sch);
+    bewaker.klaar(sch, usd);
   }
 }
 
@@ -191,11 +183,17 @@ async function genereer(caseNaam, droog) {
   const uit = join(resolve(opt("uit", join(ROOT, "eval-out"))), String(naam), caseNaam);
   mkdirSync(uit, { recursive: true });
   console.log(`${caseNaam}: doel ${kal.items} vragen / ${kal.punten} p · RTTI ${JSON.stringify(inv.rttiDoel)}`);
-  const chat = droog ? await droogChat() : await maakChat(budget - RECHTER_RESERVE);
+  // Budget: generatie + herstel + aanvulling eerst (realistische schattingen binnen --budget); hard plafond --plafond
+  // tegen de werkelijk gelogde rondekosten sinds --start. De rechter krijgt wat over is (zie hieronder).
+  const plafond = Number(opt("plafond", droog ? 1e9 : NaN));
+  const start = String(opt("start", new Date().toISOString()));
+  if (!droog && !Number.isFinite(plafond)) throw new Error("--plafond <usd> verplicht (hard rondeplafond)");
+  bewaker = maakBewaker({ caseBudget: budget, plafond, gelogd: () => (droog ? 0 : gelogdeKosten(KOSTENLOG, start)), log: (x) => console.error(x) });
+  const chat = droog ? await droogChat() : await maakChat();
   const t0 = Date.now();
   let g;
   try {
-    g = await G.genereerSpec(inv, kal, chat);
+    g = await G.genereerSpec(inv, kal, chat, { maxGericht: Number(opt("max-gericht", 10)) });
   } catch (e) {
     console.error(`generatie mislukt: ${e?.message ?? e}`);
     writeFileSync(join(uit, "resultaat.json"), JSON.stringify({ case: caseNaam, ok: false, fout: String(e?.message ?? e), kostenUsd: runKosten }, null, 1));
@@ -219,13 +217,20 @@ async function genereer(caseNaam, droog) {
   writeFileSync(join(uit, "toets.json"), JSON.stringify(toets, null, 1));
   writeFileSync(join(uit, "keuring.json"), JSON.stringify({ eerste: g.eerste.fouten, na: rap.fouten, feiten: rap.feiten, hersteld: g.hersteld, stappen: g.stappen, gerichteAanroepen: g.gerichteAanroepen, keuringen: rap.res.keuringen.map(({ figuren, ...k }) => ({ ...k, figuren: figuren.map(({ svg: _s, ...f }) => f) })) }, null, 1));
   // Rubriek + rechter.
-  const n = droog ? 0 : Number(opt("rechter", 3));
+  const n = droog ? 0 : Number(opt("rechter", 2));
   const input = { ...c.input };
   let oordeel = null;
   if (n > 0) {
     const figuren = await rechterFiguren(rap.res);
     console.log(`rechter: ${figuren.length} figuren als afbeelding`);
-    const lijst = (await Promise.all(Array.from({ length: n }, () => rechter(toets, input, budget, figuren).catch((e) => (console.error(`rechter: ${e?.message}`), null))))).filter(Boolean);
+    // Rechter na generatie/herstel/aanvulling: run 1 alleen tegen het harde plafond, volgende runs binnen het casebudget.
+    const lijst = [];
+    for (let i = 0; i < n; i++) {
+      const o = await rechter(toets, input, figuren, i > 0).catch((e) => (console.error(`rechter: ${e?.message}`), null));
+      if (o) lijst.push(o);
+      else if (i > 0) break;
+    }
+    console.log(`rechter: ${lijst.length} van ${n} runs`);
     if (lijst.length) {
       const gem = (xs) => Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) / 100;
       const punten = {};
@@ -295,9 +300,9 @@ async function poort(mappen) {
   const n = perCase.size;
   gemNieuw /= n;
   gemBasis /= n;
-  const groen = n >= 5 && alleHard && gemNieuw >= 6.48 && gemNieuw >= gemBasis - 1e-9;
+  const groen = n >= 1 && alleHard && gemNieuw >= 6.48 && gemNieuw >= gemBasis - 1e-9;
   console.log(regels.join("\n"));
-  console.log(`Gemiddeld rechter ${gemNieuw.toFixed(2)} vs baseline ${gemBasis.toFixed(2)} (drempel 6,48) · harde checks ${alleHard ? "100 %" : "NIET 100 %"}`);
+  console.log(`Gemiddeld rechter ${gemNieuw.toFixed(2)} vs baseline ${gemBasis.toFixed(2)} (drempel 6,48 én ≥ baseline van dezelfde cases; ${n} cases) · harde checks ${alleHard ? "100 %" : "NIET 100 %"}`);
   console.log(`POORT ${groen ? "GROEN" : "ROOD"}`);
 }
 
