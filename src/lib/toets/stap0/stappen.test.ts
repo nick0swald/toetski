@@ -25,6 +25,8 @@ const kal = { items: 8, punten: 12 };
 /** Nep-chat: eerste generatie = `eerste`, gerichte aanroepen geven een goed vraagstuk met de gevraagde id. */
 function nepChat(eerste: VraagstukSpec[], o: { usd?: number; herstelUsd?: number; teller?: { n: number } } = {}): StapChat {
   return async (m, schema) => {
+    // Docent-review: standaard schoon en gratis (telt niet mee in de teller).
+    if (schema.naam === "docent_review") return { tekst: JSON.stringify({ bevindingen: [], figurenBeter: false }), usd: 0 };
     if (o.teller) o.teller.n++;
     if (schema.naam === "toets_spec") return { tekst: JSON.stringify({ titel: "x", vraagstukken: eerste }), usd: o.usd ?? 0.08 };
     const p = m.at(-1)!.content;
@@ -47,7 +49,7 @@ describe("stap 0 in losse stappen (offline)", () => {
     const teller = { n: 0 };
     const logs: [string, Record<string, unknown>][] = [];
     const { s, fasen } = await totKlaar(nieuweStaat(inv, kal, "t1"), nepChat([kopie("een"), fout("twee"), kopie("drie")], { teller }), { log: (k, d) => logs.push([k, d]) });
-    assert.deepEqual(fasen, ["herstel", "afronden", "klaar"]);
+    assert.deepEqual(fasen, ["herstel", "herstel", "afronden", "klaar"], "spec → (docent-review) → afronden → klaar");
     assert.equal(teller.n, 1, "afgekeurd vraagstuk geschrapt (lengte blijft ≥ 90 %), geen herstelaanroep");
     assert.deepEqual(s.gen!.vraagstukken.map((v) => v.id), ["een", "drie"]);
     assert.deepEqual(s.restFouten, []);

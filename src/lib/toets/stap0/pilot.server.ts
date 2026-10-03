@@ -107,7 +107,7 @@ export function pilotAntwoord(code: string | undefined, env: Env = envVan()): { 
   return { aan: Boolean(stap0Voor(code, env)) };
 }
 
-export function logStap0(soort: "stap" | "alarm" | "klaar", data: Record<string, unknown>): void {
+export function logStap0(soort: "stap" | "alarm" | "klaar" | "review", data: Record<string, unknown>): void {
   const regel = zonderEmail(JSON.stringify({ stap0: soort, t: new Date().toISOString(), ...data }));
   if (soort === "alarm") console.warn(`[stap0-alarm] ${regel}`);
   else console.log(`[stap0] ${regel}`);

@@ -20,6 +20,26 @@ const figuur = {
     {
       type: "object",
       additionalProperties: false,
+      required: ["type", "soort", "eenheid", "waarde", "breedteCm"],
+      properties: {
+        type: { const: "meter" },
+        soort: { enum: ["wijzer", "kwh"] },
+        eenheid: str,
+        min: num,
+        max: num,
+        streep: { type: "number", exclusiveMinimum: 0 },
+        getalElke: { type: "number", exclusiveMinimum: 0 },
+        waarde: num,
+        cijfers: { type: "integer", minimum: 4, maximum: 7 },
+        decimalen: { type: "integer", minimum: 0, maximum: 2 },
+        label: { type: "string" },
+        breedteCm: breedte,
+        controle,
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
       required: ["type", "cilinders", "max", "streep", "getalElke", "breedteCm"],
       properties: {
         type: { const: "maatcilinder" },

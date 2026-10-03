@@ -42,6 +42,107 @@
      "additionalProperties": false,
      "required": [
       "type",
+      "soort",
+      "eenheid",
+      "waarde",
+      "breedteCm"
+     ],
+     "properties": {
+      "type": {
+       "const": "meter"
+      },
+      "soort": {
+       "enum": [
+        "wijzer",
+        "kwh"
+       ]
+      },
+      "eenheid": {
+       "type": "string",
+       "minLength": 1
+      },
+      "min": {
+       "type": "number"
+      },
+      "max": {
+       "type": "number"
+      },
+      "streep": {
+       "type": "number",
+       "exclusiveMinimum": 0
+      },
+      "getalElke": {
+       "type": "number",
+       "exclusiveMinimum": 0
+      },
+      "waarde": {
+       "type": "number"
+      },
+      "cijfers": {
+       "type": "integer",
+       "minimum": 4,
+       "maximum": 7
+      },
+      "decimalen": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 2
+      },
+      "label": {
+       "type": "string"
+      },
+      "breedteCm": {
+       "type": "number",
+       "minimum": 2,
+       "maximum": 16
+      },
+      "controle": {
+       "type": "array",
+       "description": "Alleen metingen van wat IN déze figuur getekend staat. Wat de leerling zelf tekent (pijl, lijn, punten) controleer je in antwoordmodel.figuur.",
+       "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "meting"
+        ],
+        "properties": {
+         "meting": {
+          "type": "string",
+          "minLength": 1
+         },
+         "parameter": {
+          "type": "string",
+          "minLength": 1
+         },
+         "verwacht": {
+          "type": "number"
+         },
+         "tolerantie": {
+          "type": "number",
+          "minimum": 0
+         }
+        },
+        "anyOf": [
+         {
+          "required": [
+           "parameter"
+          ]
+         },
+         {
+          "required": [
+           "verwacht"
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "type",
       "cilinders",
       "max",
       "streep",

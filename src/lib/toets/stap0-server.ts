@@ -47,7 +47,7 @@ export const stap0Stap = createServerFn({ method: "POST" })
         if ((data.input.ronde ?? 1) > 1 || data.input.feedback?.trim()) return { ok: false, error: "Feedbackronde: huidige pijplijn.", fallback: true };
         const v = await bereidVoor(data.input);
         if (!v.k) return { ok: false, error: "Geen NaSk-toets: huidige pijplijn.", fallback: true };
-        const inv = { titel: v.data.titel || "Toets", leerweg: v.data.leerweg, leerjaar: v.data.leerjaar, duurMinuten: v.data.duurMinuten, bronmateriaal: v.bron, antwoordenmateriaal: v.antwoorden || undefined, rttiDoel: v.data.rttiDoel };
+        const inv = { titel: v.data.titel || "Toets", leerweg: v.data.leerweg, leerjaar: v.data.leerjaar, duurMinuten: v.data.duurMinuten, bronmateriaal: v.bron, antwoordenmateriaal: v.antwoorden || undefined, rttiDoel: v.data.rttiDoel, plaatjes: data.input.plaatjes };
         const kal = { items: v.data.aantalVragen, punten: v.data.doelPunten, vorm: v.k.vorm, pct1p: v.k.pct1p };
         staat = S.nieuweStaat(inv, kal, crypto.randomUUID());
         staat.kalVol = { ...v.k, items: kal.items, punten: kal.punten };

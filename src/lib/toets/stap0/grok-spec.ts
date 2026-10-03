@@ -28,6 +28,8 @@ export interface SpecInvoer {
   bronmateriaal: string;
   antwoordenmateriaal?: string;
   rttiDoel: RttiVerdeling;
+  /** Plaatjesmodus van de docent: "zonder" schakelt alleen ai-afbeeldingen (foto's) uit, nooit de figuren uit de bibliotheek. */
+  plaatjes?: "auto" | "met" | "zonder";
 }
 
 export interface Generatie {
@@ -91,7 +93,7 @@ OPBOUW (CSE-stijl)
 - Weinig losse weetvragen: hoogstens het percentage uit de WEETVRAGEN-regel van de opdracht van de punten mag uit 1-punts reproductievragen (rtti R) komen; maak de rest toepassen (T1/T2), inzicht (I) of vragen van 2–3 punten.
 - Alleen stof uit de LESSTOF hieronder, met de woorden van de lesstof (bijv. "resulterende kracht" als de lesstof dat zegt, niet "nettokracht"; geen versnelling, stabiliteit of andere stof die er niet in staat).
 - Realistische, herkenbare situaties uit het dagelijks leven van een vmbo-leerling, met realistische getallen.
-- Namen: gewone Nederlandse voornamen (ook meercultureel), per vraagstuk een andere naam. GEEN schoolnamen, geen plaatsnamen van scholen, geen merknamen of productnamen, geen namen van methodes of uitgevers, geen "Toetski".
+- Namen: ALLEEN gewone westerse/Nederlandse voornamen (bijv. Sanne, Daan, Lotte, Bram, Emma, Luuk), per vraagstuk een andere naam; geen namen van buiten die lijst (dus niet bijv. Fatima, Youssef, Mohammed). GEEN schoolnamen, geen plaatsnamen van scholen, geen merknamen of productnamen, geen namen van methodes of uitgevers, geen "Toetski".
 - Neem NOOIT een vraag uit het boek, de lesstof of een examen letterlijk over. Bedenk nieuwe situaties en nieuwe getallen; ook geen zinnen uit de lesstof overschrijven.
 - Taal: helder Nederlands op het niveau van de klas. Getallen met decimale komma ("2,5"). Eenheden met spatie ("12 V"). Inline opmaak mag: <b>, <i>, <sub>, <sup>.
 
@@ -110,14 +112,21 @@ REKENEN (wordt door code nagerekend; een fout = de vraag wordt niet geplaatst)
 - Gebruik overal dezelfde waarde voor g (die uit de lesstof; anders 10 N/kg).
 - AFRONDEN: rond de einduitkomst af op hetzelfde aantal significante cijfers als het gegeven met de minste significante cijfers (minimaal 2), tenzij de vraag zelf zegt hoe je afrondt. Doe dat in de hele toets op dezelfde manier. Zet in het antwoordmodel de onafgeronde waarde erbij: "Fz = 4,0 × 9,8 = 39,2 N ≈ 39 N".
 
-FIGUREN (alleen als de vraag er echt een nodig heeft; de software tekent ze exact)
-- Toegestane typen: grafiek, oscilloscoop, schakelschema, krachten, maatcilinder, en ai-afbeelding.
+FIGUREN (de software tekent ze exact, in CSE-stijl; een figuur moet de vraag beter maken: iets aflezen, een schakeling of situatie begrijpen, of een uitgewerkt voorbeeld. Nooit een figuur alleen om er een te hebben.)
+- Toegestane typen: grafiek, oscilloscoop, schakelschema, krachten, maatcilinder, meter, en ai-afbeelding.
+- FIGURENMENU per onderwerp (kies wat bij de lesstof past):
+  * SE4.1 krachten/druk/werktuigen: krachten (pijl tekenen, resultante construeren, krachtenschaal), grafiek (veerlengte tegen kracht, druk tegen diepte).
+  * SE4.2 energie/geluid/materie: oscilloscoop (amplitude, trillingstijd, frequentie; beelden A–D vergelijken), maatcilinder (volume aflezen, onderdompelen voor dichtheid), grafiek (opwarmkromme met smelt-/kookpunt, geluidsniveau), meter (kWh-meter: verbruik uit twee standen).
+  * SE4.3 elektriciteit: schakelschema met NEN-symbolen (serie/parallel, schakelaar, zekering, led, motor, stroom- en spanningsmeter in de kring; ook "maak het schema af"), meter (wijzermeter: spanning of stroom aflezen; kWh-meter: verbruik en kosten), grafiek ((U,I)-diagram: weerstand bepalen, lamp tegen weerstand; vermogen tegen tijd).
+  * SE4.4 arbeid/vermogen/beweging: grafiek ((v,t)- en (s,t)-diagram aflezen, afstand als oppervlakte, diagrammen A–D), krachten.
+  * ALG: grafiek tekenen uit een meettabel, aflezen en interpoleren.
 - Elke meetfiguur (alle typen behalve ai-afbeelding) MOET "controle" hebben: een lijst die een meting in de figuur koppelt aan een parameter (bron "figuur") of aan een vaste verwachte waarde. Meetsleutels:
   * grafiek: "y@<x>" (y-waarde van reeks 1 bij x, bijv. "y@4"); bij panelen (kleine diagrammen A–D zonder getallen): "<label>.trend" (1 stijgend, 0 vlak, -1 dalend) en "<label>.eind".
   * oscilloscoop: "A" en "T" (amplitude en trillingstijd in hokjes) bij één paneel; bij meerdere panelen met labels "A.A", "A.T", "B.T", …; "tijdbasis" als het onderschrift "1 hokje = … ms" bevat. Amplitude ≤ hokjesY/2.
   * schakelschema: "takken", "aantal.lamp", "aantal.weerstand", … en waarden uit labels zoals "R1 = 40 Ω" → meting "R1".
   * krachten: "<naam>.N" en "<naam>.hoek" per pijl (hoek in graden: 0 rechts, 90 omhoog, 270 omlaag). breedteCm/hoogteCm op ware grootte, punt binnen het vlak, pijl past binnen de figuur.
   * maatcilinder: "niveau1", "niveau2" (in mL), streep = waarde van de kleinste streep; niveaus op een streep.
+  * meter: "waarde". Wijzermeter: {"type":"meter","soort":"wijzer","eenheid":"V","min":0,"max":10,"streep":0.2,"getalElke":2,"waarde":6.4,"breedteCm":6,"controle":[{"meting":"waarde","parameter":"U"}]} (wijzer op een streep of halve streep). kWh-meter: {"type":"meter","soort":"kwh","eenheid":"kWh","waarde":4512.6,"cijfers":5,"decimalen":1,"breedteCm":6,"controle":[{"meting":"waarde","verwacht":4512.6}]}.
 - Bij precies 4 keuzefiguren (A–D) zet de software ze in een 2×2-raster; gebruik daarvoor panelen met labels A, B, C, D.
 - breedteCm 6–11 (krachtenfiguur: ware grootte, max 14).
 - ai-afbeelding: ALLEEN voor een foto of situatieplaatje dat de situatie herkenbaar maakt, nooit om iets af te lezen of te meten; beschrijving zonder getallen en meetwaarden; hoogstens 2 per toets. Geen getallen of meetwoorden (aflezen, hokjes, grafiek) in een vraag die alleen een ai-afbeelding heeft.
@@ -167,7 +176,7 @@ export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "pun
     `LENGTE: totaal ${Math.round(kal.punten * LENGTE_DOEL)} punten (minimaal ${Math.ceil(kal.punten * LENGTE_MIN)}, maximaal ${Math.floor(kal.punten * LENGTE_MAX)}) verdeeld over ongeveer ${Math.ceil(kal.items * LENGTE_DOEL)} deelvragen (minimaal ${Math.ceil(kal.items * LENGTE_MIN)}), dus ${nVs[0]}–${nVs[1]} vraagstukken van 3 of 4 deelvragen. Dit is bewust meer dan de toetstijd: de software kiest daarna zelf. Tel de punten na voordat je antwoordt.`,
     `RTTI-doel (percentage van de punten): R ${r.R}%, T1 ${r.T1}%, T2 ${r.T2}%, I ${r.I}%.`,
     kal.vorm ? `VRAAGVORMEN (aantal deelvragen, ongeveer, zoals echte toetsen van deze klas): ${vormRegel(kal.vorm, kal.items)}${kal.pct1p ? `; ongeveer ${kal.pct1p}% van de deelvragen is 1 punt` : ""}.` : "",
-    `FIGUREN: gebruik in deze toets 2–4 figuren uit de toegestane typen waar de lesstof dat vraagt (bijv. een oscilloscoopbeeld bij geluid, een grafiek bij beweging of metingen, een schakelschema bij elektriciteit, een krachtenfiguur bij krachten), elk met "controle".`,
+    `FIGUREN: een goede toets heeft 2–4 figuren waar ze iets toevoegen (een schema, een meteraflezing, een grafiek of een uitgewerkt voorbeeld in de context), gekozen uit het FIGURENMENU bij de onderwerpen van deze lesstof, elk met "controle". Een toets zonder enige figuur is bij deze stof bijna altijd zwakker; voeg nooit een figuur toe die niets toevoegt.${inv.plaatjes === "zonder" ? " Geen ai-afbeelding (de docent wil geen foto's); figuren uit de bibliotheek wel." : ""}`,
     pars.length ? `PARAGRAFEN: elke paragraaf komt terug in minstens TWEE verschillende vraagstukken (waar de lesstof dat toelaat; zo blijft de dekking heel als er een vraagstuk afvalt), verder verdeeld naar de hoeveelheid stof. Zet de paragraafcode vooraan in elk leerdoel. Paragrafen: ${pars.map((p) => `${p.code} ${p.titel}`).join("; ")}.` : "",
     inv.leerjaar <= 2 ? `NIVEAU: onderbouw klas ${inv.leerjaar}: korte inleidingen, eenvoudige taal, rekenwerk in 1–2 stappen; wel CSE-opbouw met vraagstukken.` : "",
     `WEETVRAGEN: hoogstens ${Math.round((MAX_1P_R[inv.leerweg] ?? 0.35) * 100)}% van de punten (${Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * kal.punten)} punten) uit 1-punts R-vragen.`,
@@ -634,7 +643,7 @@ function contextRegels(gen: Generatie, inv: SpecInvoer, behalve: string, extraPu
  * Prompt voor een NIEUW, volledig vraagstuk: exacte punten per deelvraag, uit de minst getoetste paragrafen van
  * dezelfde lesstof, met de begrippen die op zijn, en (bij een herkansing) waarom de vorige poging is afgekeurd.
  */
-export function aanvulPrompt(o: { id: string; punten: number; paragrafen: string[]; gen: Generatie; inv: SpecInvoer; fouten?: string[]; vorige?: VraagstukSpec }): string {
+export function aanvulPrompt(o: { id: string; punten: number; paragrafen: string[]; gen: Generatie; inv: SpecInvoer; fouten?: string[]; vorige?: VraagstukSpec; figuur?: string }): string {
   const verdeling = puntenVerdeling(o.punten);
   const p = verdeling.reduce((a, b) => a + b, 0);
   const kop = `Schrijf nu ALLEEN één vraagstuk (JSON: {"vraagstuk": …}). De rest van de toets staat al vast:\n${overzicht(o.gen, o.id)}`;
@@ -642,7 +651,8 @@ export function aanvulPrompt(o: { id: string; punten: number; paragrafen: string
   const terug = o.vorige && o.fouten?.length
     ? `\n\nJE VORIGE POGING ("${o.vorige.titel}") IS DOOR DE SOFTWARE AFGEKEURD. Waarom:\n- ${waaromAfgekeurd(o.fouten).join("\n- ")}\nLetterlijke bevindingen:\n- ${o.fouten.slice(0, 8).join("\n- ")}\nSchrijf een ANDER vraagstuk (andere situatie en andere begrippen) waarin deze punten niet terugkomen.`
     : "";
-  return [kop, "", opdracht, ...contextRegels(o.gen, o.inv, o.id, p), "Houd je verder aan alle regels van de opdracht." + terug].join("\n");
+  const fig = o.figuur ? `FIGUUR: dit vraagstuk krijgt een figuur die de vragen echt beter maakt (de docent-review stelde voor: ${o.figuur}). Kies uit het FIGURENMENU, met "controle", en laat minstens één deelvraag de figuur echt gebruiken (aflezen, aanvullen of redeneren).` : "";
+  return [kop, "", opdracht, fig, ...contextRegels(o.gen, o.inv, o.id, p), "Houd je verder aan alle regels van de opdracht." + terug].filter(Boolean).join("\n");
 }
 
 /**
@@ -707,6 +717,15 @@ export const puntenVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s +
 /** "Waarde" van een vraagstuk voor het inkorten: punten op T2/I-niveau (inzicht) tellen het zwaarst. */
 export const waardeVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0) * (d.rtti === "T2" || d.rtti === "I" ? 2 : 1), 0);
 
+/** Aantal figuren uit de bibliotheek (geen ai-afbeelding) in de leerlingversie van de toets. */
+export function figuurAantal(gen: Pick<Generatie, "vraagstukken">): number {
+  const telt = (f?: FiguurSpec) => Boolean(f && f.type !== "ai-afbeelding");
+  return gen.vraagstukken.reduce((s, v) => s + (telt(v.figuur) ? 1 : 0) + (v.deelvragen ?? []).filter((d) => telt(d.figuur) || telt(d.antwoordmodel?.figuur)).length, 0);
+}
+/** Figuren worden bij schrappen/inkorten beschermd: nooit onder min(3, huidig aantal). */
+export const FIGUUR_BEHOUD = 3;
+const figuurOk = (voor: number, na: number) => na >= voor || na >= FIGUUR_BEHOUD;
+
 /** Vraagstuk zonder zijn laatste deelvraag (alleen bij 4 deelvragen: een vraagstuk heeft er minstens 3). */
 export function zonderStaart(v: VraagstukSpec): VraagstukSpec | null {
   return v.deelvragen.length >= 4 ? { ...v, deelvragen: v.deelvragen.slice(0, -1) } : null;
@@ -727,7 +746,8 @@ export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kali
     const ontbr = new Set(r.feiten.ontbrekendeParagrafen);
     const fout = gen.vraagstukken.filter((v) => r.perId[v.id]?.length);
     if (!fout.length) break;
-    const heel = (f: Keuringsrapport["feiten"]) => f.lengtePct >= 90 && f.vragen >= minV && f.ontbrekendeParagrafen.every((p) => ontbr.has(p));
+    const fig0 = figuurAantal(gen);
+    const heel = (f: Keuringsrapport["feiten"], g: Generatie) => f.lengtePct >= 90 && f.vragen >= minV && f.ontbrekendeParagrafen.every((p) => ontbr.has(p)) && figuurOk(fig0, figuurAantal(g));
     // 1. alleen de laatste deelvraag weg, als het vraagstuk daarmee goed wordt
     const staart = fout
       .map((v) => {
@@ -735,7 +755,7 @@ export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kali
         if (!v2) return null;
         const g: Generatie = { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x === v ? v2 : x)) };
         const r2 = keurGeneratie(g, inv, kal);
-        return !r2.perId[v.id]?.length && heel(r2.feiten) && vraagstukFouten(r2) < vraagstukFouten(r) ? { v, g, d: v.deelvragen.at(-1)! } : null;
+        return !r2.perId[v.id]?.length && heel(r2.feiten, g) && vraagstukFouten(r2) < vraagstukFouten(r) ? { v, g, d: v.deelvragen.at(-1)! } : null;
       })
       .filter((x): x is NonNullable<typeof x> => Boolean(x));
     if (staart[0]) {
@@ -748,10 +768,11 @@ export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kali
     const kand = fout
       .map((v) => {
         const g: Generatie = { ...gen, vraagstukken: gen.vraagstukken.filter((x) => x !== v) };
-        return { v, g, ok: heel(keurGeneratie(g, inv, kal).feiten), nFout: r.perId[v.id]!.length, waarde: waardeVan(v) };
+        return { v, g, ok: heel(keurGeneratie(g, inv, kal).feiten, g), nFout: r.perId[v.id]!.length, waarde: waardeVan(v), fig: figuurAantal(g) < fig0 };
       })
       .filter((k) => k.ok)
-      .sort((a, b) => b.nFout - a.nFout || a.waarde - b.waarde);
+      // vraagstukken zonder figuur eerst (een figuurvraagstuk gaat liever naar herstel)
+      .sort((a, b) => Number(a.fig) - Number(b.fig) || b.nFout - a.nFout || a.waarde - b.waarde);
     const k = kand[0];
     if (!k) break;
     stappen.push({ wat: `geschrapt vóór herstel (${puntenVan(k.v)} p, ${k.nFout} fout(en); lengte en dekking blijven heel)`, id: k.v.id, ok: true, fouten: r.perId[k.v.id] });
@@ -779,13 +800,16 @@ export function inkorten(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie,
     if (r.feiten.lengtePct <= 110) break;
     const ontbr = r.feiten.ontbrekendeParagrafen.length;
     const fout0 = vraagstukFouten(r);
-    type Kand = { gen: Generatie; pct: number; waarde: number; punten: number; pos: number; wat: string; id: string; deel: boolean };
+    const fig0 = figuurAantal(gen);
+    type Kand = { gen: Generatie; pct: number; waarde: number; punten: number; pos: number; wat: string; id: string; deel: boolean; figVerlies?: boolean };
     const kand: Kand[] = [];
     const beoordeel = (g: Generatie, k: Omit<Kand, "gen" | "pct">) => {
       const r2 = keurGeneratie(g, inv, kal);
       const f2 = r2.feiten;
       if (f2.lengtePct < 90 || f2.ontbrekendeParagrafen.length > ontbr || f2.vragen < minV || vraagstukFouten(r2) > fout0) return;
-      kand.push({ gen: g, pct: f2.lengtePct, ...k });
+      const fig = figuurAantal(g);
+      if (!figuurOk(fig0, fig)) return;
+      kand.push({ gen: g, pct: f2.lengtePct, ...k, figVerlies: fig < fig0 });
     };
     gen.vraagstukken.forEach((v, pos) => {
       const v2 = zonderStaart(v);
@@ -796,7 +820,9 @@ export function inkorten(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie,
       beoordeel({ ...gen, vraagstukken: gen.vraagstukken.filter((x) => x !== v) }, { wat: `geschrapt (te lang, ${puntenVan(v)} p)`, id: v.id, waarde: waardeVan(v), punten: puntenVan(v), pos, deel: false });
     });
     if (!kand.length) break;
-    const laag = (a: Kand, b: Kand) => a.waarde / a.punten - b.waarde / b.punten || a.waarde - b.waarde || b.pos - a.pos;
+    // Figuren beschermen: bij gelijke keuze gaat een kandidaat zonder figuurverlies voor (zie `laag`); de harde
+    // ondergrens (figuurOk) staat in `beoordeel`.
+    const laag = (a: Kand, b: Kand) => a.waarde / a.punten - b.waarde / b.punten || Number(Boolean(a.figVerlies)) - Number(Boolean(b.figVerlies)) || a.waarde - b.waarde || b.pos - a.pos;
     const hoogsteOnder = (l: Kand[]) => l.filter((k) => k.pct <= 110).sort((a, b) => b.pct - a.pct || laag(a, b))[0];
     const restOver = r.feiten.lengtePct - 110;
     const grootsteDeel = Math.max(0, ...kand.filter((k) => k.deel).map((k) => r.feiten.lengtePct - k.pct));
@@ -949,6 +975,8 @@ export function figuurTekst(f: FiguurSpec | undefined): string {
       return `[figuur: krachtenfiguur (${f.voorwerp}), schaal 1 cm ≙ ${n(f.schaalN)} N; ${f.pijlen.map((p) => `${p.naam}: ${n(p.grootteN)} N onder ${n(p.hoek)}°`).join(" | ")}]`;
     case "maatcilinder":
       return `[figuur: maatcilinder(s) tot ${n(f.max)} mL, kleinste streep ${n(f.streep)} mL; ${f.cilinders.map((c) => `${c.label ? `${c.label}: ` : ""}${n(c.niveau)} mL${c.voorwerp ? " met voorwerp" : ""}`).join(" | ")}]`;
+    case "meter":
+      return f.soort === "kwh" ? `[figuur: kWh-meter, stand ${n(f.waarde)} kWh]` : `[figuur: wijzermeter (${f.eenheid}), schaal ${n(f.min ?? 0)}–${n(f.max ?? 10)}, wijzer op ${n(f.waarde)} ${f.eenheid}]`;
     case "ai-afbeelding":
       return `[foto: ${f.beschrijving}]`;
   }

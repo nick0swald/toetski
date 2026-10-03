@@ -23,7 +23,7 @@ const norm = (s: string) => kaal(s).toLowerCase().replace(/[^a-zà-ÿ0-9\s]/g, "
 
 // ── 4. figuurverwijzingen ────────────────────────────────────────────────────────────────────────
 const VERWIJS_FIG =
-  /\b(?:de|deze|het|die|onderstaande|bovenstaande|zie|in|uit|op)\s+(?:figuur|afbeelding|diagram|grafiek|tekening|oscilloscoopbeeld|schakelschema|schema|assenstelsel|maatcilinder)\b|\bfiguur\s+\d|\b(?:hieronder|hiernaast|hierboven)\b|\bje ziet\s+(?:hier\s+)?(?:een|het|de|twee|drie|vier)?\s*(?:figuur|grafiek|diagram|oscilloscoopbeeld|beelden?|schema|tekening|afbeelding|maatcilinder|krachten)/i;
+  /\b(?:de|deze|het|die|onderstaande|bovenstaande|zie|in|uit|op)\s+(?:figuur|afbeelding|diagram|grafiek|tekening|oscilloscoopbeeld|schakelschema|schema|assenstelsel|maatcilinder|meter|kWh-meter|wijzer)\b|\bfiguur\s+\d|\b(?:hieronder|hiernaast|hierboven)\b|\bje ziet\s+(?:hier\s+)?(?:een|het|de|twee|drie|vier)?\s*(?:figuur|grafiek|diagram|oscilloscoopbeeld|beelden?|schema|tekening|afbeelding|maatcilinder|krachten)/i;
 const VERWIJS_TABEL = /\b(?:de|deze|het|onderstaande|bovenstaande|zie|in|uit)\s+tabel\b|\btabel\s+\d/i;
 const LETTERS = /\b(?:beeld|beelden|diagram|diagrammen|grafiek|grafieken|figuur|figuren|oscilloscoopbeeld(?:en)?)\s+([A-F])(?:\s*(?:–|-|t\/m|tot en met|en|,)\s*([A-F]))?\b/gi;
 

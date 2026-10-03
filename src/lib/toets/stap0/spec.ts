@@ -205,7 +205,28 @@ export interface AiAfbeeldingFiguur {
   hoogteCm: number;
 }
 
-export type MeetFiguurSpec = MaatcilinderFiguur | SchakelschemaFiguur | GrafiekFiguur | KrachtenFiguur | OscilloscoopFiguur;
+/**
+ * Meter: wijzermeter (analoge spannings-/stroommeter: schaal min–max, streepjes, wijzer op `waarde`) of kWh-meter
+ * (telwerk met `cijfers` hele cijfers en `decimalen` rode decimalen). Meetsleutel: "waarde".
+ */
+export interface MeterFiguur {
+  type: "meter";
+  soort: "wijzer" | "kwh";
+  /** Eenheid op de wijzerplaat ("V", "A", "mA"); bij kWh: "kWh". */
+  eenheid: string;
+  min?: number;
+  max?: number;
+  streep?: number;
+  getalElke?: number;
+  waarde: number;
+  cijfers?: number;
+  decimalen?: number;
+  label?: string;
+  breedteCm: number;
+  controle?: FiguurControle[];
+}
+
+export type MeetFiguurSpec = MaatcilinderFiguur | SchakelschemaFiguur | GrafiekFiguur | KrachtenFiguur | OscilloscoopFiguur | MeterFiguur;
 export type FiguurSpec = MeetFiguurSpec | AiAfbeeldingFiguur;
 export type FiguurType = FiguurSpec["type"];
 

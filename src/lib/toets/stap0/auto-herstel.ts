@@ -7,11 +7,14 @@
  *     (krachten: pijl uit grootte + richting in de tekst; grafiek: de getoonde reeks wordt de rode antwoordreeks);
  *  4. getal-weggever binnen een vraagstuk → "Ga uit van …" met een andere waarde (en de berekening opnieuw);
  *  5. krachtenfiguur: kader passend om voorwerp + pijlen (niets afgesneden, geen lege ruimte), leerling- en
- *     antwoordfiguur even groot.
+ *     antwoordfiguur even groot;
+ *  6. namen: een persoonsnaam die niet op de westerse/Nederlandse namenlijst staat, wordt in het hele vraagstuk
+ *     (ook antwoordmodel) vervangen door een naam van de lijst (stil; nooit een keuringsbevinding of aanroep).
  */
 import type { Berekening, FiguurControle, FiguurSpec, KrachtenFiguur, Parameter, VraagstukSpec } from "./spec.ts";
 import { figuurSvg, isTekenFiguur, meetFiguur } from "./figuren/index.ts";
 import { getalInTekst, leesNl, nl, rekenUit } from "./reken.ts";
+import { gebruikteNamen, vervangNamen } from "./namen.ts";
 
 type Deelvraag = VraagstukSpec["deelvragen"][number];
 type Letter = "A" | "B" | "C" | "D" | "E";
@@ -325,9 +328,11 @@ function fixKrachtenKader(v: VraagstukSpec, stappen: AutoStap[]): void {
 }
 
 // ── alles ────────────────────────────────────────────────────────────────────────────────────────
-export function autoHerstelVraagstuk(v0: VraagstukSpec): { v: VraagstukSpec; stappen: AutoStap[] } {
-  const v = structuredClone(v0);
+export function autoHerstelVraagstuk(v0: VraagstukSpec, vermijdNamen: Iterable<string> = []): { v: VraagstukSpec; stappen: AutoStap[] } {
   const stappen: AutoStap[] = [];
+  const nm = vervangNamen(structuredClone(v0), vermijdNamen);
+  const v = nm.v;
+  if (nm.vervangen.length) stappen.push({ id: v.id, wat: `namen vervangen: ${nm.vervangen.map(([a, b]) => `${a} → ${b}`).join(", ")}` });
   if (!Array.isArray(v.deelvragen)) return { v, stappen };
   const bekend = new Set([...(v.parameters ?? []), ...v.deelvragen.flatMap((d) => d.parameters ?? [])].map((p) => p.naam));
   // Lege tekenfiguur op vraagstukniveau (hoort bij de eerste deelvraag) terwijl een latere deelvraag de tekenvraag is
@@ -370,8 +375,9 @@ export function autoHerstelVraagstuk(v0: VraagstukSpec): { v: VraagstukSpec; sta
 
 export function autoHerstel<G extends { vraagstukken: VraagstukSpec[] }>(gen: G): { gen: G; stappen: AutoStap[] } {
   const stappen: AutoStap[] = [];
-  const vs = (gen.vraagstukken ?? []).map((v) => {
-    const r = autoHerstelVraagstuk(v);
+  const lijst = gen.vraagstukken ?? [];
+  const vs = lijst.map((v, i) => {
+    const r = autoHerstelVraagstuk(v, gebruikteNamen(lijst.filter((_, j) => j !== i)));
     stappen.push(...r.stappen);
     return r.v;
   });

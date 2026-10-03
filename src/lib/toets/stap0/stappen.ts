@@ -13,9 +13,11 @@
  * Pure logica: de modelaanroep komt binnen als `StapChat` (productie: xaiChat met XAI_API_KEY; tests: nep).
  */
 import { autoHerstel } from "./auto-herstel.ts";
+import { REVIEW, reviewPrompt, reviewSchema, verwerkReview, type ReviewUitslag } from "./docent-review.ts";
 import {
   generatieSchema,
   aanvulPrompt,
+  figuurAantal,
   foutHandtekening,
   gerichtPrompt,
   inkorten,
@@ -67,6 +69,7 @@ export interface Stap0Kosten {
   usd: number;
   specUsd: number;
   herstelUsd: number;
+  reviewUsd?: number;
   aanroepen: number;
   gericht: number;
   mislukt: number;
@@ -78,6 +81,21 @@ export interface AanvulTaak {
   paragrafen: string[];
   vorige?: VraagstukSpec;
   fouten?: string[];
+  /** Figuurtaak uit de docent-review: dit nieuwe vraagstuk moet een (zinvolle) figuur hebben; één poging. */
+  figuur?: string;
+}
+
+/** Docent-review: rondes, open herstelopdrachten per vraagstuk en de first-time-right-meting. */
+export interface Stap0Review {
+  rondes: number;
+  open: Record<string, string[]>;
+  /** Was de eerste review schoon (geen bevinding met ernst "hoog", geen figuurvoorstel)? = first-time-right. */
+  eersteSchoon?: boolean;
+  bevindingen: number;
+  /** Door de review aangezette herstellingen die geaccepteerd zijn (laatste ronde / totaal). */
+  hersteld: number;
+  hersteldTotaal: number;
+  figuurTaak?: "open" | "gelukt" | "mislukt";
 }
 
 export interface Stap0Staat {
@@ -112,6 +130,9 @@ export interface Stap0Staat {
   vul?: { sig?: string; gelijk: number; mislukt: number; strategie: "nieuw" | "uitbreiden"; laatste?: string[]; per?: Record<string, { sig: string; n: number }>; uit?: string[]; wissels?: number };
   /** Bewust geaccepteerde afwijkingen (bijv. lengte 88–90 % na vastgelopen aanvullen). */
   waarschuwingen?: string[];
+  review?: Stap0Review;
+  /** Aantal figuren (bibliotheek) in de ruwe eerste generatie en na eerst-schrappen. */
+  figuren?: { ruw: number; naSchrap: number };
 }
 
 export type StapChat = (
@@ -124,7 +145,7 @@ export interface StapOpties {
   nu?: () => number;
   budget?: Partial<Record<keyof typeof STAP0_BUDGET, number>>;
   /** Monitoring (productie: console → Vercel-logs). */
-  log?: (soort: "stap" | "alarm" | "klaar", data: Record<string, unknown>) => void;
+  log?: (soort: "stap" | "alarm" | "klaar" | "review", data: Record<string, unknown>) => void;
 }
 
 export function nieuweStaat(inv: SpecInvoer, kal: Stap0Kal, id: string, nu = Date.now()): Stap0Staat {
@@ -164,10 +185,11 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     return r.gen;
   };
   const past = (reserve: number) => s.kosten.usd + reserve <= B.vangnetUsd + 1e-9;
-  const boek = (usd: number, soort: "spec" | "herstel") => {
+  const boek = (usd: number, soort: "spec" | "herstel" | "review") => {
     s.kosten.usd = Math.round((s.kosten.usd + usd) * 1e6) / 1e6;
     s.kosten.aanroepen++;
     if (soort === "spec") s.kosten.specUsd = Math.round((s.kosten.specUsd + usd) * 1e6) / 1e6;
+    else if (soort === "review") s.kosten.reviewUsd = Math.round(((s.kosten.reviewUsd ?? 0) + usd) * 1e6) / 1e6;
     else s.kosten.herstelUsd = Math.round((s.kosten.herstelUsd + usd) * 1e6) / 1e6;
     if (!s.alarm && s.kosten.usd > B.alarmUsd) {
       s.alarm = true;
@@ -175,7 +197,7 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     }
   };
   // Eén xAI-5xx (kost niets) mag één keer opnieuw, telt niet als extra gerichte aanroep.
-  const roep = async (msgs: Parameters<StapChat>[0], schema: Parameters<StapChat>[1], o: Parameters<StapChat>[2], soort: "spec" | "herstel") => {
+  const roep = async (msgs: Parameters<StapChat>[0], schema: Parameters<StapChat>[1], o: Parameters<StapChat>[2], soort: "spec" | "herstel" | "review") => {
     try {
       const r = await chat(msgs, schema, o);
       boek(r.usd, soort);
@@ -207,6 +229,37 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     }
   };
 
+  /** Eén docent-reviewaanroep; bevindingen worden herstelopdrachten (volgende stap). Een mislukte review blokkeert nooit. */
+  const doeReview = async (gen: Generatie) => {
+    const rv = (s.review ??= { rondes: 0, open: {}, bevindingen: 0, hersteld: 0, hersteldTotaal: 0 });
+    rv.rondes++;
+    rv.hersteld = 0;
+    const p = reviewPrompt(gen, s.inv);
+    try {
+      const t = await roep([{ role: "system", content: p.system }, { role: "user", content: p.user }], { naam: "docent_review", schema: reviewSchema() }, { maxTokens: REVIEW.maxTokens, timeoutMs: REVIEW.timeoutMs }, "review");
+      const u = verwerkReview(JSON.parse(t) as ReviewUitslag, gen);
+      if (rv.rondes === 1) rv.eersteSchoon = u.schoon;
+      rv.open = u.perVraagstuk;
+      const n = Object.values(u.perVraagstuk).reduce((a, l) => a + l.length, 0);
+      rv.bevindingen += n;
+      log({ wat: `docent-review ronde ${rv.rondes}: ${u.schoon ? "schoon" : `${n} herstelopdracht(en) in ${Object.keys(u.perVraagstuk).length} vraagstuk(ken)${u.figurenBeter ? "; figuren zouden de toets beter maken" : ""}`}`, id: "", ok: u.schoon, fouten: Object.entries(u.perVraagstuk).flatMap(([id, l]) => l.map((f) => `[${id}] ${f}`)).slice(0, 12) });
+      for (const b of u.toets) log({ wat: `docent-review (toets, ${b.soort}, ${b.ernst})`, id: "", ok: b.ernst !== "hoog", fouten: [`${b.probleem} → ${b.fix}`.slice(0, 300)] });
+      opts.log?.("review", { id: s.id, ronde: rv.rondes, schoon: u.schoon, firstTimeRight: rv.eersteSchoon, figurenBeter: u.figurenBeter, bevindingen: [...Object.entries(u.perVraagstuk).flatMap(([id, l]) => l.map((f) => `[${id}] ${f}`)), ...u.toets.map((b) => `[toets] ${b.soort}/${b.ernst}: ${b.probleem}`)].slice(0, 20) });
+      // "Zou deze toets beter worden met figuren of uitgewerkte voorbeelden?" Ja → één poging voor één figuurvraagstuk.
+      if (u.figurenBeter && !rv.figuurTaak && figuurAantal(gen) < 2) {
+        const telling = paragraafTelling(gen.vraagstukken, s.inv);
+        s.aanvulling.open.push({ id: `figuur-${++s.aanvulling.n}`, punten: 4, paragrafen: telling.slice(0, 2).map((x) => `${x.code} ${x.titel}`), figuur: u.figuurVoorstel ?? "een figuur die de vragen echt beter maakt (schema, aflezing, grafiek of uitgewerkt voorbeeld)" });
+        rv.figuurTaak = "open";
+      }
+    } catch (e) {
+      const usd = (e as { usd?: number }).usd ?? 0;
+      if (usd) boek(usd, "review");
+      rv.open = {};
+      if (rv.rondes === 1) rv.eersteSchoon = undefined;
+      log({ wat: "docent-review mislukt (geen blokkade)", id: "", ok: false, fouten: [String((e as Error)?.message ?? e).slice(0, 160)] });
+    }
+  };
+
   s.laatsteFout = undefined;
   if (s.fase === "spec") {
     if (!past(B.reserveSpecUsd)) throw new Error("Vangnet bereikt vóór de eerste generatie.");
@@ -232,9 +285,11 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     s.ruwLengtePct = r0.feiten.lengtePct;
     s.ruwFouten = r0.fouten.length;
     let gen = auto(ruw);
+    const fRuw = figuurAantal(gen);
     const vooraf = schrapAfgekeurd(gen, s.inv, k);
     gen = vooraf.gen;
     vooraf.stappen.forEach(log);
+    s.figuren = { ruw: fRuw, naSchrap: figuurAantal(gen) };
     s.gen = gen;
     s.fase = "herstel";
   } else if (s.fase === "herstel") {
@@ -247,7 +302,13 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     let rap = keur(gen);
     const tijdOp = nu() - s.tijden.start > B.maxTotaalMs - 45_000;
     const minV = Math.ceil(k.items * 0.85);
-    if (allesGoed(rap, k)) s.fase = "afronden";
+    const reviewOpen = () => Object.keys(s.review?.open ?? {}).filter((id) => gen.vraagstukken.some((v) => v.id === id));
+    const figuurOpen = () => s.aanvulling.open.some((t) => t.figuur);
+    // Docent-review: na groen op de deterministische keuring; ronde 2 alleen als ronde 1 iets liet herstellen.
+    const reviewMag = () => !tijdOp && past(REVIEW.reserveUsd) && (!s.review || (s.review.rondes < REVIEW.maxRondes && s.review.hersteld > 0));
+    if (allesGoed(rap, k) && !reviewOpen().length && !figuurOpen() && reviewMag()) {
+      await doeReview(gen);
+    } else if (allesGoed(rap, k) && !reviewOpen().length && !figuurOpen()) s.fase = "afronden";
     else if (tijdOp || !past(B.reserveVraagstukUsd)) {
       s.stopReden = tijdOp ? "tijd" : "vangnet";
       s.fase = "afronden";
@@ -267,26 +328,34 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
         }
       };
       const nBudget = Math.max(0, Math.floor((B.vangnetUsd - s.kosten.usd) / B.reserveVraagstukUsd + 1e-9));
-      const fout = fouteIds(rap, gen);
+      const fout = [...new Set([...fouteIds(rap, gen), ...reviewOpen()])];
       if (fout.length) {
         // Herstel: minst geprobeerde eerst; hoogstens `parallel` tegelijk.
         const batch = [...fout].sort((a, b) => (s.pogingen[a] ?? 0) - (s.pogingen[b] ?? 0)).slice(0, Math.min(B.parallel, nBudget));
-        const nieuw = await pool(batch, B.parallel, (id) => vraag(gerichtPrompt({ soort: "herstel", vraagstuk: gen.vraagstukken.find((v) => v.id === id)!, fouten: rap.perId[id]!, gen })));
+        const reviewFouten = (id: string) => (s.review?.open[id] ?? []).map((f) => `docent-review: ${f}`);
+        const nieuw = await pool(batch, B.parallel, (id) => vraag(gerichtPrompt({ soort: "herstel", vraagstuk: gen.vraagstukken.find((v) => v.id === id)!, fouten: [...(rap.perId[id] ?? []), ...reviewFouten(id)], gen })));
         batch.forEach((id, i) => {
           const n = nieuw[i];
+          // Alleen door de review (deterministisch al goed): één poging; de nieuwe versie moet de harde keuring halen.
+          const doorReview = !rap.perId[id]?.length;
+          if (doorReview && s.review) delete s.review.open[id];
           if (n) {
             const kand: Generatie = { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x.id === id ? metId(n, id) : x)) };
             const rk = keur(kand);
             const eigen = rk.perId[id] ?? [];
-            const beter = vraagstukFouten(rk) < vraagstukFouten(rap);
-            log({ wat: `opnieuw (ronde ${s.rondes})${eigen.length ? ` afgewezen: ${foutHandtekening(eigen)}` : ""}`, id, ok: eigen.length === 0, fouten: eigen });
+            const beter = doorReview ? eigen.length === 0 && vraagstukFouten(rk) <= vraagstukFouten(rap) : vraagstukFouten(rk) < vraagstukFouten(rap);
+            log({ wat: `opnieuw (ronde ${s.rondes}${doorReview ? ", docent-review" : ""})${eigen.length ? ` afgewezen: ${foutHandtekening(eigen)}` : ""}`, id, ok: eigen.length === 0, fouten: eigen });
             if (beter) {
               gen = kand;
               rap = rk;
+              if (doorReview && s.review) {
+                s.review.hersteld++;
+                s.review.hersteldTotaal++;
+              }
             }
             if (eigen.length === 0 && beter) return;
           }
-          s.pogingen[id] = (s.pogingen[id] ?? 0) + 1;
+          if (!doorReview) s.pogingen[id] = (s.pogingen[id] ?? 0) + 1;
         });
         // Te vaak mislukt. Weg mag alleen als lengte (≥ 90 %), aantal deelvragen en dekking heel blijven; anders
         // eerst alleen de laatste deelvraag (als het vraagstuk daarmee goed is), en anders wordt het vraagstuk
@@ -364,20 +433,35 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
           });
         }
         taken = taken.slice(0, Math.min(B.parallel, nBudget));
-        const nieuw = await pool(taken, B.parallel, (t) => vraag(aanvulPrompt({ id: t.id, punten: t.punten, paragrafen: t.paragrafen, gen, inv: s.inv, vorige: t.vorige, fouten: t.fouten })));
+        const nieuw = await pool(taken, B.parallel, (t) => vraag(aanvulPrompt({ id: t.id, punten: t.punten, paragrafen: t.paragrafen, gen, inv: s.inv, vorige: t.vorige, fouten: t.fouten, figuur: t.figuur })));
         const open: AanvulTaak[] = s.aanvulling.open.filter((t) => !taken.includes(t));
         taken.forEach((t, i) => {
           const v = nieuw[i];
+          const figuurMislukt = (waarom: string) => {
+            if (s.review) s.review.figuurTaak = "mislukt";
+            (s.waarschuwingen ??= []).push(`figuren: geen geldige figuurvraag toegevoegd (${waarom}); toets blijft zonder extra figuur`);
+          };
           if (!v) {
-            open.push(t);
+            if (t.figuur) figuurMislukt("aanroep mislukt");
+            else open.push(t);
             return;
           }
           const voor = vraagstukFouten(rap);
           const kand: Generatie = { ...gen, vraagstukken: [...gen.vraagstukken, metId(v, t.id)] };
           const rk = keur(kand);
           const eigen = rk.perId[t.id] ?? [];
-          const fouten = eigen.length ? eigen : vraagstukFouten(rk) > voor ? andereFouten(rk, t.id) : [];
+          const zonderFiguur = t.figuur && figuurAantal(kand) <= figuurAantal(gen) ? ["figuur: het nieuwe vraagstuk heeft geen figuur"] : [];
+          const fouten = eigen.length ? eigen : vraagstukFouten(rk) > voor ? andereFouten(rk, t.id) : zonderFiguur;
           const ok = fouten.length === 0;
+          if (t.figuur) {
+            log({ wat: `figuurvraagstuk ${ok ? "toegevoegd" : `afgewezen: ${foutHandtekening(fouten)}`} (docent-review)`, id: t.id, ok, fouten });
+            if (ok) {
+              gen = kand;
+              rap = rk;
+              if (s.review) s.review.figuurTaak = "gelukt";
+            } else figuurMislukt(foutHandtekening(fouten));
+            return;
+          }
           log({ wat: `aanvulling ${puntenVan(v)}/${t.punten} p (ronde ${s.rondes})${ok ? "" : ` afgewezen: ${foutHandtekening(fouten)}`}`, id: t.id, ok, fouten });
           if (ok) {
             gen = kand;
@@ -416,7 +500,7 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
           s.vul = { gelijk: 0, mislukt: 0, strategie: "nieuw", uit: s.vul.uit, wissels: (s.vul.wissels ?? 0) + 1 };
         }
       }
-      if (s.fase === "herstel" && allesGoed(keur(gen), k) && !s.aanvulling.open.some((t) => t.id.startsWith("vervang-"))) s.fase = "afronden";
+      if (s.fase === "herstel" && allesGoed(keur(gen), k) && !s.aanvulling.open.some((t) => t.id.startsWith("vervang-") || t.figuur) && !reviewOpen().length && !reviewMag()) s.fase = "afronden";
     }
     s.gen = gen;
   } else if (s.fase === "afronden") {
@@ -477,6 +561,12 @@ export function monitoring(s: Stap0Staat, r?: Keuringsrapport): Record<string, u
     vulStrategie: s.vul?.strategie,
     stopReden: s.stopReden,
     ...(f ? { vragen: f.vragen, punten: f.punten, figuren: f.figuren, figurenGo: f.figurenGo } : {}),
+    figurenRuw: s.figuren?.ruw,
+    figurenNaSchrap: s.figuren?.naSchrap,
+    reviewUsd: s.kosten.reviewUsd,
+    review: s.review ? { rondes: s.review.rondes, bevindingen: s.review.bevindingen, hersteld: s.review.hersteldTotaal, figuurTaak: s.review.figuurTaak } : undefined,
+    /** First-time-right: de eerste docent-review vond niets (geen "hoog", geen figuurvoorstel). */
+    firstTimeRight: s.review?.eersteSchoon,
   };
 }
 
