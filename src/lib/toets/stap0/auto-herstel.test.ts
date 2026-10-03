@@ -5,6 +5,7 @@ import { genereerSpec, hoofdstukNaam, isServerfout, keurGeneratie, specPrompt, t
 import { afrondFouten, bloklijstRegel, paragraafKern, zoekGegevenWeggevers, raaktKern, zoekBegripHerhaling, zoekGetalWeggevers } from "./inhoud-keuring.ts";
 import { controleerBerekeningen, leesNl } from "./reken.ts";
 import { laadFixtures } from "./laad.ts";
+import { heeftRood } from "./figuren/index.ts";
 import { verwerkToets } from "./pijplijn.ts";
 import type { FiguurSpec, KrachtenFiguur, VraagstukSpec } from "./spec.ts";
 
@@ -78,6 +79,25 @@ describe("stap 0: first-time-right (offline)", () => {
     const a = w.deelvragen[0]!;
     assert.deepEqual((a.figuur as { reeksen: unknown[] }).reeksen, []);
     assert.deepEqual((a.antwoordmodel.figuur as { reeksen: { rood?: boolean }[] }).reeksen[0]!.rood, true);
+  });
+
+  it("3c. rood in een leerlingfiguur (ook schakelschema) → naar de antwoordfiguur; leerling krijgt de figuur zonder rood", () => {
+    const v = krat();
+    const schema = { type: "schakelschema", bron: { soort: "wisselbron", label: "230 V" }, breedteCm: 6, takken: [{ onderdelen: [{ soort: "schakelaar", label: "S1" }, { soort: "lamp", label: "lamp" }] }, { rood: true, onderdelen: [{ soort: "motor", label: "M" }] }], controle: [{ meting: "aantal.lamp", verwacht: 1 }] } as unknown as FiguurSpec;
+    v.deelvragen[0]!.figuur = schema;
+    v.deelvragen[0]!.stam = "Maak het schema af: zet de motor parallel aan de lamp.";
+    const { v: w, stappen } = autoHerstelVraagstuk(v);
+    const d = w.deelvragen[0]!;
+    assert.equal(heeftRood(d.figuur), false);
+    assert.equal((d.figuur as { takken: unknown[] }).takken.length, 1);
+    assert.equal(heeftRood(d.antwoordmodel.figuur), true);
+    assert.ok(stappen.some((s) => /rood uit de leerlingfiguur/.test(s.wat)));
+    // krachten: een rode pijl en een resultante horen ook niet bij de leerling
+    const k = krat();
+    k.deelvragen[0]!.figuur = { ...(k.deelvragen[0]!.figuur as KrachtenFiguur), pijlen: [{ naam: "Fz", grootteN: 40, hoek: 270, rood: true }] };
+    const { v: k2 } = autoHerstelVraagstuk(k);
+    assert.equal(heeftRood(k2.deelvragen[0]!.figuur), false);
+    assert.equal(heeftRood(k2.deelvragen[0]!.antwoordmodel.figuur), true);
   });
 
   it("4. 'Ga uit van' met de uitkomst van een eerdere deelvraag → andere waarde en opnieuw doorgerekend; overbodige zin weg", () => {
