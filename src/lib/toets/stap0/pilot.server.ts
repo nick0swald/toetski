@@ -15,6 +15,14 @@ import type { StapChat, Stap0Staat } from "./stappen.ts";
 type Env = Record<string, string | undefined>;
 const envVan = (): Env => (typeof process !== "undefined" ? process.env : {});
 
+/**
+ * Optioneel lager vangnet via STAP0_VANGNET_USD (bijv. 0.40 voor een testrun); nooit hoger dan het productievangnet ($ 1).
+ */
+export function stap0VangnetUsd(env: Env = envVan()): number | undefined {
+  const v = Number((env.STAP0_VANGNET_USD ?? "").trim());
+  return Number.isFinite(v) && v > 0 ? Math.min(v, 1) : undefined;
+}
+
 export type Stap0Modus = "uit" | "pilot" | "aan";
 export function stap0Modus(env: Env = envVan()): Stap0Modus {
   const v = (env.STAP0_RENDERER ?? "").trim().toLowerCase();

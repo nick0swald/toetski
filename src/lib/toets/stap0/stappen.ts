@@ -108,7 +108,7 @@ export type StapChat = (
 
 export interface StapOpties {
   nu?: () => number;
-  budget?: Partial<typeof STAP0_BUDGET>;
+  budget?: Partial<Record<keyof typeof STAP0_BUDGET, number>>;
   /** Monitoring (productie: console → Vercel-logs). */
   log?: (soort: "stap" | "alarm" | "klaar", data: Record<string, unknown>) => void;
 }
@@ -135,9 +135,11 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
   const nu = opts.nu ?? (() => Date.now());
   const B = { ...STAP0_BUDGET, ...opts.budget };
   const t0 = nu();
+  const dezeStap: string[] = [];
   const s: Stap0Staat = structuredClone(staat0);
   const log = (st: Stap) => {
     s.stappen.push(st);
+    if (!st.ok && dezeStap.length < 8) dezeStap.push(`${st.wat}${st.id ? ` ${st.id}` : ""}: ${(st.fouten ?? []).slice(0, 2).join(" | ")}`.slice(0, 240));
     if (s.stappen.length > MAX_LOG) s.stappen.splice(0, s.stappen.length - MAX_LOG);
   };
   const auto = (g: Generatie): Generatie => {
@@ -312,7 +314,7 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     opts.log?.("klaar", monitoring(s, r));
   }
   s.tijden.stapMs.push(nu() - t0);
-  opts.log?.("stap", { id: s.id, fase: s.fase, ronde: s.rondes, ms: nu() - t0, usd: s.kosten.usd, gericht: s.kosten.gericht });
+  opts.log?.("stap", { id: s.id, fase: s.fase, ronde: s.rondes, ms: nu() - t0, usd: s.kosten.usd, gericht: s.kosten.gericht, ...(dezeStap.length ? { afgekeurd: dezeStap } : {}) });
   return s;
 }
 

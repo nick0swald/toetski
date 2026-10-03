@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { laadFixtures } from "./laad.ts";
 import { allesGoed, monitoring, nieuweStaat, STAP0_BUDGET, voerStapUit, type Stap0Staat, type StapChat } from "./stappen.ts";
 import { keurGeneratie, type SpecInvoer } from "./grok-spec.ts";
-import { controleer, onderteken, pilotGebruikers, stap0Modus, stap0Voor } from "./pilot.server.ts";
+import { controleer, onderteken, pilotGebruikers, stap0Modus, stap0Voor, stap0VangnetUsd } from "./pilot.server.ts";
 import { leesPilotCode, maakToetsStap0 } from "../maak-toets-stap0.ts";
 import type { VraagstukSpec } from "./spec.ts";
 
@@ -138,6 +138,12 @@ describe("stap-0-pilot: vlag per gebruiker en ondertekende toestand", () => {
     assert.deepEqual(pilotGebruikers(env).map((g) => g.label), ["nickoswald@live.nl"], "te korte code telt niet");
     assert.equal(stap0Voor(code, { ...env, STAP0_RENDERER: "uit" }), null);
     assert.deepEqual(stap0Voor(undefined, { STAP0_RENDERER: "aan" }), { label: "iedereen" });
+  });
+  it("STAP0_VANGNET_USD kan het vangnet alleen verlagen", () => {
+    assert.equal(stap0VangnetUsd({}), undefined);
+    assert.equal(stap0VangnetUsd({ STAP0_VANGNET_USD: "0.40" }), 0.4);
+    assert.equal(stap0VangnetUsd({ STAP0_VANGNET_USD: "5" }), 1);
+    assert.equal(stap0VangnetUsd({ STAP0_VANGNET_USD: "x" }), undefined);
   });
   it("HMAC: gewijzigde kosten of fase worden geweigerd", () => {
     const s = nieuweStaat(inv, kal, "t7");

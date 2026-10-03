@@ -35,7 +35,7 @@ export type Stap0StapAntwoord =
 export const stap0Stap = createServerFn({ method: "POST" })
   .validator((input: unknown) => stapInput.parse(input))
   .handler(async ({ data }): Promise<Stap0StapAntwoord> => {
-    const { stap0Voor, onderteken, controleer, productieChat, logStap0 } = await import("./stap0/pilot.server");
+    const { stap0Voor, onderteken, controleer, productieChat, logStap0, stap0VangnetUsd } = await import("./stap0/pilot.server");
     const S = await import("./stap0/stappen");
     const G = await import("./stap0/grok-spec");
     const wie = stap0Voor(data.pilot);
@@ -60,7 +60,8 @@ export const stap0Stap = createServerFn({ method: "POST" })
         if (!controleer(staat, data.mac)) return { ok: false, error: "Toestand ongeldig.", fallback: true };
       }
       if (staat.fase === "klaar") return { ok: false, error: "Al klaar.", fallback: false };
-      const na = await S.voerStapUit(staat, productieChat, { log: logStap0 });
+      const vangnetUsd = stap0VangnetUsd();
+      const na = await S.voerStapUit(staat, productieChat, { log: logStap0, ...(vangnetUsd ? { budget: { vangnetUsd } } : {}) });
       const r = na.gen ? G.keurGeneratie(na.gen, na.inv, na.kal) : null;
       const status = { tekst: na.laatsteFout ? "Eerste versie mislukte; nog één poging…" : S.statusTekst(na, r ? { fouten: r.fouten.length } : undefined), fase: na.fase, usd: na.kosten.usd, open: r?.fouten.length ?? 0 };
       let toets: GegenereerdeToets | undefined;
