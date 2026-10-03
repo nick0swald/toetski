@@ -173,12 +173,13 @@ export function andereWaarde(u: string): string {
 }
 
 /** Vervang losse getallen (niet midden in een ander getal) in één keer, zodat vervangingen niet op elkaar doorwerken. */
-function vervangGetallen(t: string, paren: [string, string][]): string {
+function vervangGetallen(t: string, paren0: [string, string][]): string {
+  const paren = paren0.slice(0, 26); // placeholders ⟦a⟧…⟦z⟧ (geen cijfers, die zouden zelf weer matchen)
   let uit = t;
   paren.forEach(([o], i) => {
-    uit = uit.replace(new RegExp(`(^|[^0-9,])${esc(o)}(?![0-9]|,[0-9])`, "g"), `$1⟦${i}⟧`);
+    uit = uit.replace(new RegExp(`(^|[^0-9,])${esc(o)}(?![0-9]|,[0-9])`, "g"), `$1⟦${String.fromCharCode(97 + i)}⟧`);
   });
-  return uit.replace(/⟦(\d+)⟧/g, (_, i) => paren[Number(i)]![1]);
+  return uit.replace(/⟦([a-z])⟧/g, (_, c: string) => paren[c.charCodeAt(0) - 97]![1]);
 }
 
 /** Herreken B; `invoer` = gewijzigde gegeven waarden [oud, nieuw] die ook in antwoordmodel en scorestappen veranderen. */
