@@ -167,6 +167,23 @@ async function rechter(toets, input, figuren = [], binnenCase = true) {
   }
 }
 
+/** Lab met de productie-afronding: voerStapUit tot klaar/mislukt; zelfde velden als genereerSpec voor de rest van de ronde. */
+async function productieMotor(G, inv, kal, chat) {
+  const St = await S("stap0/stappen.ts");
+  let ruw;
+  const stapChat = async (m, schema, o) => {
+    const r = await chat(m, schema, o);
+    const tekst = typeof r === "string" ? r : r.tekst;
+    if (schema.naam === "toets_spec" && !ruw) ruw = JSON.parse(tekst);
+    return { tekst, usd: typeof r === "string" ? 0 : (r.usd ?? 0) };
+  };
+  let s = St.nieuweStaat(inv, kal, `lab-${Date.now()}`);
+  for (let n = 0; n < 80 && s.fase !== "klaar" && s.fase !== "mislukt"; n++) s = await St.voerStapUit(s, stapChat);
+  if (s.fase !== "klaar") throw new Error(s.nietGelukt ?? `niet klaar (${s.fase})`);
+  const eerste = G.keurGeneratie(G.normaliseer(ruw), inv, kal);
+  return { gen: s.gen, ruw, rapport: G.keurGeneratie(s.gen, inv, kal), stappen: s.stappen, eerste, eersteRuw: eerste, eersteMs: s.tijden.specMs, lengteVoorInkorten: s.lengteVoorInkorten, hersteld: s.kosten.gericht > 0, gerichteAanroepen: s.kosten.gericht };
+}
+
 async function genereer(caseNaam, droog) {
   const budget = Number(opt("budget", droog ? 1e9 : NaN));
   if (!droog) {
@@ -193,7 +210,8 @@ async function genereer(caseNaam, droog) {
   const t0 = Date.now();
   let g;
   try {
-    g = await G.genereerSpec(inv, kal, chat, { maxGericht: Number(opt("max-gericht", 10)) });
+    // Standaard de productiemotor (stappen.ts: selectie uit alles, herstelbeleid, exacte afronding); --motor oud = genereerSpec.
+    g = opt("motor", "productie") === "oud" ? await G.genereerSpec(inv, kal, chat, { maxGericht: Number(opt("max-gericht", 10)) }) : await productieMotor(G, inv, kal, chat);
   } catch (e) {
     console.error(`generatie mislukt: ${e?.message ?? e}`);
     writeFileSync(join(uit, "resultaat.json"), JSON.stringify({ case: caseNaam, ok: false, fout: String(e?.message ?? e), kostenUsd: runKosten }, null, 1));

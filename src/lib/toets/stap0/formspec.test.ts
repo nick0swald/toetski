@@ -64,4 +64,13 @@ describe("stap 0: formulier is de harde spec", () => {
     assert.equal(selecteerExact(gen, basis, { punten: totaal + 1 }), null, "te weinig punten → null");
     assert.match(waaromNietGelukt(gen, { ...basis, mcVragen: 12, openVragen: 10 }, { punten: 32 }, 0.954, "vangnet"), /^Niet gelukt: je vroeg 12 meerkeuze, 10 open en 32 punten; .*kostenplafond.*\$0\.95/);
   });
+  it("selecteerExact: 1p-R-grens al tijdens het kiezen, staart weglaten tot minstens 3 deelvragen", () => {
+    const dv = (id: string, p: number, rtti: string) => ({ id, punten: p, rtti, stam: "x", scorestappen: [], antwoordmodel: { regels: ["x"] } });
+    const v = (id: string, ps: [number, string][]) => ({ id, soort: "vraagstuk", titel: id, se: "SE4.1", hoofdstuk: "1", context: [], deelvragen: ps.map(([p, r], i) => dv(`${id}-${i}`, p, r)) }) as unknown as VraagstukSpec;
+    const gen = { titel: "t", vraagstukken: [v("r", [[1, "R"], [1, "R"], [1, "R"], [1, "R"], [1, "R"]]), v("t", [[2, "T1"], [2, "T1"], [2, "T2"]])] };
+    // BB (45 %): 11 punten = alles, 5 van de 11 punten 1p-R (max 4) → null; 10 punten: r zonder laatste deelvraag
+    const bb = { ...basis, leerweg: "BB" as const };
+    assert.equal(selecteerExact(gen, bb, { punten: 11 }), null);
+    assert.deepEqual(selecteerExact(gen, bb, { punten: 10 })!.vraagstukken.map((x) => x.deelvragen.length), [4, 3]);
+  });
 });
