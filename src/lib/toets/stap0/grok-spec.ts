@@ -18,6 +18,7 @@ import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { overlap, woorden } from "../eval/rubric.ts";
 import { afrondFouten, begripTelling, bloklijstRegel, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekBegripHerhaling, zoekBoekParafrase, zoekFiguurVerwijzingen, zoekGegevenWeggevers, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
 import { autoHerstel } from "./auto-herstel.ts";
+import { heeftRood } from "./figuren/index.ts";
 import { officieelVraagtype, relevanteDoelen, typenVoorDoelen } from "./doelen.ts";
 import type { GegenereerdeToets, Leerweg, RttiVerdeling, Vraag } from "../types";
 
@@ -529,6 +530,8 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
       const fig = d.figuur ?? (v.deelvragen[0] === d ? v.figuur : undefined);
       if (/\bteken\b/i.test(kaal(d.stam)) && fig?.type === "grafiek" && !fig.panelen?.length && fig.reeksen.some((r) => !r.rood && r.punten.length >= 2))
         voeg(v.id, `${d.id}: tekenvraag, maar de leerlingfiguur toont de grafiek al (leerling krijgt een leeg diagram; het antwoord hoort in antwoordmodel.figuur)`);
+      if (heeftRood(d.figuur) || (v.deelvragen[0] === d && heeftRood(v.figuur)))
+        voeg(v.id, `${d.id}: de leerlingfiguur bevat rood (antwoord); rood hoort alleen in antwoordmodel.figuur`);
       if (overgenomen(tekstVan(d), `${inv.bronmateriaal}\n${inv.antwoordenmateriaal ?? ""}`)) voeg(v.id, `${d.id}: zin letterlijk uit de lesstof overgenomen`);
     }
     if (overgenomen(v.context.join(" "), `${inv.bronmateriaal}\n${inv.antwoordenmateriaal ?? ""}`)) voeg(v.id, `${v.id}: inleiding letterlijk uit de lesstof overgenomen`);

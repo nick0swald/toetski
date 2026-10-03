@@ -5,6 +5,8 @@
  *  2. figuurcontrole met een onbekende parameter → de waarde die de figuur zelf heeft (gemeten);
  *  3. tekenvraag: controle op wat de leerling tekent uit de leerlingfiguur halen; een ontbrekende antwoordfiguur maken
  *     (krachten: pijl uit grootte + richting in de tekst; grafiek: de getoonde reeks wordt de rode antwoordreeks);
+ *  3b. rood in een leerlingfiguur (pijl, resultante, reeks, schakelschema-tak of -onderdeel) = antwoord: de figuur mét
+ *     rood wordt de antwoordfiguur (als die er nog niet is), de leerling krijgt de figuur zonder rood;
  *  4. getal-weggever binnen een vraagstuk → "Ga uit van …" met een andere waarde (en de berekening opnieuw);
  *  4b. gegeven-weggever over de hele toets (ook W ↔ kW, tussen vraagstukken): het gegeven verschuift naar een andere
  *     ronde waarde (≈ +20 %) en alle deelvragen die ermee rekenen, worden opnieuw doorgerekend;
@@ -17,7 +19,7 @@
  *     veel of te weinig significante cijfers → afgerond op het verwachte aantal (antwoordmodel en scorestappen mee).
  */
 import type { Berekening, FiguurControle, FiguurSpec, KrachtenFiguur, Parameter, VraagstukSpec } from "./spec.ts";
-import { figuurSvg, isTekenFiguur, meetFiguur } from "./figuren/index.ts";
+import { figuurSvg, heeftRood, isTekenFiguur, meetFiguur, zonderRood } from "./figuren/index.ts";
 import { getalInTekst, leesNl, nl, rekenUit } from "./reken.ts";
 import { gebruikteNamen, vervangNamen } from "./namen.ts";
 import { afrondDoel, isWeetvraag, significant, zoekGegevenWeggevers, zoekGetalWeggevers } from "./inhoud-keuring.ts";
@@ -159,6 +161,29 @@ function fixTekenvraag(v: VraagstukSpec, d: Deelvraag, i: number, stappen: AutoS
     d.antwoordmodel.figuur = { ...leer, reeksen: getoond.map((r) => ({ ...r, rood: true })), controle: yc.length ? yc : undefined };
     d.tekenvraag = true;
     stappen.push({ id: d.id, wat: "getoonde grafiek verplaatst naar de antwoordfiguur (rood); leerling krijgt een leeg assenstelsel" });
+  }
+}
+
+// ── 3b. rood alleen in de antwoordfiguur ─────────────────────────────────────────────────────────
+const IS_TEKEN = /\b(teken|schets|maak\b.*\baf|vul\b.*\baan|geef\b.*\baan)\b/i;
+function fixRood(v: VraagstukSpec, stappen: AutoStap[]): void {
+  const naarAntwoord = (d: Deelvraag | undefined, f: FiguurSpec) => {
+    if (!d?.antwoordmodel || d.antwoordmodel.figuur) return false;
+    d.antwoordmodel.figuur = f;
+    d.tekenvraag = true;
+    return true;
+  };
+  if (v.figuur && heeftRood(v.figuur)) {
+    const doel = v.deelvragen.find((d) => d?.antwoordmodel && !d.antwoordmodel.figuur && !d.figuur && (d.tekenvraag || IS_TEKEN.test(kaal(d.stam)))) ?? v.deelvragen[0];
+    const verplaatst = naarAntwoord(doel, v.figuur);
+    v.figuur = zonderRood(v.figuur);
+    stappen.push({ id: v.id, wat: `rood uit de leerlingfiguur van ${v.id} gehaald${verplaatst ? ` (naar de antwoordfiguur van ${doel!.id})` : ""}` });
+  }
+  for (const d of v.deelvragen) {
+    if (!d?.figuur || !heeftRood(d.figuur)) continue;
+    const verplaatst = naarAntwoord(d, d.figuur);
+    d.figuur = zonderRood(d.figuur);
+    stappen.push({ id: d.id, wat: `rood uit de leerlingfiguur gehaald${verplaatst ? " (naar de antwoordfiguur)" : ""}` });
   }
 }
 
@@ -443,6 +468,11 @@ export function autoHerstelVraagstuk(v0: VraagstukSpec, vermijdNamen: Iterable<s
       v.figuur = undefined;
       stappen.push({ id: v.deelvragen[j]!.id, wat: `lege tekenfiguur van het vraagstuk verplaatst naar tekenvraag ${v.deelvragen[j]!.id}` });
     }
+  }
+  try {
+    fixRood(v, stappen);
+  } catch {
+    /* laat over aan de keuring */
   }
   const nOnb = vulOnbekend(v.figuur, bekend);
   if (nOnb) stappen.push({ id: v.id, wat: `${nOnb} figuurcontrole(s) met onbekende parameter → waarde uit de figuur` });

@@ -70,6 +70,38 @@ export interface FiguurOordeel {
  * Go/no-go: elke `controle` koppelt een meting uit de SVG aan een parameter (of een vaste waarde). Daarnaast:
  * grafiek-asgetallen op de juiste plek, krachtenfiguur op ware grootte.
  */
+/** Rood = antwoord: een rode pijl/resultante, rode reeks of rode tak/onderdeel hoort nooit in een leerlingfiguur. */
+export function heeftRood(f: FiguurSpec | undefined): boolean {
+  if (!f) return false;
+  if (f.type === "krachten") return f.pijlen.some((p) => p.rood) || Boolean(f.resultante);
+  if (f.type === "grafiek") return f.reeksen.some((r) => r.rood);
+  if (f.type === "schakelschema") return f.takken.some((t) => t.rood || t.onderdelen.some((o) => o.rood));
+  return false;
+}
+/**
+ * Leerlingfiguur zonder het rode antwoord. Een tak die helemaal rood was (of alleen rode onderdelen had) verdwijnt. Een
+ * controle waarvan de meting in de kale figuur niet meer bestaat, valt weg (die hoort bij de antwoordfiguur).
+ */
+export function zonderRood(f: FiguurSpec): FiguurSpec {
+  let g: FiguurSpec = f;
+  if (f.type === "krachten") {
+    const { resultante: _r, ...rest } = f;
+    g = { ...rest, pijlen: f.pijlen.filter((p) => !p.rood) };
+  } else if (f.type === "grafiek") g = { ...f, reeksen: f.reeksen.filter((r) => !r.rood) };
+  else if (f.type === "schakelschema")
+    g = { ...f, takken: f.takken.filter((t) => !t.rood && (t.onderdelen.length === 0 || t.onderdelen.some((o) => !o.rood))).map((t) => ({ ...t, onderdelen: t.onderdelen.filter((o) => !o.rood) })) };
+  const cs = (g as { controle?: FiguurControle[] }).controle;
+  if (g === f || !cs?.length) return g;
+  let m: Record<string, number> = {};
+  try {
+    m = meetFiguur(g, figuurSvg(g));
+  } catch {
+    /* geen metingen: alle controles weg */
+  }
+  const controle = cs.filter((c) => c.meting in m);
+  return { ...g, controle: controle.length ? controle : undefined } as FiguurSpec;
+}
+
 /** Lege of halve tekenfiguur: de leerling tekent er zelf in (geen pijlen, geen reeksen, of vrije ruimte voor een tak). */
 export function isTekenFiguur(f: FiguurSpec): boolean {
   if (f.type === "krachten") return f.pijlen.length === 0;
