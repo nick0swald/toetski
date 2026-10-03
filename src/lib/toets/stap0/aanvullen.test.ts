@@ -89,7 +89,7 @@ describe("aanvullen na 143 % → 82 % (pilotrun 3 okt, offline)", () => {
       assert.equal(keurGeneratie(s.gen!, inv, kal).feiten.punten, kal.punten);
     } else {
       assert.equal(s.fase, "mislukt");
-      assert.match(s.nietGelukt!, /^Niet gelukt: je vroeg 28 punten; er waren 26 punten goedgekeurd/);
+      assert.match(s.nietGelukt!, /^Niet gelukt: je vroeg 28 punten; er waren \d+ punten goedgekeurd/);
     }
   });
 

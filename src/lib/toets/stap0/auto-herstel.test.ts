@@ -219,6 +219,26 @@ describe("stap 0: first-time-right (offline)", () => {
     assert.equal(rondSig(0.01234, 2), "0,012");
   });
 
+  it("7b. gegeven alleen in het antwoordmodel → naar de vraag; afgerond in andere notatie; MC-letter uit de uitleg", () => {
+    const v = krat();
+    const b = v.deelvragen[1]!;
+    b.parameters = [{ naam: "F_z", waarde: 40, bron: "tekst", eenheid: "N", weergave: "40" }, { naam: "g", waarde: 9.8, bron: "binas", eenheid: "N/kg" }];
+    b.berekeningen = [{ naam: "m", formule: "F_z / g", waarde: 40 / 9.8, eenheid: "kg", afgerond: "4,1", tolerantie: 0.001 }];
+    v.context = ["Ali tilt een krat."];
+    b.antwoordmodel.regels = ["Ga uit van F_z = 40 N", "m = 40 / 9,8 = 4,08 kg"];
+    const { v: w } = autoHerstelVraagstuk(v);
+    assert.match(w.deelvragen[1]!.stam, /^Ga uit van 40 N\. Bereken/);
+    assert.deepEqual(w.deelvragen[1]!.antwoordmodel.regels, ["m = 40 / 9,8 = 4,08 kg"]);
+    const c = krat();
+    c.deelvragen[1]!.antwoordmodel.regels = ["m = 40 / 9,8 = 4,08 ≈ 4,1 × 10⁰ kg"];
+    c.deelvragen[1]!.berekeningen![0]!.afgerond = "4,1";
+    const d = krat();
+    d.deelvragen[1]!.berekeningen![0]!.afgerond = "4,08";
+    d.deelvragen[1]!.antwoordmodel.regels = ["m = 40 / 9,8 ≈ 4,1 kg"];
+    assert.equal(autoHerstelVraagstuk(d).v.deelvragen[1]!.berekeningen![0]!.afgerond, "4,08", "geen gelijke waarde in de tekst → niets veranderd");
+    assert.equal(leidJuistAf({ opties: ["De snaar stuurt licht naar zijn ogen.", "De trilling gaat via de lucht naar zijn oor.", "Geluid reist alleen door de hals."], antwoordmodel: { regels: ["De trillende snaar brengt de lucht in trilling; die trilling bereikt zijn oor."] } }), "B");
+  });
+
   it("6. reken: '1400' bij 1372 (2 sig. cijfers) en '1,4×10³' zijn goed afgerond", () => {
     assert.equal(leesNl("1,4×10³"), 1400);
     assert.equal(leesNl("2,0·10^2"), 200);
