@@ -13,6 +13,8 @@ export interface Bevinding {
   id: string;
   vraagstuk: string;
   tekst: string;
+  /** Alleen bij gegeven-weggevers: het gegeven zoals het in de tekst staat, bv. "1400 W". */
+  gegeven?: string;
 }
 
 type Deelvraag = VraagstukSpec["deelvragen"][number];
@@ -480,7 +482,7 @@ export function zoekGegevenWeggevers(vs: VraagstukSpec[]): Bevinding[] {
             const rel = Math.abs(g.v - u.v) / Math.abs(u.v);
             const eigenVraagstuk = u.vs === v;
             if (rel <= 0.1 && (eigenVraagstuk || rel <= 0.02))
-              uit.push({ id: br.id, vraagstuk: v.id, tekst: `"${g.tekst}" in ${br.id} ligt (bijna) op de uitkomst van ${u.a.id} (${u.bk.afgerond ?? u.bk.waarde} ${u.bk.eenheid}); kies een duidelijk andere waarde (minstens 20 % ernaast) of laat hem weg` });
+              uit.push({ id: br.id, vraagstuk: v.id, gegeven: g.tekst, tekst: `"${g.tekst}" in ${br.id} ligt (bijna) op de uitkomst van ${u.a.id} (${u.bk.afgerond ?? u.bk.waarde} ${u.bk.eenheid}); kies een duidelijk andere waarde (minstens 20 % ernaast) of laat hem weg` });
           }
     }
   }
