@@ -68,7 +68,7 @@ const STOP = new Set(
   ),
 );
 
-function woorden(t: string | undefined): string[] {
+export function woorden(t: string | undefined): string[] {
   return (t ?? "")
     .toLowerCase()
     .replace(/[^a-zà-ÿ0-9\s-]/g, " ")
@@ -76,7 +76,7 @@ function woorden(t: string | undefined): string[] {
     .filter((w) => w.length >= 4 && !STOP.has(w) && !/^\d+$/.test(w));
 }
 
-function overlap(a: string[], b: string[]): number {
+export function overlap(a: string[], b: string[]): number {
   if (!a.length || !b.length) return 0;
   const sb = new Set(b);
   return a.filter((w) => sb.has(w)).length / a.length;

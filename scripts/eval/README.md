@@ -38,3 +38,30 @@ Zonder rechtercijfers valt `poort` (per case) terug op het rubriekcijfer. Zelfde
 Verhoog `RUBRIEK_VERSIE` bij elke rubriekwijziging en scoor de baseline opnieuw.
 
 `baselines/` bevat de vaste baseline-toets (productie 8079c92) die ook `rubric.test.ts` gebruikt.
+
+## Waakhond (timeout, hang-detectie, kostenlog)
+
+Draai lange runs via `scripts/eval/waakhond.mjs`, bijvoorbeeld:
+
+```
+node scripts/eval/waakhond.mjs --timeout 900 --stil 180 --max-usd 2 -- node scripts/eval/met-plaatjes.mjs ...
+```
+
+Na `--timeout` seconden, of na `--stil` seconden zonder uitvoer/hartslag (`$WAAKHOND_HARTSLAG`), wordt het kind afgebroken (exitcode 124). Elke run komt als één regel in `eval-out/kosten.jsonl` (duur, status, reden, geschatte kosten uit de `$`-bedragen in de uitvoer). Het kind krijgt alleen `XAI_API_KEY = TOETSKI_XAI_API_KEY`.
+
+## Stap 0 + Grok: spec-ronde (`stap0-ronde.mjs`)
+
+Grok vult alleen de gestructureerde spec (JSON-schema, structured output); de deterministische stap-0-pijplijn keurt
+(schema, rekencontrole, figuur-go/no-go, lengte 90–110 %, weggevers, merken/schoolnamen, letterlijk overnemen,
+tekenvraag met al ingevulde grafiek) en rendert leerling- en docentdeel (PDF + Word). Hooguit 1 herstelaanroep.
+In de app alleen als pilot achter de server-side vlag `STAP0_RENDERER=pilot` + allowlist `STAP0_USERS` (stapsgewijs, zie `src/lib/toets/stap0-server.ts`).
+
+```
+node scripts/eval/waakhond.mjs --timeout 1200 --stil 120 --max-usd 0.55 -- \
+  node scripts/eval/stap0-ronde.mjs genereer geluid-gt4 --naam gen1 --uit /workspace/toetski-paid1 --budget 0.55 --rechter 3
+node scripts/eval/stap0-ronde.mjs droog geluid-gt4 --uit /tmp/droog          # zelfde stroom met fixtures, geen API
+node scripts/eval/stap0-ronde.mjs poort <uit>/gen1/<case> …                   # rechter ≥ 6,48 gemiddeld + harde checks
+```
+
+Kosten: vóór elke aanroep een worst-case-schatting tegen `--budget` (harde stop), na elke aanroep `run-kosten $x`
+(waakhond-plafond) en per aanroep een regel in `eval-out/kosten.jsonl`. Alleen `TOETSKI_XAI_API_KEY` (via de waakhond).

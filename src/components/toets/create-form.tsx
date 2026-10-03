@@ -19,6 +19,7 @@ import {
 import { bewaarPlaatjesModus, leesPlaatjesModus, maakToets, type Voortgang } from "@/lib/toets/maak-toets";
 import type { PlaatjesModus } from "@/lib/toets/types";
 import { VoortgangsBalk } from "@/components/toets/voortgangs-balk";
+import { leesPilotCode, maakToetsStap0, stap0Status } from "@/lib/toets/maak-toets-stap0";
 import {
   herkenBatch,
   herkenBron,
@@ -117,6 +118,20 @@ export function CreateForm() {
   const [aantalVoorBalk, setAantalVoorBalk] = useState(10);
   const [plaatjes, setPlaatjes] = useState<PlaatjesModus>("auto");
   useEffect(() => setPlaatjes(leesPlaatjesModus()), []);
+  // Stap-0-pilot: alleen als de server deze pilotcode kent (STAP0_RENDERER + STAP0_USERS); anders huidige pijplijn.
+  const [pilot, setPilot] = useState<{ code: string; label?: string } | null>(null);
+  const [stap0Tekst, setStap0Tekst] = useState<string | null>(null);
+  useEffect(() => {
+    const code = leesPilotCode();
+    if (!code) return;
+    let weg = false;
+    void stap0Status(code).then((r) => {
+      if (!weg && r.aan) setPilot({ code, label: r.label });
+    });
+    return () => {
+      weg = true;
+    };
+  }, []);
   const metPlaatjes = plaatjes !== "zonder";
   const [error, setError] = useState<string | null>(null);
 
@@ -323,6 +338,21 @@ export function CreateForm() {
     };
     setAantalVoorBalk(aantalVragen);
     try {
+      if (pilot) {
+        // Stap-0-pilot: losse server-stappen tot alle checks slagen (of tijd/vangnet); bij een fout: huidige pijplijn.
+        setStap0Tekst("Toets schrijven (eerste versie, ± 1,5–2 minuten)…");
+        const r0 = await maakToetsStap0(input, { pilot: pilot.code, onStatus: setStap0Tekst });
+        setStap0Tekst(null);
+        if (r0.ok) {
+          const toetsId = await persistToetsBeforeNavigate(r0.toets);
+          toast.success("Toets klaar (stap 0). Download PDF en Word op de toetspagina.");
+          navigate({ to: "/toets/$id", params: { id: toetsId } });
+          return;
+        }
+        if (!r0.fallback) throw new Error(r0.error);
+        toast.message(`Stap 0 lukte niet (${r0.error.slice(0, 80)}); de huidige generator maakt de toets.`);
+        setVoortgang({ fase: "vragen", metPlaatjes });
+      }
       // Snelle route: vragen → afwerken ∥ figuren (go/no-go) → koppelen; ± 60 s totaal.
       const result = await maakToets(input, { plaatjes, onVoortgang: setVoortgang });
       if (!result.ok) {
@@ -348,6 +378,7 @@ export function CreateForm() {
     } finally {
       setBusy(false);
       setVoortgang(null);
+      setStap0Tekst(null);
     }
   }
 
@@ -505,7 +536,17 @@ export function CreateForm() {
         ) : null}
       </div>
 
-      {busy && voortgang ? <VoortgangsBalk voortgang={voortgang} aantalVragen={aantalVoorBalk} /> : null}
+      {pilot ? (
+        <p className="text-xs text-muted" data-testid="stap0-pilot">
+          Stap-0-pilot actief{pilot.label ? ` (${pilot.label})` : ""}: nieuwe generator met losse stappen en controle tot alles klopt.
+        </p>
+      ) : null}
+      {busy && stap0Tekst ? (
+        <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-[var(--radius-md)] bg-surface p-4 text-sm text-fg" data-testid="stap0-status">
+          <Loader2 className="size-4 animate-spin" />
+          {stap0Tekst}
+        </div>
+      ) : busy && voortgang ? <VoortgangsBalk voortgang={voortgang} aantalVragen={aantalVoorBalk} /> : null}
       {error ? <p className="text-sm text-warn">{error}</p> : null}
       <Button type="submit" disabled={!canSubmit} className="h-auto min-h-20 w-full justify-between rounded-[var(--radius-lg)] px-6 py-5 text-left sm:px-8 [&_svg]:size-6">
         <span className="min-w-0">

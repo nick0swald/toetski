@@ -1,0 +1,35 @@
+{
+ "titel": "Natuur- en scheikunde 1 · voorbeeldtoets stap 0",
+ "ondertitel": "12 vaste specs uit de 62 voorbeeldvragen (15 vragen)",
+ "minuten": 90,
+ "nTerm": 1.0,
+ "vragen": [
+  "se41-bloempot",
+  "se41-boomstam",
+  "se41-krat",
+  "se41-bakfiets",
+  "se42-sleutelhanger",
+  "se42-toongenerator",
+  "se43-stoelverwarming",
+  "se43-afzuigkap",
+  "se43-sanne",
+  "se44-tram",
+  "se44-skeeler",
+  "alg-lampje"
+ ],
+ "voorblad": {
+  "kop": "Toets Krachten, Geluid, Elektriciteit en Beweging",
+  "leerweg": "VMBO-GL en TL",
+  "schooljaar": "2026-2027",
+  "seCode": "SE4",
+  "toetscode": "voorbeeld stap 0",
+  "vak": "natuur- en scheikunde 1 – SE4 GL en TL",
+  "hulpmiddelen": [
+   "Gebruik het BINAS informatieboek.",
+   "Je mag een rekenmachine gebruiken."
+  ],
+  "uitwerkbijlage": false,
+  "schoolveld": "",
+  "voetcode": "SE4-VB0"
+ }
+}

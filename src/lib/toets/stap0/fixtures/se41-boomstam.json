@@ -1,0 +1,167 @@
+{
+ "soort": "vraag",
+ "id": "se41-boomstam",
+ "titel": "Omgevallen boom",
+ "vraagtype": {
+  "nr": 44,
+  "code": "K-RES",
+  "naam": "Resulterende kracht construeren/bepalen",
+  "cse": [
+   0,
+   0,
+   16
+  ]
+ },
+ "se": "SE4.1",
+ "hoofdstuk": "Resulterende kracht construeren",
+ "niveau": "vooral GT",
+ "punten": 3,
+ "leerdoel": "K/9.2 resultante van twee krachten construeren",
+ "context": [
+  "Twee trekkers trekken een omgevallen boomstam weg. Je ziet de twee krachten op de boomstam in punt P, op schaal getekend. F<sub>1</sub> = 400 N en F<sub>2</sub> = 300 N. De hoek tussen de krachten is 60°.",
+  "De krachtenschaal is 1 cm ≙ 100 N."
+ ],
+ "figuur": {
+  "type": "krachten",
+  "breedteCm": 11.0,
+  "hoogteCm": 4.8,
+  "schaalN": 100,
+  "voorwerp": "boomstam",
+  "punt": [
+   1.0,
+   0.9
+  ],
+  "puntLabel": "P",
+  "pijlen": [
+   {
+    "naam": "F1",
+    "grootteN": 400,
+    "hoek": 0,
+    "label": "F<sub>1</sub> = 400 N"
+   },
+   {
+    "naam": "F2",
+    "grootteN": 300,
+    "hoek": 60,
+    "label": "F<sub>2</sub> = 300 N"
+   }
+  ],
+  "controle": [
+   {
+    "meting": "F1.N",
+    "parameter": "F1"
+   },
+   {
+    "meting": "F2.N",
+    "parameter": "F2"
+   },
+   {
+    "meting": "F2.hoek",
+    "parameter": "hoek"
+   }
+  ]
+ },
+ "stam": "Construeer in de figuur de resulterende kracht op de boomstam en bepaal de grootte ervan.",
+ "antwoordregels": 1,
+ "antwoordmodel": {
+  "regels": [
+   "F<sub>res</sub> ≈ 610 N (pijl van ongeveer 6,1 cm; zie figuur)",
+   "controle: √(400² + 300² + 2 · 400 · 300 · cos 60°) = 608 N"
+  ],
+  "figuur": {
+   "type": "krachten",
+   "breedteCm": 11.0,
+   "hoogteCm": 4.8,
+   "schaalN": 100,
+   "voorwerp": "boomstam",
+   "punt": [
+    1.0,
+    0.9
+   ],
+   "puntLabel": "P",
+   "pijlen": [
+    {
+     "naam": "F1",
+     "grootteN": 400,
+     "hoek": 0,
+     "label": "F<sub>1</sub> = 400 N"
+    },
+    {
+     "naam": "F2",
+     "grootteN": 300,
+     "hoek": 60,
+     "label": "F<sub>2</sub> = 300 N"
+    }
+   ],
+   "resultante": {
+    "label": "F<sub>res</sub> ≈ 6,1 cm\n≈ 610 N"
+   },
+   "controle": [
+    {
+     "meting": "Fres.N",
+     "parameter": "Fres",
+     "tolerantie": 5
+    }
+   ]
+  }
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "parallellogram (of kop-staartmethode) juist geconstrueerd",
+   "punten": 1
+  },
+  {
+   "omschrijving": "resulterende kracht getekend als pijl vanuit P",
+   "punten": 1
+  },
+  {
+   "omschrijving": "grootte bepaald met de krachtenschaal: 610 N (marge 580–640 N)",
+   "punten": 1
+  }
+ ],
+ "rtti": "T2",
+ "parameters": [
+  {
+   "naam": "F1",
+   "waarde": 400,
+   "bron": "tekst",
+   "eenheid": "N"
+  },
+  {
+   "naam": "F2",
+   "waarde": 300,
+   "bron": "tekst",
+   "eenheid": "N"
+  },
+  {
+   "naam": "hoek",
+   "waarde": 60,
+   "bron": "tekst",
+   "eenheid": "°"
+  },
+  {
+   "naam": "schaal",
+   "waarde": 100,
+   "bron": "tekst",
+   "eenheid": "N/cm"
+  }
+ ],
+ "berekeningen": [
+  {
+   "naam": "Fres",
+   "formule": "sqrt(F1^2 + F2^2 + 2*F1*F2*cos(hoek))",
+   "waarde": 608.276253,
+   "eenheid": "N",
+   "afgerond": "608",
+   "tolerantie": 1e-06
+  },
+  {
+   "naam": "lengte",
+   "formule": "Fres / schaal",
+   "waarde": 6.08276253,
+   "eenheid": "cm",
+   "afgerond": "6,1",
+   "tolerantie": 1e-06
+  }
+ ]
+}

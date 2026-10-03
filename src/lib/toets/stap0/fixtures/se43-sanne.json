@@ -1,0 +1,94 @@
+{
+ "soort": "vraag",
+ "id": "se43-sanne",
+ "titel": "Twee lampjes",
+ "vraagtype": {
+  "nr": 9,
+  "code": "E-SERPAR",
+  "naam": "Serie/parallel: spanning, stroom en weerstand redeneren",
+  "cse": [
+   3,
+   10,
+   34
+  ]
+ },
+ "se": "SE4.3",
+ "hoofdstuk": "Serie- en parallelschakeling",
+ "niveau": "vooral KB/GT",
+ "punten": 1,
+ "leerdoel": "K/6.4 spanning en stroom in een parallelschakeling",
+ "context": [
+  "Sanne bouwt een schakeling. Je ziet het schakelschema. Schakelaar S is open. Lampje L1 brandt. Sanne sluit schakelaar S, zodat ook L2 gaat branden. De spanning van de batterij blijft 6 V."
+ ],
+ "figuur": {
+  "type": "schakelschema",
+  "bron": {
+   "soort": "cel",
+   "label": "6 V"
+  },
+  "takken": [
+   {
+    "onderdelen": [
+     {
+      "soort": "lamp",
+      "label": "L1"
+     }
+    ]
+   },
+   {
+    "onderdelen": [
+     {
+      "soort": "schakelaar",
+      "label": "S"
+     },
+     {
+      "soort": "lamp",
+      "label": "L2"
+     }
+    ]
+   }
+  ],
+  "breedteCm": 6.5,
+  "controle": [
+   {
+    "meting": "U",
+    "parameter": "U"
+   },
+   {
+    "meting": "aantal.lamp",
+    "verwacht": 2
+   },
+   {
+    "meting": "stippen",
+    "verwacht": 2
+   }
+  ]
+ },
+ "stam": "Wat gebeurt er met lampje L1 als Sanne schakelaar S sluit?",
+ "opties": [
+  "L1 gaat uit",
+  "L1 gaat zwakker branden",
+  "L1 blijft even fel branden",
+  "L1 gaat feller branden"
+ ],
+ "antwoordmodel": {
+  "juist": "C",
+  "regels": [],
+  "opmerking": "L1 en L2 staan parallel: over L1 blijft 6 V staan, dus de stroom door L1 verandert niet."
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "C",
+   "punten": 1
+  }
+ ],
+ "rtti": "T2",
+ "parameters": [
+  {
+   "naam": "U",
+   "waarde": 6,
+   "bron": "tekst",
+   "eenheid": "V"
+  }
+ ]
+}

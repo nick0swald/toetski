@@ -1,0 +1,335 @@
+{
+ "soort": "vraagstuk",
+ "id": "se42-toongenerator",
+ "titel": "Toongenerator",
+ "se": "SE4.2",
+ "hoofdstuk": "Geluid (H13): oscilloscoop, trillingstijd en frequentie",
+ "context": [
+  "Gijs laat met een toongenerator een toon horen. Met een microfoon en een oscilloscoop maakt hij een beeld van de toon. Je ziet dit beeld. De tijdbasis is 0,2 ms per hokje."
+ ],
+ "figuur": {
+  "type": "oscilloscoop",
+  "hokjesX": 10,
+  "hokjesY": 8,
+  "panelen": [
+   {
+    "amplitude": 3,
+    "trillingstijd": 4
+   }
+  ],
+  "onderschrift": "tijdbasis: 1 hokje (horizontaal) = 0,2 ms",
+  "breedteCm": 8.5,
+  "controle": [
+   {
+    "meting": "T",
+    "parameter": "Th"
+   },
+   {
+    "meting": "A",
+    "parameter": "Ah"
+   },
+   {
+    "meting": "tijdbasis",
+    "parameter": "tb"
+   }
+  ]
+ },
+ "parameters": [
+  {
+   "naam": "tb",
+   "waarde": 0.2,
+   "bron": "tekst",
+   "eenheid": "ms",
+   "weergave": "0,2"
+  },
+  {
+   "naam": "Th",
+   "waarde": 4,
+   "bron": "figuur",
+   "eenheid": "hokjes"
+  },
+  {
+   "naam": "Ah",
+   "waarde": 3,
+   "bron": "figuur",
+   "eenheid": "hokjes"
+  }
+ ],
+ "deelvragen": [
+  {
+   "id": "se42-toongenerator-a",
+   "vraagtype": {
+    "nr": 25,
+    "code": "G-FREQ",
+    "naam": "Frequentie/trillingstijd berekenen (f = 1/T)",
+    "cse": [
+     0,
+     10,
+     20
+    ]
+   },
+   "niveau": "vooral KB/GT",
+   "punten": 1,
+   "leerdoel": "K/13.3 trillingstijd aflezen op een oscilloscoop",
+   "stam": "Bepaal de trillingstijd van de toon in ms.",
+   "antwoordregels": 2,
+   "antwoordmodel": {
+    "regels": [
+     "T = 0,8 ms",
+     "uitwerking: één trilling = 4 hokjes → T = 4 · 0,2 = 0,8 ms"
+    ]
+   },
+   "scorestappen": [
+    {
+     "omschrijving": "4 hokjes per trilling en T = 0,8 ms",
+     "punten": 1
+    }
+   ],
+   "rtti": "T1",
+   "berekeningen": [
+    {
+     "naam": "T",
+     "formule": "Th * tb",
+     "waarde": 0.8,
+     "eenheid": "ms",
+     "afgerond": "0,8"
+    }
+   ]
+  },
+  {
+   "id": "se42-toongenerator-b",
+   "vraagtype": {
+    "nr": 25,
+    "code": "G-FREQ",
+    "naam": "Frequentie/trillingstijd berekenen (f = 1/T)",
+    "cse": [
+     0,
+     10,
+     20
+    ]
+   },
+   "niveau": "vooral KB/GT",
+   "punten": 2,
+   "leerdoel": "K/13.3 frequentie berekenen met f = 1/T",
+   "stam": "Bereken de frequentie van de toon.",
+   "antwoordregels": 3,
+   "antwoordmodel": {
+    "regels": [
+     "f = 1,25·10³ Hz (1250 Hz)",
+     "uitwerking: T = 0,8 ms = 0,0008 s; f = 1 / T = 1 / 0,0008 = 1250 Hz"
+    ]
+   },
+   "scorestappen": [
+    {
+     "omschrijving": "gebruik van f = 1 / T",
+     "punten": 1
+    },
+    {
+     "omschrijving": "rest van de berekening juist (met omrekenen ms → s)",
+     "punten": 1
+    }
+   ],
+   "rtti": "T1",
+   "berekeningen": [
+    {
+     "naam": "T",
+     "formule": "Th * tb",
+     "waarde": 0.8,
+     "eenheid": "ms",
+     "afgerond": "0,8"
+    },
+    {
+     "naam": "Ts",
+     "formule": "T / 1000",
+     "waarde": 0.0008,
+     "eenheid": "s",
+     "afgerond": "0,0008"
+    },
+    {
+     "naam": "f",
+     "formule": "1 / Ts",
+     "waarde": 1250,
+     "eenheid": "Hz",
+     "afgerond": "1250"
+    }
+   ]
+  },
+  {
+   "id": "se42-toongenerator-c",
+   "vraagtype": {
+    "nr": 3,
+    "code": "G-OSC",
+    "naam": "Oscilloscoopbeeld: amplitude/toonhoogte/luidheid",
+    "cse": [
+     9,
+     13,
+     45
+    ]
+   },
+   "niveau": "BB/KB/GT",
+   "punten": 1,
+   "leerdoel": "K/13.2 toonhoogte en luidheid herkennen in een oscilloscoopbeeld",
+   "context": [
+    "Gijs stelt de toongenerator anders in. De nieuwe toon is <b>hoger én harder</b>. De instellingen van de oscilloscoop blijven gelijk. Je ziet vier beelden."
+   ],
+   "figuur": {
+    "type": "oscilloscoop",
+    "hokjesX": 10,
+    "hokjesY": 8,
+    "panelen": [
+     {
+      "label": "A",
+      "amplitude": 2,
+      "trillingstijd": 2.5
+     },
+     {
+      "label": "B",
+      "amplitude": 3.6,
+      "trillingstijd": 2.5
+     },
+     {
+      "label": "C",
+      "amplitude": 3.6,
+      "trillingstijd": 5
+     },
+     {
+      "label": "D",
+      "amplitude": 2,
+      "trillingstijd": 5
+     }
+    ],
+    "breedteCm": 11.0,
+    "controle": [
+     {
+      "meting": "B.T",
+      "parameter": "TB"
+     },
+     {
+      "meting": "B.A",
+      "parameter": "AB"
+     },
+     {
+      "meting": "A.A",
+      "verwacht": 2
+     },
+     {
+      "meting": "C.T",
+      "verwacht": 5
+     },
+     {
+      "meting": "D.T",
+      "verwacht": 5
+     }
+    ]
+   },
+   "stam": "Welk beeld hoort bij de nieuwe toon?",
+   "opties": [
+    "beeld A",
+    "beeld B",
+    "beeld C",
+    "beeld D"
+   ],
+   "antwoordmodel": {
+    "juist": "B",
+    "regels": [],
+    "opmerking": "Hoger = kleinere trillingstijd (2,5 hokjes < 4 hokjes); harder = grotere amplitude (3,6 hokjes > 3 hokjes). Alleen B voldoet aan beide."
+   },
+   "scorestappen": [
+    {
+     "omschrijving": "B",
+     "punten": 1
+    }
+   ],
+   "rtti": "T1",
+   "parameters": [
+    {
+     "naam": "TB",
+     "waarde": 2.5,
+     "bron": "figuur",
+     "eenheid": "hokjes"
+    },
+    {
+     "naam": "AB",
+     "waarde": 3.6,
+     "bron": "figuur",
+     "eenheid": "hokjes"
+    }
+   ],
+   "berekeningen": [
+    {
+     "naam": "hoger",
+     "formule": "TB < Th",
+     "waarde": 1
+    },
+    {
+     "naam": "harder",
+     "formule": "AB > Ah",
+     "waarde": 1
+    }
+   ]
+  },
+  {
+   "id": "se42-toongenerator-d",
+   "vraagtype": {
+    "nr": 25,
+    "code": "G-FREQ",
+    "naam": "Frequentie/trillingstijd berekenen (f = 1/T)",
+    "cse": [
+     0,
+     10,
+     20
+    ]
+   },
+   "niveau": "vooral KB/GT",
+   "punten": 2,
+   "leerdoel": "K/13.3 inzicht: tijdbasis en trillingstijd",
+   "context": [
+    "Gijs zet de tijdbasis van de oscilloscoop op 0,1 ms per hokje. De toongenerator laat dezelfde toon horen als eerst."
+   ],
+   "stam": "Leg uit hoeveel hokjes één trilling nu breed is.",
+   "antwoordregels": 3,
+   "antwoordmodel": {
+    "regels": [
+     "8 hokjes",
+     "uitleg: de toon is hetzelfde, dus T blijft 0,8 ms; 0,8 / 0,1 = 8 hokjes (de trilling wordt twee keer zo breed getekend)."
+    ]
+   },
+   "scorestappen": [
+    {
+     "omschrijving": "inzicht dat de trillingstijd van de toon gelijk blijft (0,8 ms)",
+     "punten": 1
+    },
+    {
+     "omschrijving": "8 hokjes",
+     "punten": 1
+    }
+   ],
+   "rtti": "I",
+   "parameters": [
+    {
+     "naam": "tb2",
+     "waarde": 0.1,
+     "bron": "tekst",
+     "eenheid": "ms",
+     "weergave": "0,1"
+    }
+   ],
+   "berekeningen": [
+    {
+     "naam": "T",
+     "formule": "Th * tb",
+     "waarde": 0.8,
+     "eenheid": "ms",
+     "afgerond": "0,8"
+    },
+    {
+     "naam": "Th2",
+     "formule": "T / tb2",
+     "waarde": 8,
+     "eenheid": "hokjes",
+     "afgerond": "8"
+    }
+   ]
+  }
+ ]
+}

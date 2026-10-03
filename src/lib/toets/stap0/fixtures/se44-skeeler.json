@@ -1,0 +1,135 @@
+{
+ "soort": "vraag",
+ "id": "se44-skeeler",
+ "titel": "Skeeleren",
+ "vraagtype": {
+  "nr": 43,
+  "code": "B-DIAG",
+  "naam": "Bewegingsdiagram (v,t)/(s,t) lezen of interpreteren",
+  "cse": [
+   3,
+   3,
+   10
+  ]
+ },
+ "se": "SE4.4",
+ "hoofdstuk": "Bewegingsdiagram (v,t)",
+ "niveau": "BB/KB/GT",
+ "punten": 1,
+ "leerdoel": "K/8.2 beweging herkennen in een (v,t)-diagram",
+ "context": [
+  "Mila skeelert over een vlak fietspad. Ze stopt met afzetten en rolt uit tot ze stilstaat. Je ziet vier (v,t)-diagrammen."
+ ],
+ "figuur": {
+  "type": "grafiek",
+  "x": {
+   "label": "t →",
+   "min": 0,
+   "max": 10,
+   "stap": 10
+  },
+  "y": {
+   "label": "v →",
+   "min": -0.2,
+   "max": 9,
+   "stap": 9
+  },
+  "reeksen": [],
+  "panelen": [
+   {
+    "label": "A",
+    "punten": [
+     [
+      0,
+      5
+     ],
+     [
+      10,
+      5
+     ]
+    ]
+   },
+   {
+    "label": "B",
+    "punten": [
+     [
+      0,
+      1
+     ],
+     [
+      10,
+      8
+     ]
+    ]
+   },
+   {
+    "label": "C",
+    "punten": [
+     [
+      0,
+      8
+     ],
+     [
+      8.889,
+      0
+     ],
+     [
+      10,
+      0
+     ]
+    ]
+   },
+   {
+    "label": "D",
+    "punten": [
+     [
+      0,
+      0
+     ],
+     [
+      10,
+      0
+     ]
+    ]
+   }
+  ],
+  "breedteCm": 11.0,
+  "controle": [
+   {
+    "meting": "C.trend",
+    "verwacht": -1
+   },
+   {
+    "meting": "C.eind",
+    "verwacht": 0
+   },
+   {
+    "meting": "A.trend",
+    "verwacht": 0
+   },
+   {
+    "meting": "B.trend",
+    "verwacht": 1
+   }
+  ]
+ },
+ "stam": "Welk (v,t)-diagram hoort bij deze beweging?",
+ "opties": [
+  "diagram A",
+  "diagram B",
+  "diagram C",
+  "diagram D"
+ ],
+ "antwoordmodel": {
+  "juist": "C",
+  "regels": [],
+  "opmerking": "Uitrollen: de snelheid neemt af tot 0 (dalende lijn die op de t-as eindigt)."
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "C",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1"
+}

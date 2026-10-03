@@ -107,7 +107,13 @@ function boek(kosten: Kosten | undefined, rol: ModelRol, model: string, u: Usage
 export async function xaiChat(
   rol: ModelRol,
   messages: Bericht[],
-  opts: { maxTokens: number; timeoutMs: number; kosten?: Kosten },
+  opts: {
+    maxTokens: number;
+    timeoutMs: number;
+    kosten?: Kosten;
+    /** Structured output: het antwoord moet aan dit JSON-schema voldoen (xAI json_schema, strict). Standaard json_object. */
+    jsonSchema?: { naam: string; schema: Record<string, unknown> };
+  },
 ): Promise<string> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("AI is in deze omgeving niet beschikbaar.");
@@ -126,7 +132,9 @@ export async function xaiChat(
         ...(redeneer ? { reasoning_effort: redeneer } : {}),
         temperature: TEMPERATUUR[rol] ?? 0.4,
         max_tokens: opts.maxTokens,
-        response_format: { type: "json_object" },
+        response_format: opts.jsonSchema
+          ? { type: "json_schema", json_schema: { name: opts.jsonSchema.naam, schema: opts.jsonSchema.schema, strict: true } }
+          : { type: "json_object" },
         messages,
       }),
     });

@@ -1,0 +1,90 @@
+{
+ "soort": "vraag",
+ "id": "se41-krat",
+ "titel": "Krat met flessen",
+ "vraagtype": {
+  "nr": 55,
+  "code": "K-SCHAAL",
+  "naam": "Krachtenschaal bepalen/aantonen",
+  "cse": [
+   0,
+   0,
+   9
+  ]
+ },
+ "se": "SE4.1",
+ "hoofdstuk": "Krachtenschaal",
+ "niveau": "vooral GT",
+ "punten": 1,
+ "leerdoel": "K/9.1 krachtenschaal bepalen",
+ "context": [
+  "Op een plank in de schuur staat een krat met flessen. De zwaartekracht op de krat is 90 N. Je ziet de krat met de zwaartekracht op schaal getekend. De pijl is 4,5 cm lang."
+ ],
+ "figuur": {
+  "type": "krachten",
+  "breedteCm": 6.0,
+  "hoogteCm": 8.5,
+  "schaalN": 20,
+  "voorwerp": "krat",
+  "punt": [
+   3.0,
+   6.7
+  ],
+  "pijlen": [
+   {
+    "naam": "Fz",
+    "grootteN": 90,
+    "hoek": 270,
+    "label": "F<sub>z</sub>"
+   }
+  ],
+  "controle": [
+   {
+    "meting": "Fz.lengteCm",
+    "parameter": "lengte"
+   },
+   {
+    "meting": "Fz.N",
+    "parameter": "Fz"
+   }
+  ]
+ },
+ "stam": "Toon met een berekening aan dat de krachtenschaal 1 cm ≙ 20 N is.",
+ "antwoordregels": 2,
+ "antwoordmodel": {
+  "regels": [
+   "90 N / 4,5 cm = 20 N per cm, dus 1 cm ≙ 20 N"
+  ]
+ },
+ "scorestappen": [
+  {
+   "omschrijving": "juiste berekening (90 : 4,5 = 20)",
+   "punten": 1
+  }
+ ],
+ "rtti": "T1",
+ "parameters": [
+  {
+   "naam": "Fz",
+   "waarde": 90,
+   "bron": "tekst",
+   "eenheid": "N"
+  },
+  {
+   "naam": "lengte",
+   "waarde": 4.5,
+   "bron": "tekst",
+   "eenheid": "cm",
+   "weergave": "4,5"
+  }
+ ],
+ "berekeningen": [
+  {
+   "naam": "schaal",
+   "formule": "Fz / lengte",
+   "waarde": 20,
+   "eenheid": "N/cm",
+   "afgerond": "20"
+  }
+ ]
+}
