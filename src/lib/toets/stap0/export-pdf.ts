@@ -8,7 +8,7 @@
 import type { FiguurSpec, OpmaakVraag, SeCode, ToetsSpec } from "./spec.ts";
 import type { Pijplijnresultaat } from "./pijplijn.ts";
 import { figuurSvg } from "./figuren/index.ts";
-import { cijferGrafiekSvg, cijferTabel, cesuur, cesuurPct, formule } from "./cijfer-n.ts";
+import { cijferGrafiekSvg, cijferTabel, cesuur, cesuurPct, formule, nlN } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
 import { leerdoelMetDoel, typeSleutel, vraagtypeNaam, antwoordKop, bandTekst, contextTitel, indelingKop, instructieVoor, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, voorbladTekst, vraagstukBereik } from "./opmaak.ts";
 import { A4, Beeld, Bijeen, type Blok, CM, type Fonts, GeenNummer, Ingesprongen, Lijn, Lijnen, maakPdf, Onderaan, PaginaEinde, Para, Ruimte, ST, Tabel } from "./pdf-opmaak.ts";
@@ -258,7 +258,7 @@ async function cijferDeel(max: number, n: number, png: PngRender): Promise<Blok[
   const cs = cesuur(max, n);
   return [
     new Para("Cijferberekening", ST.h2, 6),
-    new Para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlCijfer(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cs} van de ${max} punten</b> (${cesuurPct(cs, max)} %) → ${nlCijfer(tabel[cs].cijfer)}. Onvoldoendes staan in rood.`, ST.body, 6),
+    new Para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlN(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cs} van de ${max} punten</b> (${cesuurPct(cs, max)} %) → ${nlCijfer(tabel[cs].cijfer)}. Onvoldoendes staan in rood.`, ST.body, 6),
     new Tabel([kop, ...rijen], { kolommen: Array(8).fill(TW / 8), rooster: { kleur: "#999999", lw: 0.4 }, pad: { l: 6, r: 8, t: 1.5, b: 2.5 }, va: "midden" }),
     new Ruimte(10),
     new Bijeen([new Para("<b>Grafiek: cijfer tegen score</b>", ST.body, 4), new Beeld(g, 12 * CM, hCm * CM, "midden")]),

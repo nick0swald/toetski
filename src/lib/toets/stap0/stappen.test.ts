@@ -135,7 +135,7 @@ describe("stap 0 in losse stappen (offline)", () => {
     assert.deepEqual(keurGeneratie(s.gen!, inv, kal).fouten.filter((f) => /^\[a\d|^\[zz/.test(f)), [], "geen afgekeurd vraagstuk geplaatst");
   });
 
-  it("tijd op → afronden met wat goed is", async () => {
+  it("tijd op → afronden; wat goed is haalt de spec niet → niet gelukt (geen halve toets)", async () => {
     let t = 0;
     const chat = nepChat([kopie("een"), fout("twee")]);
     let s = nieuweStaat(inv, kal, "t4", 0);
@@ -145,8 +145,8 @@ describe("stap 0 in losse stappen (offline)", () => {
     assert.equal(s.fase, "afronden");
     assert.equal(s.stopReden, "tijd");
     s = await voerStapUit(s, chat, { nu: () => t });
-    assert.equal(s.fase, "klaar");
-    assert.deepEqual(s.gen!.vraagstukken.map((v) => v.id), ["een"]);
+    assert.equal(s.fase, "mislukt");
+    assert.match(s.nietGelukt!, /^Niet gelukt: .*de tijd is op/);
     assert.deepEqual(monitoring(s).stopReden, "tijd");
   });
 

@@ -90,14 +90,14 @@ export async function maakToetsStap0(
   const vorige = laatste?.staat as { fase?: Stap0Voortgang["fase"]; rondes?: number } | undefined;
   meld(laatste ? { fase: vorige?.fase ?? "herstel", ronde: vorige?.rondes ?? 0, tekst: "Verder waar het gebleven was…" } : { fase: "spec", ronde: 0, tekst: "Toets schrijven (eerste versie, ± 1,5–2 minuten)…" });
   for (let n = 0; n < MAX_STAPPEN; n++) {
-    if (nu() - t0 > MAX_CLIENT_MS) return { ok: false, error: "Stap 0 duurde te lang.", fallback: true };
+    if (nu() - t0 > MAX_CLIENT_MS) return { ok: false, error: "Niet gelukt: het maken duurde te lang. Er is geen halve toets gemaakt; probeer het opnieuw.", fallback: false };
     let r: Stap0StapAntwoord | null = null;
     for (let poging = 0; poging <= HERKANSINGEN && !r; poging++) {
       try {
         r = await stap({ data: laatste ? { pilot: opts.pilot, ...laatste } : { pilot: opts.pilot, input } });
       } catch (err) {
         // Time-out of netwerkfout: opnieuw vanaf de laatst bewaarde toestand.
-        if (poging === HERKANSINGEN) return { ok: false, error: err instanceof Error ? err.message : "Stap mislukt", fallback: true };
+        if (poging === HERKANSINGEN) return { ok: false, error: `Niet gelukt: de verbinding viel weg (${err instanceof Error ? err.message.slice(0, 120) : "stap mislukt"}). Probeer het opnieuw.`, fallback: !laatste };
         opts.onStatus?.("Verbinding haperde; deze stap opnieuw…");
       }
     }
@@ -115,5 +115,5 @@ export async function maakToetsStap0(
     }
     meld({ fase: (ok.status.fase as Stap0Voortgang["fase"]) ?? "herstel", ronde: ok.status.ronde ?? 0, open: ok.status.open, tekst: ok.status.tekst });
   }
-  return { ok: false, error: "Te veel stappen.", fallback: true };
+  return { ok: false, error: "Niet gelukt: te veel stappen zonder een toets die aan je eisen voldoet. Probeer het opnieuw.", fallback: false };
 }
