@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { andereWaarde, autoHerstel, autoHerstelVraagstuk, leidJuistAf, pasKrachtenKader } from "./auto-herstel.ts";
+import { andereWaarde, autoHerstel, autoHerstelVraagstuk, leidJuistAf, pasKrachtenKader, rondSig } from "./auto-herstel.ts";
 import { genereerSpec, hoofdstukNaam, isServerfout, keurGeneratie, specPrompt, type ChatFn, type SpecInvoer } from "./grok-spec.ts";
-import { bloklijstRegel, paragraafKern, raaktKern, zoekBegripHerhaling, zoekGetalWeggevers } from "./inhoud-keuring.ts";
+import { afrondFouten, bloklijstRegel, paragraafKern, raaktKern, zoekBegripHerhaling, zoekGetalWeggevers } from "./inhoud-keuring.ts";
 import { controleerBerekeningen, leesNl } from "./reken.ts";
 import { laadFixtures } from "./laad.ts";
 import { verwerkToets } from "./pijplijn.ts";
@@ -153,6 +153,32 @@ describe("stap 0: first-time-right (offline)", () => {
     assert.ok(l!.hoogteCm <= 7 && l!.breedteCm <= 6, `kader ${l!.breedteCm} × ${l!.hoogteCm}`);
     assert.deepEqual([l!.breedteCm, l!.hoogteCm, l!.punt], [a!.breedteCm, a!.hoogteCm, a!.punt]);
     assert.equal(pasKrachtenKader([l, a]), null); // idempotent
+  });
+
+  it("7. validatie: losse juiste letter bij open vraag weg, vraagtype/niveau aangevuld, afronding op significante cijfers", () => {
+    const v = krat();
+    const b = v.deelvragen[1]! as unknown as Record<string, unknown> & (typeof v.deelvragen)[number];
+    b.antwoordmodel.juist = "B";
+    delete (b as { vraagtype?: unknown }).vraagtype;
+    v.deelvragen[0]!.niveau = "vooral GT";
+    delete (b as { niveau?: unknown }).niveau;
+    b.parameters = [{ naam: "Fz", waarde: 42, bron: "tekst", eenheid: "N", weergave: "42" }, { naam: "g", waarde: 9.8, bron: "binas", eenheid: "N/kg" }];
+    b.berekeningen = [{ naam: "m", formule: "Fz / g", waarde: 42 / 9.8, eenheid: "kg", afgerond: "4,2857", tolerantie: 0.001 }];
+    b.antwoordmodel.regels = ["m = 42 / 9,8 = 4,2857 kg"];
+    assert.equal(afrondFouten([v]).length, 1);
+    const { v: w, stappen } = autoHerstelVraagstuk(v);
+    const wb = w.deelvragen[1]!;
+    assert.equal(wb.antwoordmodel.juist, undefined);
+    assert.equal(wb.vraagtype.code, "OVERIG");
+    assert.equal(wb.niveau, "vooral GT");
+    assert.equal(wb.berekeningen![0]!.afgerond, "4,3");
+    assert.deepEqual(wb.antwoordmodel.regels, ["m = 42 / 9,8 = 4,3 kg"]);
+    assert.equal(afrondFouten([w]).length, 0);
+    assert.ok(!fouten(w).some((f) => /open vraag met een juiste letter/.test(f)));
+    assert.ok(stappen.some((s) => /losse juiste letter/.test(s.wat)));
+    assert.equal(rondSig(6.04, 2), "6,0");
+    assert.equal(rondSig(1372, 2), null); // "1400": dubbelzinnig
+    assert.equal(rondSig(0.01234, 2), "0,012");
   });
 
   it("6. reken: '1400' bij 1372 (2 sig. cijfers) en '1,4×10³' zijn goed afgerond", () => {

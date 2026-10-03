@@ -189,33 +189,41 @@ const EXPLICIET = /\b(rond\w* af|afgerond|decimaal|decimalen|significant|hele ge
  * hebben. Staat er in de vraag een eigen
  * afrondinstructie, dan geldt die (geen controle).
  */
+/**
+ * Afrondingsdoel van een deelvraag: de laatste afgeronde berekening, haar aantal significante cijfers en het verwachte
+ * aantal (zoals het gegeven met de minste significante cijfers, minimaal 2). null als er niets te keuren is.
+ */
+export function afrondDoel(v: VraagstukSpec, d: VraagstukSpec["deelvragen"][number]): { laatste: NonNullable<typeof d.berekeningen>[number]; sf: number; verwacht: number; ondergrens: number } | null {
+  const b = d.berekeningen ?? [];
+  const laatste = [...b].reverse().find((x) => x.afgerond);
+  if (!laatste?.afgerond || EXPLICIET.test(d.stam)) return null;
+  const sf = significant(laatste.afgerond);
+  if (sf === null) return null;
+  const params: Parameter[] = [...(v.parameters ?? []), ...(d.parameters ?? [])];
+  const perNaam = new Map(params.map((p) => [p.naam, p]));
+  const stappen = new Map(b.map((x) => [x.naam, x]));
+  const gebruikt = new Set<string>();
+  const loop = (formule: string, diepte = 0) => {
+    for (const id of formule.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []) {
+      if (perNaam.has(id)) gebruikt.add(id);
+      else if (stappen.has(id) && diepte < 10) loop(stappen.get(id)!.formule, diepte + 1);
+    }
+  };
+  loop(laatste.formule);
+  const sfs = [...gebruikt].map((n) => perNaam.get(n)!).filter((p) => p.bron !== "binas").map((p) => significant(p.weergave ?? String(p.waarde).replace(".", ","))).filter((x): x is number => x !== null);
+  if (!sfs.length) return null;
+  const minst = Math.min(...sfs);
+  return { laatste, sf, verwacht: Math.max(2, minst), ondergrens: Math.min(2, minst) };
+}
+
 export function afrondFouten(vs: VraagstukSpec[]): Bevinding[] {
   const uit: Bevinding[] = [];
   for (const v of vs)
     for (const d of v.deelvragen) {
-      const b = d.berekeningen ?? [];
-      const laatste = [...b].reverse().find((x) => x.afgerond);
-      if (!laatste?.afgerond || EXPLICIET.test(d.stam)) continue;
-      const sf = significant(laatste.afgerond);
-      if (sf === null) continue;
-      const params: Parameter[] = [...(v.parameters ?? []), ...(d.parameters ?? [])];
-      const perNaam = new Map(params.map((p) => [p.naam, p]));
-      const stappen = new Map(b.map((x) => [x.naam, x]));
-      const gebruikt = new Set<string>();
-      const loop = (formule: string, diepte = 0) => {
-        for (const id of formule.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []) {
-          if (perNaam.has(id)) gebruikt.add(id);
-          else if (stappen.has(id) && diepte < 10) loop(stappen.get(id)!.formule, diepte + 1);
-        }
-      };
-      loop(laatste.formule);
-      const sfs = [...gebruikt].map((n) => perNaam.get(n)!).filter((p) => p.bron !== "binas").map((p) => significant(p.weergave ?? String(p.waarde).replace(".", ","))).filter((x): x is number => x !== null);
-      if (!sfs.length) continue;
-      const minst = Math.min(...sfs);
-      const verwacht = Math.max(2, minst);
+      const a = afrondDoel(v, d);
       // Toegestaan: van min(2, minst) (gegevens met 1 significant cijfer, bijv. "0,2 ms per hokje") tot verwacht + 1.
-      if (sf > verwacht + 1 || sf < Math.min(2, minst))
-        uit.push({ id: d.id, vraagstuk: v.id, tekst: `${d.id}: afronding: "${laatste.afgerond}" heeft ${sf} significante cijfers; rond af op ${verwacht} (zoals het gegeven met de minste significante cijfers, minimaal 2), of zeg in de vraag hoe er afgerond moet worden; zet de onafgeronde waarde er in het antwoordmodel bij` });
+      if (a && (a.sf > a.verwacht + 1 || a.sf < a.ondergrens))
+        uit.push({ id: d.id, vraagstuk: v.id, tekst: `${d.id}: afronding: "${a.laatste.afgerond}" heeft ${a.sf} significante cijfers; rond af op ${a.verwacht} (zoals het gegeven met de minste significante cijfers, minimaal 2), of zeg in de vraag hoe er afgerond moet worden; zet de onafgeronde waarde er in het antwoordmodel bij` });
     }
   return uit;
 }
