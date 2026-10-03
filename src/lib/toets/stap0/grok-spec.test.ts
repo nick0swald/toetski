@@ -198,7 +198,7 @@ describe("stap 0 + Grok: spec-generatie (offline)", () => {
     const chat: ChatFn = async (m, schema) => {
       if (schema.naam === "toets_spec") return JSON.stringify({ titel: "x", vraagstukken: [kopie("start")] });
       const p = m.at(-1)!.content;
-      assert.match(p, /NIEUW vraagstuk[\s\S]*13\.1 Het oor/);
+      assert.match(p, /NIEUW vraagstuk[\s\S]*13\.1 Het oor/i);
       const v = kopie(`nieuw${++n}`);
       v.deelvragen.forEach((d) => (d.leerdoel = "13.1 het trommelvlies in het oor"));
       return JSON.stringify({ vraagstuk: v });
