@@ -290,10 +290,13 @@ function ToetsPage() {
                   </div>
                 </>
               )}
-              <Button type="button" disabled={saving} onClick={saveDocx}>
-                {saving ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
-                Word
-              </Button>
+              {current.stap0 ? null : (
+                // Stap-0-toetsen: downloads (leerling- en docentdeel apart, CSE-voorblad) staan in Stap0Export.
+                <Button type="button" disabled={saving} onClick={saveDocx}>
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
+                  Word
+                </Button>
+              )}
             </div>
           </div>
           {current.stap0 ? <Stap0Export toets={current} /> : null}

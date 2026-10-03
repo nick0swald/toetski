@@ -12,6 +12,7 @@
  * Geen vaste limiet op het aantal herstelaanroepen (alleen tijd en geld); geen rechter in productie.
  * Pure logica: de modelaanroep komt binnen als `StapChat` (productie: xaiChat met XAI_API_KEY; tests: nep).
  */
+import { vraagtypeSpreiding } from "./doelen.ts";
 import { autoHerstel } from "./auto-herstel.ts";
 import { REVIEW, reviewPrompt, reviewSchema, verwerkReview, type ReviewUitslag } from "./docent-review.ts";
 import {
@@ -567,6 +568,9 @@ export function monitoring(s: Stap0Staat, r?: Keuringsrapport): Record<string, u
     review: s.review ? { rondes: s.review.rondes, bevindingen: s.review.bevindingen, hersteld: s.review.hersteldTotaal, figuurTaak: s.review.figuurTaak } : undefined,
     /** First-time-right: de eerste docent-review vond niets (geen "hoog", geen figuurvoorstel). */
     firstTimeRight: s.review?.eersteSchoon,
+    /** Spreiding van vraagtypen (62 CSE-typen) en het aandeel deelvragen met een examendoel. */
+    vraagtypen: s.gen ? (({ aantal, maxAandeel }) => ({ aantal, maxAandeel }))(vraagtypeSpreiding(s.gen.vraagstukken)) : undefined,
+    metExamendoel: s.gen ? (() => { const d = s.gen!.vraagstukken.flatMap((v) => v.deelvragen); return d.length ? Math.round((100 * d.filter((x) => x.examendoel).length) / d.length) : 0; })() : undefined,
   };
 }
 

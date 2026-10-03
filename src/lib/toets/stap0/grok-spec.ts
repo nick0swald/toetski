@@ -16,8 +16,9 @@ import { nl } from "./reken.ts";
 import { annoteerKalibratie, relevanteVraagtypen, type Kalibratie } from "../kalibratie.ts";
 import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { overlap, woorden } from "../eval/rubric.ts";
-import { afrondFouten, begripTelling, bloklijstRegel, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekBegripHerhaling, zoekFiguurVerwijzingen, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
+import { afrondFouten, begripTelling, bloklijstRegel, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekBegripHerhaling, zoekBoekParafrase, zoekFiguurVerwijzingen, zoekGegevenWeggevers, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
 import { autoHerstel } from "./auto-herstel.ts";
+import { officieelVraagtype, relevanteDoelen, typenVoorDoelen } from "./doelen.ts";
 import type { GegenereerdeToets, Leerweg, RttiVerdeling, Vraag } from "../types";
 
 export interface SpecInvoer {
@@ -97,11 +98,22 @@ OPBOUW (CSE-stijl)
 - Neem NOOIT een vraag uit het boek, de lesstof of een examen letterlijk over. Bedenk nieuwe situaties en nieuwe getallen; ook geen zinnen uit de lesstof overschrijven.
 - Taal: helder Nederlands op het niveau van de klas. Getallen met decimale komma ("2,5"). Eenheden met spatie ("12 V"). Inline opmaak mag: <b>, <i>, <sub>, <sup>.
 
+GOED IN ÉÉN KEER (na jou leest een strenge docent de toets na; zorg dat die niets vindt)
+- Weggevers over de HELE toets: geen context, tabel, "Ga uit van …"-waarde of MC-optie (ook niet in een ander vraagstuk) die het antwoord op een andere vraag noemt of bijna noemt. Een "Ga uit van"-waarde ligt duidelijk (minstens 20 %) naast elke uitkomst die elders berekend wordt, in dezelfde eenheid. Een meetwaarde in de context mag niet verklappen waar of hoe er gemeten moet worden als dat juist gevraagd wordt.
+- Eerlijke RTTI: een feit, definitie, naam of herkennen is R (ook als het een meerkeuzevraag is). T1/T2 alleen als de leerling iets toepast of rekent; I alleen bij redeneren in een nieuwe situatie.
+- Examenniveau: hoogstens ongeveer 35 % van de punten R. Minstens twee meerstapsvragen waar de stof dat toelaat (eenheden omrekenen zoals W→kW of min→h, kosten met de prijs per kWh, "slaat de zekering door?", eerst een tussenwaarde berekenen).
+- Geen bijna-kopie van een opgave of voorbeeld uit de lesstof: niet dezelfde situatie en niet dezelfde vraag in andere woorden.
+- MC-opties: precies één verdedigbaar juist antwoord, geen half-juiste of onzinnige afleiders, geen optie die een andere vraag beantwoordt.
+- Figuren waar ze iets toevoegen (zie FIGUREN), en alleen westerse/Nederlandse voornamen.
+- Elke deelvraag toetst een examendoel uit DOELEN dat echt in de lesstof staat, met een passend vraagtype; de typen zijn gevarieerd (zie VRAAGTYPE) en het niveau past bij de klas.
+- Instructies op het voorblad maakt de software uit de inhoud (g, Binas, rekenmachine, tekenen); zet zulke afspraken dus alleen in een vraag als die vraag ze nodig heeft.
+
 PUNTEN EN NAKIJKEN
 - punten per deelvraag 1–4. "scorestappen": per scorepunt één controleerbaar criterium; de som = punten.
 - "antwoordmodel.regels": het antwoord en de uitwerking zoals in een correctievoorschrift. Bij meerkeuze "juist" = de letter.
 - "rtti": R (reproductie), T1 (toepassen bekend), T2 (toepassen nieuw), I (inzicht). Label eerlijk naar wat de vraag vraagt.
 - "leerdoel": begin met de paragraafcode uit de lesstof (bijv. "13.2 …") en daarna wat er getoetst wordt.
+- "examendoel": de id van het examendoel uit DOELEN (bijv. "K/5.6" of "SLO-30C") dat de vraag echt toetst; "vraagtype": het CSE-vraagtype dat bij de vraag past (zie VRAAGTYPE).
 - "niveau": "BB/KB/GT", "vooral KB/GT" of "vooral GT".
 
 REKENEN (wordt door code nagerekend; een fout = de vraag wordt niet geplaatst)
@@ -162,10 +174,33 @@ export const LENGTE_DOEL = 1.15;
 export const LENGTE_MIN = 1.1;
 export const LENGTE_MAX = 1.2;
 
+/** Doelbron per klas: klas 4 de CvTE-eindtermen op examenniveau, klas 3 dezelfde eindtermen iets milder, klas 1–2 de SLO-kerndoelen. */
+export function doelenRegel(leerjaar: number, doelen: { id: string; tekst: string }[]): string {
+  if (!doelen.length) return "";
+  const lijst = doelen.map((d) => `${d.id} ${d.tekst}`).join("; ");
+  if (leerjaar <= 2)
+    return `DOELEN (onderbouw, SLO-kerndoelen mens en natuur): elke deelvraag past bij een kerndoel dat in deze lesstof aan bod komt; zet de id in "examendoel". Kerndoelen bij deze lesstof: ${lijst}. Toets alleen wat in de lesstof staat; geen examenstof die nog niet behandeld is.`;
+  const wie = leerjaar >= 4 ? "klas 4, examenniveau: toets zoals het CSE/SE dat doet" : "klas 3: richting het examen, iets milder (kortere contexten, minder stappen)";
+  return `DOELEN (CvTE-syllabus NaSk1, ${wie}): elke deelvraag toetst een eindterm die in deze lesstof aan bod komt; zet de id in "examendoel". Eindtermen bij deze lesstof: ${lijst}. Verdeel de punten over deze eindtermen naar de hoeveelheid stof; niets buiten de lesstof.`;
+}
+
+/** Vraagtypen uit de 62 CSE-vraagtypen: klas 4 op examenniveau, klas 3 richting examen, onderbouw alleen losjes. */
+export function vraagtypeRegel(leerjaar: number, typen: string): string {
+  const kop = `VRAAGTYPE: vul "vraagtype" met het officiële nr, code en naam (nr=code; de lijst begint met de typen die bij de doelen horen): ${typen}; past niets, gebruik 63=OVERIG.`;
+  if (leerjaar >= 4) return `${kop} Bouw elke deelvraag als het CSE-vraagtype op examenniveau. Varieer: minstens 6 verschillende typen en geen type met meer dan 25 % van de punten.`;
+  if (leerjaar === 3) return `${kop} Bouw de deelvragen naar deze CSE-vraagtypen, iets eenvoudiger dan op het examen. Varieer: minstens 5 verschillende typen en geen type met meer dan 30 % van de punten.`;
+  return `${kop} Onderbouw: de typen zijn alleen een richting (eenvoudige vorm, kort); wissel wel af: minstens 4 verschillende typen.`;
+}
+
 export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten"> & Partial<Pick<Kalibratie, "vorm" | "pct1p">>): string {
   const pars = extractParagrafen(inv.bronmateriaal, inv.antwoordenmateriaal);
+  const doelen = relevanteDoelen(`${inv.bronmateriaal}\n${inv.antwoordenmateriaal ?? ""}`, inv.leerjaar, inv.leerweg);
+  const bijDoel = typenVoorDoelen(doelen);
   const typen = relevanteVraagtypen(inv.bronmateriaal, inv.leerjaar, inv.leerweg)
-    .map((t, i) => `${i + 1}=${t.id} (${t.naam.split(/[(:;]/)[0]!.trim().slice(0, 50)})`)
+    .map((t) => officieelVraagtype(t.id))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t))
+    .sort((a, b) => Number(bijDoel.has(b.code)) - Number(bijDoel.has(a.code)))
+    .map((t) => `${t.nr}=${t.code} (${t.naam.slice(0, 50)})`)
     .join("; ");
   const r = inv.rttiDoel;
   const nVs = [Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 4)), Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 3))];
@@ -181,7 +216,8 @@ export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "pun
     inv.leerjaar <= 2 ? `NIVEAU: onderbouw klas ${inv.leerjaar}: korte inleidingen, eenvoudige taal, rekenwerk in 1–2 stappen; wel CSE-opbouw met vraagstukken.` : "",
     `WEETVRAGEN: hoogstens ${Math.round((MAX_1P_R[inv.leerweg] ?? 0.35) * 100)}% van de punten (${Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * kal.punten)} punten) uit 1-punts R-vragen.`,
     bloklijstRegel(inv.bronmateriaal),
-    typen ? `VRAAGTYPE: vul "vraagtype" met nr, code en naam uit deze lijst (nr=code): ${typen}. Gebruik minstens 5 verschillende typen.` : "",
+    doelenRegel(inv.leerjaar, doelen),
+    typen ? vraagtypeRegel(inv.leerjaar, typen) : "",
     `\nLESSTOF:\n${inv.bronmateriaal}`,
     inv.antwoordenmateriaal ? `\nANTWOORDEN BIJ DE LESSTOF (alleen als achtergrond; niets letterlijk overnemen):\n${inv.antwoordenmateriaal}` : "",
     `\nSchrijf nu de complete toets als JSON volgens het schema (titel + vraagstukken).`,
@@ -368,11 +404,11 @@ export function zoekWeggevers(vs: VraagstukSpec[]): string[] {
   return [...new Set(uit)];
 }
 
-/** Zinnen (≥ 10 woorden) die letterlijk uit de lesstof komen. */
+/** Zinnen (≥ 8 woorden achter elkaar) die letterlijk uit de lesstof komen. */
 function overgenomen(tekst: string, bron: string): boolean {
   const w = kaal(tekst).toLowerCase().split(/\s+/);
   const b = kaal(bron).toLowerCase().replace(/\s+/g, " ");
-  for (let i = 0; i + 10 <= w.length; i++) if (b.includes(w.slice(i, i + 10).join(" "))) return true;
+  for (let i = 0; i + 8 <= w.length; i++) if (b.includes(w.slice(i, i + 8).join(" "))) return true;
   return false;
 }
 
@@ -389,7 +425,7 @@ export function alsToetsSpec(gen: Generatie, inv: SpecInvoer): ToetsSpec {
       schooljaar: "2026-2027",
       seCode: inv.leerjaar === 4 ? "SE4" : `klas ${inv.leerjaar}`,
       vak: `natuur- en scheikunde${inv.leerjaar >= 3 ? " 1" : ""}`,
-      hulpmiddelen: [...(inv.leerjaar >= 3 ? ["Gebruik het BINAS informatieboek."] : []), "Je mag een rekenmachine gebruiken."],
+      // hulpmiddelen: uit de inhoud (opmaak.hulpmiddelenVoor): Binas alleen als een vraag Binas gebruikt.
       schoolveld: "",
     },
   };
@@ -463,6 +499,11 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
     const id = gen.vraagstukken.find((v) => v.deelvragen.some((d) => w.startsWith(d.id)))?.id ?? "";
     voeg(id, `weggever: ${w}`);
   }
+  for (const b of zoekGegevenWeggevers(gen.vraagstukken)) {
+    voeg(b.vraagstuk, `weggever: ${b.tekst}`);
+    weggevers.push(b.tekst);
+  }
+  for (const b of zoekBoekParafrase(gen.vraagstukken, `${inv.bronmateriaal}\n${inv.antwoordenmateriaal ?? ""}`)) voeg(b.vraagstuk, `letterlijk: ${b.tekst}`);
   const kruis = zoekKruisWeggevers(gen.vraagstukken);
   for (const k of kruis) {
     voeg(k.vraagstuk, `weggever: ${k.tekst}`);
@@ -982,6 +1023,21 @@ export function figuurTekst(f: FiguurSpec | undefined): string {
   }
 }
 
+/**
+ * Modelantwoord bij meerkeuze: "D. groengele isolatie", met de uitleg uit het antwoordmodel erachter, maar zonder
+ * herhaling van de letter of de optietekst ("D. groengele isolatie (groengele isolatie)" → "D. groengele isolatie").
+ */
+export function mcModelantwoord(letter: string, optie: string | undefined, regels: string[]): string {
+  const o = kaal(optie ?? "");
+  const norm = (x: string) => x.toLowerCase().replace(/[^a-zà-ÿ0-9]+/g, " ").trim();
+  const uitleg = regels
+    .map(kaal)
+    .map((r) => r.replace(new RegExp(`^\\(?${letter}\\)?\\s*[).:,—–-]?\\s*`), ""))
+    .map((r) => (o && norm(r).startsWith(norm(o)) ? r.slice(o.length).replace(/^[\s).:,;—–-]+/, "") : r))
+    .filter((r) => r && norm(r) !== norm(o) && norm(r) !== letter.toLowerCase());
+  return `${letter}.${o ? ` ${o}` : ""}${uitleg.length ? ` (${uitleg.join(" / ")})` : ""}`;
+}
+
 export function alsGegenereerdeToets(res: Pijplijnresultaat, inv: SpecInvoer & { moeilijkheid?: string }, kal: Kalibratie, extra: Partial<GegenereerdeToets> = {}): GegenereerdeToets {
   // De figuur van een vraagstuk staat één keer (bij de eerste deelvraag) maar hoort bij alle deelvragen.
   const metFiguur = new Set(res.vragen.filter((q) => q.figuur && q.vraagstuk).map((q) => q.vraagstuk!.id));
@@ -1010,7 +1066,7 @@ export function alsGegenereerdeToets(res: Pijplijnresultaat, inv: SpecInvoer & {
     const regels = q.antwoordmodel.regels.map(kaal).join(" / ");
     return {
       nummer: q.nr,
-      modelantwoord: letter ? `${letter}. ${q.opties?.[letter.charCodeAt(0) - 65] ? kaal(q.opties[letter.charCodeAt(0) - 65]!) : ""}${regels ? ` (${regels})` : ""}` : regels,
+      modelantwoord: letter ? mcModelantwoord(letter, q.opties?.[letter.charCodeAt(0) - 65], q.antwoordmodel.regels) : regels,
       puntenverdeling: q.scorestappen.map((s) => ({ punt: s.punten, criterium: kaal(s.omschrijving) })),
     };
   });

@@ -15,6 +15,11 @@ import type { Berekening, FiguurControle, FiguurSpec, KrachtenFiguur, Parameter,
 import { figuurSvg, isTekenFiguur, meetFiguur } from "./figuren/index.ts";
 import { getalInTekst, leesNl, nl, rekenUit } from "./reken.ts";
 import { gebruikteNamen, vervangNamen } from "./namen.ts";
+import { isWeetvraag } from "./inhoud-keuring.ts";
+import { normaliseerVraagtype } from "./doelen.ts";
+import { EINDTERMEN, KERNDOELEN } from "../leerdoelen-data.ts";
+
+const DOEL_IDS = new Set([...EINDTERMEN, ...KERNDOELEN].map((d) => d.id));
 
 type Deelvraag = VraagstukSpec["deelvragen"][number];
 type Letter = "A" | "B" | "C" | "D" | "E";
@@ -351,6 +356,18 @@ export function autoHerstelVraagstuk(v0: VraagstukSpec, vermijdNamen: Iterable<s
   if (nOnb) stappen.push({ id: v.id, wat: `${nOnb} figuurcontrole(s) met onbekende parameter → waarde uit de figuur` });
   v.deelvragen.forEach((d, i) => {
     if (!d?.antwoordmodel) return;
+    // 8. vraagtype: officieel nr/naam bij de code (stil); een onbekend examendoel valt weg.
+    const vt = normaliseerVraagtype(d);
+    if (vt) stappen.push({ id: d.id, wat: vt });
+    if (d.examendoel !== undefined && !DOEL_IDS.has(d.examendoel.trim())) {
+      stappen.push({ id: d.id, wat: `onbekend examendoel "${d.examendoel}" weggelaten` });
+      delete d.examendoel;
+    }
+    // 7. eerlijke RTTI: een 1-punts weetvraag (definitie/naam/functie) met label T1/T2/I wordt R.
+    if (d.rtti && d.rtti !== "R" && isWeetvraag(d)) {
+      stappen.push({ id: d.id, wat: `RTTI ${d.rtti} → R (weetvraag: "${d.stam.replace(/<[^>]+>/g, "").slice(0, 50)}")` });
+      d.rtti = "R";
+    }
     const l = leidJuistAf(d);
     if (l) {
       d.antwoordmodel.juist = l;

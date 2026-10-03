@@ -47,6 +47,15 @@ async function vergelijk(toets: ToetsSpec, res: Pijplijnresultaat) {
   const docx = await maakDocxs(toets, res, pngRender);
   const L = { pdf: await pdfInfo(pdf.leerling), docx: await docxInfo(docx.leerling) };
   const D = { pdf: await pdfInfo(pdf.docent), docx: await docxInfo(docx.docent) };
+  // Neutrale metadata: geen auteur/maker "Toetski" in PDF en Word.
+  for (const b of [pdf.leerling, pdf.docent]) {
+    const info = (await (await pdfjs.getDocument({ data: new Uint8Array(b), useSystemFonts: false }).promise).getMetadata()).info as Record<string, unknown>;
+    assert.ok(!/toetski/i.test(String(info.Author ?? "") + String(info.Creator ?? "") + String(info.Producer ?? "")), "PDF-metadata neutraal");
+  }
+  for (const b of [docx.leerling, docx.docent]) {
+    const core = (await (await JSZip.loadAsync(b)).file("docProps/core.xml")?.async("string")) ?? "";
+    assert.doesNotMatch(core, /<dc:creator>[^<]+<|toetski/i, "Word-metadata neutraal");
+  }
   // Figuren (leerlingdeel) en figuren + antwoordfiguren + cijfergrafiek (docentdeel): even veel beelden.
   assert.equal(L.docx.beelden, L.pdf.beelden, "leerlingdeel: aantal figuren PDF ≠ Word");
   assert.equal(D.docx.beelden, D.pdf.beelden, "docentdeel: aantal figuren PDF ≠ Word");
@@ -68,8 +77,9 @@ async function vergelijk(toets: ToetsSpec, res: Pijplijnresultaat) {
   for (const kop of ["Toetsmatrijs", "Totaal per RTTI-categorie", "Totaal per examenniveau", "Cijferberekening", "Register"]) {
     assert.ok(D.pdf.tekst.includes(kop) && D.docx.tekst.includes(kop), `kop "${kop}" niet in beide`);
   }
-  const ces = /Cesuur \(laagste voldoende\):\s*(\d+) punten/;
+  const ces = /Cesuur \(laagste voldoende\):\s*(\d+) van de \d+ punten \((\d+) %\)/;
   assert.equal(ces.exec(D.docx.tekst)?.[1], ces.exec(D.pdf.tekst)?.[1], "cesuur");
+  assert.equal(ces.exec(D.docx.tekst)?.[2], ces.exec(D.pdf.tekst)?.[2], "cesuur-percentage");
   assert.ok(ces.exec(D.pdf.tekst)?.[1]);
 }
 

@@ -61,6 +61,48 @@ describe("stap 0 in losse stappen (offline)", () => {
     assert.ok(allesGoed(keurGeneratie(s.gen!, inv, kal), kal));
   });
 
+  it("docent-review (mock): eerste review schoon → firstTimeRight true, log 'review'", async () => {
+    const logs: [string, Record<string, unknown>][] = [];
+    const { s } = await totKlaar(nieuweStaat(inv, kal, "r0"), nepChat([kopie("een"), kopie("drie")]), { log: (k, d) => logs.push([k, d]) });
+    assert.equal(s.fase, "klaar");
+    assert.ok(logs.some(([k]) => k === "review"));
+    const m = logs.find(([k]) => k === "klaar")![1];
+    assert.equal(m.firstTimeRight, true);
+    assert.equal(typeof (m.vraagtypen as { aantal: number }).aantal, "number");
+  });
+
+  it("docent-review (mock): bevinding → gericht herstel met 'docent-review' in de opdracht; firstTimeRight false; figuurtaak één keer en niet blokkerend", async () => {
+    const basis = nepChat([kopie("een"), kopie("drie")]);
+    let reviews = 0;
+    const herstelPrompts: string[] = [];
+    const chat: StapChat = async (m, schema, o) => {
+      if (schema.naam === "docent_review") {
+        reviews++;
+        return reviews === 1
+          ? { tekst: JSON.stringify({ bevindingen: [{ id: "een-a", soort: "rtti", ernst: "hoog", probleem: "weetvraag met T1", fix: "label R of maak er toepassing van" }], figurenBeter: true, figuurVoorstel: "oscilloscoopbeeld" }), usd: 0.04 }
+          : { tekst: JSON.stringify({ bevindingen: [], figurenBeter: false }), usd: 0.04 };
+      }
+      if (schema.naam !== "toets_spec") herstelPrompts.push(m.at(-1)!.content);
+      return basis(m, schema, o);
+    };
+    const logs: [string, Record<string, unknown>][] = [];
+    const { s } = await totKlaar(nieuweStaat(inv, kal, "r1"), chat, { log: (k, d) => logs.push([k, d]) });
+    assert.equal(s.fase, "klaar", "review blokkeert nooit");
+    assert.ok(herstelPrompts.some((p) => /docent-review/i.test(p)), "bevinding gaat naar gericht herstel");
+    assert.ok(reviews <= 2, "max 2 reviewrondes");
+    const m = logs.find(([k]) => k === "klaar")![1];
+    assert.equal(m.firstTimeRight, false);
+    assert.ok((m.reviewUsd as number) > 0);
+  });
+
+  it("docent-review (mock): mislukte review blokkeert niet", async () => {
+    const basis = nepChat([kopie("een"), kopie("drie")]);
+    const chat: StapChat = async (m, schema, o) => (schema.naam === "docent_review" ? Promise.reject(new Error("xAI API error 500")) : basis(m, schema, o));
+    const { s } = await totKlaar(nieuweStaat(inv, kal, "r2"), chat);
+    assert.equal(s.fase, "klaar");
+    assert.deepEqual(s.restFouten, []);
+  });
+
   it("herstel tot alles goed is: hoogstens 4 parallel per stap, geen vaste limiet op het aantal aanroepen", async () => {
     const vijf = ["piet", "klaas", "roos", "sanne", "tim", "ursula"].map(fout);
     let bezig = 0;

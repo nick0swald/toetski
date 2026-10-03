@@ -255,6 +255,7 @@ const vraagVelden = {
   },
   rtti: { enum: ["R", "T1", "T2", "I"] },
   leerdoel: { type: "string" },
+  examendoel: { type: "string" },
   begrip: { type: "string" },
   tekenvraag: { type: "boolean", description: "true als de leerling iets in de figuur tekent; dan is antwoordmodel.figuur verplicht en staan de controles daar." },
   parameters: { $ref: "#/definitions/parameters" },

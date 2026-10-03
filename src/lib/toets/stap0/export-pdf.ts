@@ -8,9 +8,9 @@
 import type { FiguurSpec, OpmaakVraag, SeCode, ToetsSpec } from "./spec.ts";
 import type { Pijplijnresultaat } from "./pijplijn.ts";
 import { figuurSvg } from "./figuren/index.ts";
-import { cijferGrafiekSvg, cijferTabel, cesuur, formule } from "./cijfer-n.ts";
+import { cijferGrafiekSvg, cijferTabel, cesuur, cesuurPct, formule } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
-import { antwoordKop, bandTekst, contextTitel, indelingKop, INSTRUCTIE_CSE, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, voorbladTekst, vraagstukBereik } from "./opmaak.ts";
+import { leerdoelMetDoel, typeSleutel, vraagtypeNaam, antwoordKop, bandTekst, contextTitel, indelingKop, instructieVoor, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, voorbladTekst, vraagstukBereik } from "./opmaak.ts";
 import { A4, Beeld, Bijeen, type Blok, CM, type Fonts, GeenNummer, Ingesprongen, Lijn, Lijnen, maakPdf, Onderaan, PaginaEinde, Para, Ruimte, ST, Tabel } from "./pdf-opmaak.ts";
 
 export type PngRender = (svg: string, breedtePx: number) => Promise<Uint8Array>;
@@ -171,7 +171,7 @@ function register(vragen: OpmaakVraag[]): Blok {
     .sort((a, b) => a.vraagtype.nr - b.vraagtype.nr || a.nr - b.nr)
     .map((q) => [
       { inhoud: [new Para(String(q.vraagtype.nr), ST.idx)] },
-      { inhoud: [new Para(`${q.vraagtype.naam} (${q.vraagtype.code})`, ST.idx)] },
+      { inhoud: [new Para(vraagtypeNaam(q), ST.idx)] },
       { inhoud: [new Para(`<font color="#ffffff"><b>${q.code}</b></font>`, ST.idx)], bg: SE_INFO[q.se].kleur },
       { inhoud: [new Para(q.ookIn ?? "–", ST.idx)] },
       { inhoud: [new Para(q.hoofdstuk, ST.idx)] },
@@ -186,8 +186,8 @@ function matrijs(vragen: OpmaakVraag[]): Blok[] {
     { inhoud: [new Para(String(q.nr), ST.idx)] },
     { inhoud: [new Para(`<font color="#ffffff"><b>${q.code}</b></font>`, ST.idx)], bg: SE_INFO[q.se].kleur },
     { inhoud: [new Para(q.hoofdstuk, ST.idx)] },
-    { inhoud: [new Para(q.leerdoel ?? "–", ST.idx)] },
-    { inhoud: [new Para(q.vraagtype.code, ST.idx)] },
+    { inhoud: [new Para(leerdoelMetDoel(q), ST.idx)] },
+    { inhoud: [new Para(typeSleutel(q), ST.idx)] },
     { inhoud: [new Para(q.rtti, ST.idx)] },
     { inhoud: [new Para(q.niveau, ST.idx)] },
     { inhoud: [new Para(String(q.punten), ST.idx)], uitlijning: "rechts" as const },
@@ -227,6 +227,10 @@ function matrijs(vragen: OpmaakVraag[]): Blok[] {
     new Bijeen([new Para("<b>Totaal per examenniveau</b>", ST.body, 2), klein("Niveau", t.perNiveau)]),
     new Ruimte(8),
     new Bijeen([new Para("<b>Totaal per hoofdstuk / onderwerp</b>", ST.body, 2), klein("Hoofdstuk / onderwerp", t.perHoofdstuk)]),
+    new Ruimte(8),
+    new Bijeen([new Para("<b>Leerdoeldekking per paragraaf</b>", ST.body, 2), klein("Paragraaf", t.perParagraaf)]),
+    new Ruimte(8),
+    new Bijeen([new Para(`<b>Spreiding vraagtypen</b> (nummer uit de 62 CSE-vraagtypen; ${t.perVraagtype.length} verschillende typen)`, ST.body, 2), klein("Vraagtype", t.perVraagtype)]),
   ];
 }
 
@@ -254,7 +258,7 @@ async function cijferDeel(max: number, n: number, png: PngRender): Promise<Blok[
   const cs = cesuur(max, n);
   return [
     new Para("Cijferberekening", ST.h2, 6),
-    new Para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlCijfer(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cs} punten</b> → ${nlCijfer(tabel[cs].cijfer)}. Onvoldoendes staan in rood.`, ST.body, 6),
+    new Para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlCijfer(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cs} van de ${max} punten</b> (${cesuurPct(cs, max)} %) → ${nlCijfer(tabel[cs].cijfer)}. Onvoldoendes staan in rood.`, ST.body, 6),
     new Tabel([kop, ...rijen], { kolommen: Array(8).fill(TW / 8), rooster: { kleur: "#999999", lw: 0.4 }, pad: { l: 6, r: 8, t: 1.5, b: 2.5 }, va: "midden" }),
     new Ruimte(10),
     new Bijeen([new Para("<b>Grafiek: cijfer tegen score</b>", ST.body, 4), new Beeld(g, 12 * CM, hCm * CM, "midden")]),
@@ -337,7 +341,7 @@ function voorblad(toets: ToetsSpec, vragen: OpmaakVraag[], deel: { naam: string;
   out.push(new Onderaan(new Bijeen([...v.onder.map((r) => new Para(r, ST.lbody)), ...(v.voetcode ? [new Ruimte(14), new Para(v.voetcode, ST.lklein)] : [])])));
   // Instructiepagina (CSE pagina 2); de vragen volgen direct.
   out.push(new PaginaEinde());
-  for (const blok of INSTRUCTIE_CSE) {
+  for (const blok of instructieVoor(vragen)) {
     out.push(ind(new Para(`<b>${blok.kop}</b>`, ST.lbody, 1)));
     if (blok.regels.length === 1) out.push(ind(new Para(blok.regels[0], ST.lbody, 8)));
     else {

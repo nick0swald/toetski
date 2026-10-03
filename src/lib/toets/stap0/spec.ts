@@ -269,6 +269,8 @@ export interface VraagSpec {
   rtti: Rtti;
   /** Leerdoel (voor de toetsmatrijs), bv. "K/4.2 dichtheid berekenen met ρ = m/V". */
   leerdoel?: string;
+  /** Examendoel: CvTE-eindterm (klas 3–4, bv. "K/5.6") of SLO-kerndoel (klas 1–2, bv. "SLO-30C") dat deze vraag toetst. */
+  examendoel?: string;
   /** Het getoetste begrip of de redenering in 2–6 woorden (bv. "frequentie uit trillingstijd"); geen twee vragen met hetzelfde begrip. */
   begrip?: string;
   /**

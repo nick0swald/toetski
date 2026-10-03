@@ -106,3 +106,8 @@ export function controleerCijfers(max: number, n = 1): string[] {
   });
   return f;
 }
+
+/** Cesuur als percentage van de maximumscore, berekend (16 van 31 → 52), nooit een vaste 55. */
+export function cesuurPct(cesuurPunten: number, max: number): number {
+  return max > 0 ? Math.round((100 * cesuurPunten) / max) : 0;
+}

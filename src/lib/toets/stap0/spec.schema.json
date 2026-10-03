@@ -1023,6 +1023,9 @@
     "leerdoel": {
      "type": "string"
     },
+    "examendoel": {
+     "type": "string"
+    },
     "begrip": {
      "type": "string"
     },
@@ -1264,6 +1267,9 @@
      ]
     },
     "leerdoel": {
+     "type": "string"
+    },
+    "examendoel": {
      "type": "string"
     },
     "begrip": {
