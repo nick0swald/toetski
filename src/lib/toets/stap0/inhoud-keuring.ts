@@ -388,6 +388,18 @@ export function zoekBegripHerhaling(vs: VraagstukSpec[]): Bevinding[] {
   return uit;
 }
 
+/**
+ * Hoe vaak elk bloklijst-begrip (dat de lesstof raakt) al in de toets zit: voor gerichte aanroepen ("deze begrippen
+ * zijn op"), zodat een nieuw vraagstuk niet op begrip-herhaling sneuvelt.
+ */
+export function begripTelling(vs: VraagstukSpec[], bron: string): { naam: string; max: number; in: string[] }[] {
+  return BEGRIP_BLOKLIJST.filter((b) => b.bron.test(bron)).map((b) => ({
+    naam: b.naam,
+    max: b.max,
+    in: vs.filter((v) => v.deelvragen.some((d) => b.re.test(begripTekst(d)) && !(b.niet && b.niet.test(begripTekst(d))))).map((v) => v.id),
+  }));
+}
+
 /** Bloklijst-regel voor de prompt: alleen begrippen die de lesstof raakt. */
 export function bloklijstRegel(bron: string): string {
   const l = BEGRIP_BLOKLIJST.filter((b) => b.bron.test(bron));

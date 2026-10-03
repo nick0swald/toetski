@@ -16,7 +16,7 @@ import { nl } from "./reken.ts";
 import { annoteerKalibratie, relevanteVraagtypen, type Kalibratie } from "../kalibratie.ts";
 import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { overlap, woorden } from "../eval/rubric.ts";
-import { afrondFouten, bloklijstRegel, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekBegripHerhaling, zoekFiguurVerwijzingen, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
+import { afrondFouten, begripTelling, bloklijstRegel, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekBegripHerhaling, zoekFiguurVerwijzingen, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
 import { autoHerstel } from "./auto-herstel.ts";
 import type { GegenereerdeToets, Leerweg, RttiVerdeling, Vraag } from "../types";
 
@@ -530,15 +530,141 @@ export function overzicht(gen: Generatie, behalve?: string): string {
     .join("\n");
 }
 
-export function gerichtPrompt(o: { soort: "herstel"; vraagstuk: VraagstukSpec; fouten: string[]; gen: Generatie } | { soort: "nieuw"; punten: number; paragrafen: string[]; gen: Generatie; fouten?: string[]; vorige?: VraagstukSpec; id: string }): string {
+export function gerichtPrompt(o: { soort: "herstel"; vraagstuk: VraagstukSpec; fouten: string[]; gen: Generatie } | { soort: "nieuw"; punten: number; paragrafen: string[]; gen: Generatie; fouten?: string[]; vorige?: VraagstukSpec; id: string; inv?: SpecInvoer }): string {
   const ander = overzicht(o.gen, o.soort === "herstel" ? o.vraagstuk.id : o.id);
   const kop = `Schrijf nu ALLEEN één vraagstuk (JSON: {"vraagstuk": …}). De rest van de toets staat al vast:\n${ander}\n\nGebruik een andere situatie, persoon en andere begrippen dan hierboven, en verklap geen antwoorden van die vragen.`;
   if (o.soort === "herstel") {
     const p = o.vraagstuk.deelvragen.reduce((s, d) => s + d.punten, 0);
-    return `${kop}\n\nDit vraagstuk is door de software AFGEKEURD:\n${JSON.stringify(o.vraagstuk)}\n\nFouten:\n- ${o.fouten.join("\n- ")}\n\nSchrijf het vraagstuk opnieuw zodat al deze fouten weg zijn: zelfde id ("${o.vraagstuk.id}"), zelfde onderwerp en paragrafen, samen precies ${p} punten, 3–4 deelvragen. Reken alles opnieuw na en controleer elke figuur-controle.`;
+    return `${kop}\n\nDit vraagstuk is door de software AFGEKEURD:\n${JSON.stringify(o.vraagstuk)}\n\nFouten:\n- ${o.fouten.join("\n- ")}\n\nSchrijf het vraagstuk opnieuw zodat al deze fouten weg zijn: zelfde id ("${o.vraagstuk.id}"), zelfde onderwerp en paragrafen, samen precies ${p} punten (nu per deelvraag ${o.vraagstuk.deelvragen.map((d) => d.punten).join(" + ")}), 3–4 deelvragen. Reken alles opnieuw na en controleer elke figuur-controle.`;
   }
+  if (o.inv) return aanvulPrompt({ ...o, inv: o.inv });
   const extra = o.vorige && o.fouten?.length ? `\n\nJe vorige poging werd afgekeurd:\n${JSON.stringify(o.vorige)}\nFouten:\n- ${o.fouten.join("\n- ")}` : "";
   return `${kop}\n\nNIEUW vraagstuk met id "${o.id}", samen precies ${o.punten} punten in 3–4 deelvragen${o.paragrafen.length ? `, over: ${o.paragrafen.join("; ")} (begin elk leerdoel met de paragraafcode)` : ""}. Houd je aan alle regels van de opdracht.${extra}`;
+}
+
+// ── aanvullen: volledige vraagstukken met exacte punten, uit de minst getoetste paragrafen ─────────────────────────
+
+/** Puntverdeling over 3–4 deelvragen voor precies `p` punten (3–5 p: 3 deelvragen, 6–9 p: 4; hoogstens 3 p per deelvraag). */
+export function puntenVerdeling(p: number): number[] {
+  const t = Math.max(3, Math.min(12, Math.round(p)));
+  const n = t <= 5 ? 3 : 4;
+  const base = Math.floor(t / n);
+  const rest = t % n;
+  return Array.from({ length: n }, (_, i) => base + (i >= n - rest ? 1 : 0));
+}
+
+/** Per paragraaf uit de lesstof: in hoeveel vraagstukken hij getoetst wordt (minst getoetst eerst; volgorde lesstof bij gelijk). */
+export function paragraafTelling(vs: VraagstukSpec[], inv: Pick<SpecInvoer, "bronmateriaal" | "antwoordenmateriaal">): { code: string; titel: string; n: number }[] {
+  const pars = extractParagrafen(inv.bronmateriaal, inv.antwoordenmateriaal);
+  if (pars.length < 2) return [];
+  const gedekt = vs.map((v) => {
+    const mist = new Set(ontbrekendeParagrafen([v], inv).map((p) => p.code));
+    return new Set(pars.filter((p) => !mist.has(p.code)).map((p) => p.code));
+  });
+  return pars.map((p, i) => ({ code: p.code, titel: p.titel, n: gedekt.filter((g) => g.has(p.code)).length, i })).sort((a, b) => a.n - b.n || a.i - b.i).map(({ code, titel, n }) => ({ code, titel, n }));
+}
+
+/** Paragrafen (code + titel) die een vraagstuk raakt. */
+export function paragrafenVan(v: VraagstukSpec, inv: Pick<SpecInvoer, "bronmateriaal" | "antwoordenmateriaal">): string[] {
+  const pars = extractParagrafen(inv.bronmateriaal, inv.antwoordenmateriaal);
+  if (pars.length < 2) return [];
+  const mist = new Set(ontbrekendeParagrafen([v], inv).map((p) => p.code));
+  return pars.filter((p) => !mist.has(p.code)).map((p) => `${p.code} ${p.titel}`);
+}
+
+/** Soort van een keurbevinding (voor "waarom afgekeurd" en om gelijke mislukkingen te herkennen). */
+export function foutSoort(f: string): string {
+  const t = f.replace(/^\[[^\]]*\]\s*/, "");
+  if (/toetst opnieuw|^begrip:/.test(t)) return "begrip-herhaling";
+  if (/^dubbel begrip/.test(t)) return "dubbel-begrip";
+  if (/^weggever/.test(t)) return "weggever";
+  if (/^1p-R/.test(t)) return "weetvragen";
+  if (/^lesstof/.test(t)) return "buiten-lesstof";
+  if (/^figuur|figuur|tekenvraag|oscilloscoop|grafiek|krachten/.test(t)) return "figuur";
+  if (/^afronding|staat niet in|geeft .*spec zegt|parameter|variabele/.test(t)) return "rekenwerk";
+  if (/letterlijk/.test(t)) return "letterlijk";
+  if (/^samenhang/.test(t)) return "samenhang";
+  if (/schema|meerkeuze|scorestappen|deelvragen|punten/.test(t)) return "vorm";
+  return "overig";
+}
+
+const UITLEG: Record<string, string> = {
+  "begrip-herhaling": "een begrip dat al OP is (staat al in een ander vraagstuk); kies uitsluitend begrippen die nog vrij zijn",
+  "dubbel-begrip": "een deelvraag vraagt bijna hetzelfde als een bestaand vraagstuk; kies een ander begrip en een andere redenering",
+  weggever: "een antwoord of getal verklapt (of wordt verklapt door) een ander vraagstuk; gebruik andere getallen, woorden en antwoorden",
+  weetvragen: "te veel 1-punts weetvragen (R) in de toets; maak 1-punts deelvragen toepassingsvragen (T1) of geef ze 2 punten",
+  "buiten-lesstof": "stof of vaktaal die niet in de lesstof staat; blijf binnen de genoemde paragrafen",
+  figuur: "de figuur klopt niet met de vraag (of ontbreekt); laat de figuur weg of maak hem met een geldige controle",
+  rekenwerk: "een berekening of afronding klopt niet met het antwoordmodel; reken elke stap na",
+  letterlijk: "een zin komt letterlijk uit de lesstof; formuleer alles zelf",
+  samenhang: "de deelvragen passen niet bij de situatie; houd één samenhangende situatie aan",
+  vorm: "de vorm klopt niet (3–4 deelvragen, punten, scorestappen, meerkeuze met juiste letter)",
+  overig: "zie de letterlijke bevindingen",
+};
+
+/** Korte uitleg per soort bevinding (voor de prompt en het log). */
+export function waaromAfgekeurd(fouten: string[]): string[] {
+  return [...new Set(fouten.map(foutSoort))].map((k) => `${k}: ${UITLEG[k] ?? UITLEG.overig}`);
+}
+
+/** Vaste handtekening van een mislukte poging (gelijke soorten bevindingen = gelijke mislukking). */
+export const foutHandtekening = (fouten: string[]) => [...new Set(fouten.map(foutSoort))].sort().join("+") || "geen";
+
+function contextRegels(gen: Generatie, inv: SpecInvoer, behalve: string, extraPunten: number): string[] {
+  const telling = begripTelling(gen.vraagstukken.filter((v) => v.id !== behalve), inv.bronmateriaal);
+  const op = telling.filter((b) => b.in.length >= b.max);
+  const vrij = telling.filter((b) => b.in.length < b.max);
+  const labels = [...new Set(gen.vraagstukken.filter((v) => v.id !== behalve).flatMap((v) => v.deelvragen.map((d) => d.begrip).filter((b): b is string => Boolean(b))))];
+  const r1 = eenPuntsReproductie(gen.vraagstukken.filter((v) => v.id !== behalve), inv.leerweg);
+  const totaal = gen.vraagstukken.filter((v) => v.id !== behalve).reduce((s, v) => s + puntenVan(v), 0) + extraPunten;
+  const nu1R = gen.vraagstukken.filter((v) => v.id !== behalve).flatMap((v) => v.deelvragen).filter((d) => d.punten === 1 && d.rtti === "R").length;
+  const ruimte1R = Math.max(0, Math.floor(r1.max * totaal) - nu1R);
+  const situaties = gen.vraagstukken.filter((v) => v.id !== behalve).map((v) => v.titel).filter(Boolean);
+  return [
+    op.length ? `BEGRIPPEN DIE OP ZIJN (niet gebruiken, ook niet in andere woorden of als afleider): ${op.map((b) => `${b.naam} (al in ${b.in.join(", ")})`).join("; ")}.` : "",
+    vrij.length ? `Bloklijst-begrippen die nog vrij zijn: ${vrij.map((b) => `${b.naam} (nog ${b.max - b.in.length}×)`).join("; ")}.` : "",
+    labels.length ? `Al getoetste begrippen (niet nog eens toetsen): ${labels.join("; ")}.` : "",
+    `1-punts weetvragen (R): nog hoogstens ${ruimte1R} in de hele toets${ruimte1R === 0 ? "; maak elke 1-punts deelvraag een toepassingsvraag (T1)" : ""}.`,
+    situaties.length ? `Al gebruikte situaties (kies een andere situatie en persoon): ${situaties.join("; ")}.` : "",
+    `Gebruik geen getallen of antwoorden die in de andere vraagstukken voorkomen.`,
+  ].filter(Boolean);
+}
+
+/**
+ * Prompt voor een NIEUW, volledig vraagstuk: exacte punten per deelvraag, uit de minst getoetste paragrafen van
+ * dezelfde lesstof, met de begrippen die op zijn, en (bij een herkansing) waarom de vorige poging is afgekeurd.
+ */
+export function aanvulPrompt(o: { id: string; punten: number; paragrafen: string[]; gen: Generatie; inv: SpecInvoer; fouten?: string[]; vorige?: VraagstukSpec }): string {
+  const verdeling = puntenVerdeling(o.punten);
+  const p = verdeling.reduce((a, b) => a + b, 0);
+  const kop = `Schrijf nu ALLEEN één vraagstuk (JSON: {"vraagstuk": …}). De rest van de toets staat al vast:\n${overzicht(o.gen, o.id)}`;
+  const opdracht = `NIEUW VRAAGSTUK met id "${o.id}": precies ${p} punten in ${verdeling.length} deelvragen, met in deze volgorde ${verdeling.map((x) => `${x} p`).join(", ")} (scorestappen per deelvraag = zijn punten; tel na).${o.paragrafen.length ? ` Paragrafen (uit dezelfde lesstof; nu het minst getoetst): ${o.paragrafen.join("; ")}. Begin elk leerdoel met de paragraafcode.` : ""}`;
+  const terug = o.vorige && o.fouten?.length
+    ? `\n\nJE VORIGE POGING ("${o.vorige.titel}") IS DOOR DE SOFTWARE AFGEKEURD. Waarom:\n- ${waaromAfgekeurd(o.fouten).join("\n- ")}\nLetterlijke bevindingen:\n- ${o.fouten.slice(0, 8).join("\n- ")}\nSchrijf een ANDER vraagstuk (andere situatie en andere begrippen) waarin deze punten niet terugkomen.`
+    : "";
+  return [kop, "", opdracht, ...contextRegels(o.gen, o.inv, o.id, p), "Houd je verder aan alle regels van de opdracht." + terug].join("\n");
+}
+
+/**
+ * Prompt om een goedgekeurd vraagstuk uit te breiden (andere strategie als aanvullen twee keer op dezelfde manier
+ * mislukt): bestaande deelvragen blijven staan, er komt één deelvraag bij (of, bij 4 deelvragen, extra punten).
+ */
+export function uitbreidPrompt(o: { vraagstuk: VraagstukSpec; extra: number; gen: Generatie; inv: SpecInvoer; fouten?: string[] }): string {
+  const v = o.vraagstuk;
+  const nu = puntenVan(v);
+  const doel = nu + o.extra;
+  const hoe = v.deelvragen.length < 4
+    ? `Laat de bestaande ${v.deelvragen.length} deelvragen ongewijzigd (zelfde tekst, punten en antwoorden) en voeg aan het eind één nieuwe deelvraag van ${o.extra} punt(en) toe die op dezelfde situatie voortbouwt (een ander begrip dan de bestaande deelvragen).`
+    : `Het vraagstuk heeft al 4 deelvragen: houd ze, maar maak één of twee deelvragen zwaarder (een extra rekenstap of uitlegstap) zodat het totaal ${doel} punten wordt; pas scorestappen en antwoordmodel daarop aan.`;
+  const terug = o.fouten?.length ? `\n\nEen vorige uitbreiding is afgekeurd. Waarom:\n- ${waaromAfgekeurd(o.fouten).join("\n- ")}\nLetterlijk:\n- ${o.fouten.slice(0, 6).join("\n- ")}` : "";
+  return [
+    `Schrijf nu ALLEEN één vraagstuk (JSON: {"vraagstuk": …}). De rest van de toets staat al vast:\n${overzicht(o.gen, v.id)}`,
+    "",
+    `BREID dit goedgekeurde vraagstuk uit van ${nu} naar precies ${doel} punten, zelfde id ("${v.id}"):\n${JSON.stringify(v)}`,
+    hoe,
+    ...contextRegels(o.gen, o.inv, v.id, o.extra),
+    "Reken alles opnieuw na en controleer elke figuur-controle." + terug,
+  ].join("\n");
 }
 
 export interface Stap {
@@ -581,10 +707,16 @@ export const puntenVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s +
 /** "Waarde" van een vraagstuk voor het inkorten: punten op T2/I-niveau (inzicht) tellen het zwaarst. */
 export const waardeVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0) * (d.rtti === "T2" || d.rtti === "I" ? 2 : 1), 0);
 
+/** Vraagstuk zonder zijn laatste deelvraag (alleen bij 4 deelvragen: een vraagstuk heeft er minstens 3). */
+export function zonderStaart(v: VraagstukSpec): VraagstukSpec | null {
+  return v.deelvragen.length >= 4 ? { ...v, deelvragen: v.deelvragen.slice(0, -1) } : null;
+}
+
 /**
- * Eerst schrappen, dan pas herstellen: een afgekeurd vraagstuk valt weg zolang de toets daarna nog ≥ 90 % lengte en
- * genoeg deelvragen heeft en er geen paragraaf extra gaat ontbreken. Het vraagstuk met de meeste fouten eerst (bij
- * gelijk: de laagste waarde). Wat niet weg kan zonder lengte of dekking te breken, gaat naar gericht herstel.
+ * Eerst schrappen, dan pas herstellen: zolang de toets daarna nog ≥ 90 % lengte en genoeg deelvragen heeft en er
+ * geen paragraaf extra gaat ontbreken. Liever één deelvraag dan een heel vraagstuk: zit de fout alleen in de laatste
+ * deelvraag (vraagstuk wordt zonder die deelvraag goed), dan valt alleen die weg. Anders het vraagstuk met de meeste
+ * fouten (bij gelijk: de laagste waarde). Wat niet weg kan zonder lengte of dekking te breken, gaat naar gericht herstel.
  */
 export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): { gen: Generatie; stappen: Stap[] } {
   let gen = gen0;
@@ -595,12 +727,28 @@ export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kali
     const ontbr = new Set(r.feiten.ontbrekendeParagrafen);
     const fout = gen.vraagstukken.filter((v) => r.perId[v.id]?.length);
     if (!fout.length) break;
+    const heel = (f: Keuringsrapport["feiten"]) => f.lengtePct >= 90 && f.vragen >= minV && f.ontbrekendeParagrafen.every((p) => ontbr.has(p));
+    // 1. alleen de laatste deelvraag weg, als het vraagstuk daarmee goed wordt
+    const staart = fout
+      .map((v) => {
+        const v2 = zonderStaart(v);
+        if (!v2) return null;
+        const g: Generatie = { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x === v ? v2 : x)) };
+        const r2 = keurGeneratie(g, inv, kal);
+        return !r2.perId[v.id]?.length && heel(r2.feiten) && vraagstukFouten(r2) < vraagstukFouten(r) ? { v, g, d: v.deelvragen.at(-1)! } : null;
+      })
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+    if (staart[0]) {
+      const k = staart[0];
+      stappen.push({ wat: `deelvraag ${k.d.id} geschrapt vóór herstel (${k.d.punten} p; rest van het vraagstuk is goed)`, id: k.v.id, ok: true, fouten: r.perId[k.v.id] });
+      gen = k.g;
+      continue;
+    }
+    // 2. een heel vraagstuk
     const kand = fout
       .map((v) => {
         const g: Generatie = { ...gen, vraagstukken: gen.vraagstukken.filter((x) => x !== v) };
-        const f = keurGeneratie(g, inv, kal).feiten;
-        const ok = f.lengtePct >= 90 && f.vragen >= minV && f.ontbrekendeParagrafen.every((p) => ontbr.has(p));
-        return { v, g, ok, nFout: r.perId[v.id]!.length, waarde: waardeVan(v) };
+        return { v, g, ok: heel(keurGeneratie(g, inv, kal).feiten), nFout: r.perId[v.id]!.length, waarde: waardeVan(v) };
       })
       .filter((k) => k.ok)
       .sort((a, b) => b.nFout - a.nFout || a.waarde - b.waarde);
@@ -613,39 +761,53 @@ export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kali
 }
 
 /**
- * Deterministisch inkorten tot ≤ 110 %: schrap het vraagstuk waarna de lengte het dichtst bij 100 % komt (≥ 90 %, geen
- * extra ontbrekende paragraaf, genoeg deelvragen, geen nieuwe fouten); bij gelijke afstand het vraagstuk met de laagste
- * waarde, daarna het laatste. Lukt dat niet, dan valt de laatste deelvraag van een vraagstuk met 4 deelvragen af.
+ * Lengtebewust inkorten tot net onder 110 %, nooit onder 90 %: liever losse deelvragen (de laatste van een vraagstuk
+ * met 4 deelvragen) dan hele vraagstukken, de laagste waarde eerst. Per stap:
+ *  1. haalt het weghalen van één deelvraag de toets tot ≤ 110 %: die deelvraag (hoogste lengte die nog ≤ 110 % is);
+ *  2. anders een heel vraagstuk dat de toets in 90–110 % brengt (hoogste lengte, dan laagste waarde);
+ *  3. anders het onderdeel met de laagste waarde per punt dat de toets ≥ 90 % houdt (deelvraag vóór vraagstuk zolang
+ *     de rest boven 110 % nog klein is) en verder.
+ * Een kandidaat mag geen paragraaf laten wegvallen, niet onder het minimum aantal deelvragen komen en geen nieuwe
+ * fouten geven.
  */
 export function inkorten(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): { gen: Generatie; stappen: Stap[] } {
   let gen = gen0;
   const stappen: Stap[] = [];
-  for (let n = 0; n < 12; n++) {
+  const minV = Math.ceil(kal.items * 0.85);
+  for (let n = 0; n < 40; n++) {
     const r = keurGeneratie(gen, inv, kal);
     if (r.feiten.lengtePct <= 110) break;
     const ontbr = r.feiten.ontbrekendeParagrafen.length;
     const fout0 = vraagstukFouten(r);
-    const minV = Math.ceil(kal.items * 0.85);
-    type Kand = { gen: Generatie; afstand: number; waarde: number; pos: number; wat: string; id: string };
+    type Kand = { gen: Generatie; pct: number; waarde: number; punten: number; pos: number; wat: string; id: string; deel: boolean };
     const kand: Kand[] = [];
-    const beoordeel = (g: Generatie, wat: string, id: string, waarde: number, pos: number, minPct: number) => {
+    const beoordeel = (g: Generatie, k: Omit<Kand, "gen" | "pct">) => {
       const r2 = keurGeneratie(g, inv, kal);
       const f2 = r2.feiten;
-      if (f2.lengtePct < minPct || f2.ontbrekendeParagrafen.length > ontbr || f2.vragen < minV || vraagstukFouten(r2) > fout0) return;
-      kand.push({ gen: g, afstand: Math.abs(f2.lengtePct - 100), waarde, pos, wat, id });
+      if (f2.lengtePct < 90 || f2.ontbrekendeParagrafen.length > ontbr || f2.vragen < minV || vraagstukFouten(r2) > fout0) return;
+      kand.push({ gen: g, pct: f2.lengtePct, ...k });
     };
-    gen.vraagstukken.forEach((v, pos) => beoordeel({ ...gen, vraagstukken: gen.vraagstukken.filter((x) => x !== v) }, `geschrapt (te lang, ${puntenVan(v)} p)`, v.id, waardeVan(v), pos, 90));
-    if (!kand.length)
-      gen.vraagstukken.forEach((v, pos) => {
-        if (v.deelvragen.length < 4) return;
+    gen.vraagstukken.forEach((v, pos) => {
+      const v2 = zonderStaart(v);
+      if (v2) {
         const d = v.deelvragen.at(-1)!;
-        const v2 = { ...v, deelvragen: v.deelvragen.slice(0, -1) };
-        beoordeel({ ...gen, vraagstukken: gen.vraagstukken.map((x) => (x === v ? v2 : x)) }, `deelvraag ${d.id} geschrapt (te lang, ${d.punten} p)`, v.id, d.punten, pos, 90);
-      });
+        beoordeel({ ...gen, vraagstukken: gen.vraagstukken.map((x) => (x === v ? v2 : x)) }, { wat: `deelvraag ${d.id} geschrapt (te lang, ${d.punten} p)`, id: v.id, waarde: waardeVan({ ...v, deelvragen: [d] }), punten: d.punten, pos, deel: true });
+      }
+      beoordeel({ ...gen, vraagstukken: gen.vraagstukken.filter((x) => x !== v) }, { wat: `geschrapt (te lang, ${puntenVan(v)} p)`, id: v.id, waarde: waardeVan(v), punten: puntenVan(v), pos, deel: false });
+    });
     if (!kand.length) break;
-    kand.sort((a, b) => a.afstand - b.afstand || a.waarde - b.waarde || b.pos - a.pos);
-    gen = kand[0]!.gen;
-    stappen.push({ wat: kand[0]!.wat, id: kand[0]!.id, ok: true });
+    const laag = (a: Kand, b: Kand) => a.waarde / a.punten - b.waarde / b.punten || a.waarde - b.waarde || b.pos - a.pos;
+    const hoogsteOnder = (l: Kand[]) => l.filter((k) => k.pct <= 110).sort((a, b) => b.pct - a.pct || laag(a, b))[0];
+    const restOver = r.feiten.lengtePct - 110;
+    const grootsteDeel = Math.max(0, ...kand.filter((k) => k.deel).map((k) => r.feiten.lengtePct - k.pct));
+    const keuze =
+      hoogsteOnder(kand.filter((k) => k.deel)) ??
+      hoogsteOnder(kand.filter((k) => !k.deel)) ??
+      // nog ver boven 110 %: een heel vraagstuk met de laagste waarde; vlak boven 110 %: een losse deelvraag
+      [...kand].filter((k) => (restOver > 2 * grootsteDeel ? !k.deel : k.deel)).sort(laag)[0] ??
+      [...kand].sort(laag)[0]!;
+    gen = keuze.gen;
+    stappen.push({ wat: keuze.wat, id: keuze.id, ok: true });
   }
   return { gen, stappen };
 }
@@ -741,7 +903,7 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
     for (let poging = 1; poging <= 2; poging++) {
       const open = taken.filter((t) => !t.klaar && (poging === 1 || t.vorige));
       if (!open.length) break;
-      const nieuw = await pool(open, PARALLEL, (t) => vraag(gerichtPrompt({ soort: "nieuw", id: t.id, punten: per, paragrafen: t.paragrafen, gen, vorige: t.vorige, fouten: t.fouten })));
+      const nieuw = await pool(open, PARALLEL, (t) => vraag(gerichtPrompt({ soort: "nieuw", id: t.id, punten: per, paragrafen: t.paragrafen, gen, vorige: t.vorige, fouten: t.fouten, inv })));
       open.forEach((t, i) => {
         const v = nieuw[i];
         if (!v) return;

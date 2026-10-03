@@ -3,27 +3,37 @@
  * serialiseerbaar object, zodat een stap na een time-out vanaf de laatst opgeslagen toestand opnieuw kan:
  *   (a) "spec": één aanroep voor de hele toets (~115 % lengte), dan auto-fixes en eerst schrappen;
  *   (b) "herstel" (herhaalbaar): auto-fixes + schrappen + ≤ 4 parallelle gerichte aanroepen (herstel, of aanvullen
- *       voor lengte/dekking), tot alle checks slagen, de tijd op is of het vangnet ($ 1) bereikt is;
- *   (c) "afronden": deterministisch inkorten tot 90–110 % met behoud van dekking; de toets is klaar voor export.
+ *       voor lengte/dekking), tot alle checks slagen, de tijd op is of het vangnet ($ 1) bereikt is. Een vraagstuk
+ *       valt nooit weg als de toets daardoor onder 90 % komt: dan alleen de laatste deelvraag, of vervangen door een
+ *       nieuw vraagstuk met dezelfde punten en paragrafen. Aanvullen = volledige vraagstukken met exacte punten uit de
+ *       minst getoetste paragrafen; twee gelijke mislukkingen → andere strategie (uitbreiden; 88–90 % met
+ *       waarschuwing); beide strategieën vast → stoppen ("vastgelopen");
+ *   (c) "afronden": lengtebewust inkorten tot net onder 110 % (nooit onder 90 %), liever losse deelvragen.
  * Geen vaste limiet op het aantal herstelaanroepen (alleen tijd en geld); geen rechter in productie.
  * Pure logica: de modelaanroep komt binnen als `StapChat` (productie: xaiChat met XAI_API_KEY; tests: nep).
  */
 import { autoHerstel } from "./auto-herstel.ts";
 import {
   generatieSchema,
+  aanvulPrompt,
+  foutHandtekening,
   gerichtPrompt,
   inkorten,
   isServerfout,
   keurGeneratie,
   metId,
   normaliseer,
+  paragraafTelling,
+  paragrafenVan,
   pool,
   puntenVan,
   schrapAfgekeurd,
   specPrompt,
   SPEC_SYSTEM,
+  uitbreidPrompt,
   vraagstukFouten,
   vraagstukSchema,
+  zonderStaart,
   type Generatie,
   type Keuringsrapport,
   type SpecInvoer,
@@ -98,6 +108,10 @@ export interface Stap0Staat {
   /** Na "afronden": lengte vóór inkorten en de resterende bevindingen. */
   lengteVoorInkorten?: number;
   restFouten?: string[];
+  /** Stopregel voor aanvullen: handtekening van de laatste mislukking, hoe vaak achter elkaar gelijk, strategie. */
+  vul?: { sig?: string; gelijk: number; mislukt: number; strategie: "nieuw" | "uitbreiden"; laatste?: string[]; per?: Record<string, { sig: string; n: number }>; uit?: string[]; wissels?: number };
+  /** Bewust geaccepteerde afwijkingen (bijv. lengte 88–90 % na vastgelopen aanvullen). */
+  waarschuwingen?: string[];
 }
 
 export type StapChat = (
@@ -122,6 +136,8 @@ const basis = (s: Stap0Staat) => [
   { role: "user" as const, content: specPrompt(s.inv, s.kal) },
 ];
 const MAX_LOG = 300;
+/** Bevindingen bij ándere vraagstukken die een nieuw/gewijzigd vraagstuk veroorzaakt (bijv. weggever, 1p-R), als reden. */
+const andereFouten = (r: Keuringsrapport, id: string) => Object.entries(r.perId).filter(([x]) => x && x !== id).flatMap(([x, l]) => l.map((f) => `[${x}] ${f}`)).slice(0, 8);
 const fouteIds = (r: Keuringsrapport, gen: Generatie) => gen.vraagstukken.filter((v) => r.perId[v.id]?.length).map((v) => v.id);
 
 /** Is de toets af: geen fouten op vraagstukniveau, lengte ≥ 90 %, genoeg deelvragen en alle paragrafen gedekt. */
@@ -174,6 +190,22 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
   };
   const k = s.kal;
   const keur = (g: Generatie) => keurGeneratie(g, s.inv, k);
+  /** Mislukte aanvulling/uitbreiding: tel mee voor de stopregel (gelijke handtekening = gelijke mislukking). */
+  const vulMislukt = (id: string, fouten: string[]) => {
+    const vul = (s.vul ??= { gelijk: 0, mislukt: 0, strategie: "nieuw" });
+    const sig = foutHandtekening(fouten);
+    vul.gelijk = vul.sig === sig ? vul.gelijk + 1 : 1;
+    vul.sig = sig;
+    vul.mislukt++;
+    vul.laatste = fouten.slice(0, 8);
+    // Per taak/vraagstuk: twee keer dezelfde soort mislukking telt ook als "gelijk" (parallelle taken wisselen elkaar af).
+    const per = (vul.per ??= {});
+    per[id] = per[id]?.sig === sig ? { sig, n: per[id]!.n + 1 } : { sig, n: 1 };
+    if (per[id]!.n >= 2) {
+      vul.gelijk = Math.max(vul.gelijk, 2);
+      if (vul.strategie === "uitbreiden") (vul.uit ??= []).push(id);
+    }
+  };
 
   s.laatsteFout = undefined;
   if (s.fase === "spec") {
@@ -207,12 +239,14 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     s.fase = "herstel";
   } else if (s.fase === "herstel") {
     s.rondes++;
+    s.vul ??= { gelijk: 0, mislukt: 0, strategie: "nieuw" };
     let gen = auto(s.gen!);
     const vooraf = schrapAfgekeurd(gen, s.inv, k);
     gen = vooraf.gen;
     vooraf.stappen.forEach(log);
     let rap = keur(gen);
     const tijdOp = nu() - s.tijden.start > B.maxTotaalMs - 45_000;
+    const minV = Math.ceil(k.items * 0.85);
     if (allesGoed(rap, k)) s.fase = "afronden";
     else if (tijdOp || !past(B.reserveVraagstukUsd)) {
       s.stopReden = tijdOp ? "tijd" : "vangnet";
@@ -245,7 +279,7 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
             const rk = keur(kand);
             const eigen = rk.perId[id] ?? [];
             const beter = vraagstukFouten(rk) < vraagstukFouten(rap);
-            log({ wat: `opnieuw (ronde ${s.rondes})`, id, ok: eigen.length === 0, fouten: eigen });
+            log({ wat: `opnieuw (ronde ${s.rondes})${eigen.length ? ` afgewezen: ${foutHandtekening(eigen)}` : ""}`, id, ok: eigen.length === 0, fouten: eigen });
             if (beter) {
               gen = kand;
               rap = rk;
@@ -254,62 +288,163 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
           }
           s.pogingen[id] = (s.pogingen[id] ?? 0) + 1;
         });
-        // Te vaak mislukt: weg (aanvullen vult lengte/dekking daarna aan).
+        // Te vaak mislukt. Weg mag alleen als lengte (≥ 90 %), aantal deelvragen en dekking heel blijven; anders
+        // eerst alleen de laatste deelvraag (als het vraagstuk daarmee goed is), en anders wordt het vraagstuk
+        // vervangen door een NIEUW vraagstuk met dezelfde punten en paragrafen (aanvultaak).
         const opgegeven = fouteIds(rap, gen).filter((id) => (s.pogingen[id] ?? 0) >= B.pogingenPerVraagstuk);
-        if (opgegeven.length) {
-          for (const id of opgegeven) log({ wat: `geschrapt na ${s.pogingen[id]} pogingen`, id, ok: false, fouten: rap.perId[id] });
-          gen = { ...gen, vraagstukken: gen.vraagstukken.filter((v) => !opgegeven.includes(v.id)) };
+        for (const id of opgegeven) {
+          const v = gen.vraagstukken.find((x) => x.id === id)!;
+          const ontbr = new Set(rap.feiten.ontbrekendeParagrafen);
+          const zonder: Generatie = { ...gen, vraagstukken: gen.vraagstukken.filter((x) => x.id !== id) };
+          const fz = keur(zonder).feiten;
+          const v2 = zonderStaart(v);
+          const metStaart = v2 ? { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x.id === id ? v2 : x)) } : null;
+          const rs = metStaart ? keur(metStaart) : null;
+          if (fz.lengtePct >= 90 && fz.vragen >= minV && fz.ontbrekendeParagrafen.every((p) => ontbr.has(p))) {
+            log({ wat: `geschrapt na ${s.pogingen[id]} pogingen (lengte blijft ${fz.lengtePct} %)`, id, ok: false, fouten: rap.perId[id] });
+            gen = zonder;
+          } else if (metStaart && rs && !rs.perId[id]?.length && rs.feiten.lengtePct >= 90) {
+            log({ wat: `deelvraag ${v.deelvragen.at(-1)!.id} geschrapt na ${s.pogingen[id]} pogingen (rest is goed)`, id, ok: false, fouten: rap.perId[id] });
+            gen = metStaart;
+          } else {
+            const taak: AanvulTaak = { id: `vervang-${++s.aanvulling.n}`, punten: puntenVan(v), paragrafen: paragrafenVan(v, s.inv) };
+            log({ wat: `vervangen door nieuw vraagstuk ${taak.id} (${taak.punten} p) na ${s.pogingen[id]} pogingen; schrappen zou de lengte op ${fz.lengtePct} % zetten`, id, ok: false, fouten: rap.perId[id] });
+            gen = zonder;
+            s.aanvulling.open.push(taak);
+          }
+          rap = keur(gen);
         }
-      } else {
-        // Aanvullen voor lengte en dekking (alleen als er niets meer te herstellen is).
+      } else if (s.vul.strategie === "uitbreiden") {
+        // Andere strategie (aanvullen liep twee keer op dezelfde manier vast): goedgekeurde vraagstukken uitbreiden.
         const f = rap.feiten;
-        const pars = f.ontbrekendeParagrafen;
+        let tekort = Math.max(1, k.punten - f.punten, minV - f.vragen);
+        const doelen = gen.vraagstukken.filter((v) => !s.vul!.uit?.includes(v.id)).sort((a, b) => a.deelvragen.length - b.deelvragen.length || puntenVan(a) - puntenVan(b) || a.id.localeCompare(b.id));
+        const taken: { v: VraagstukSpec; extra: number }[] = [];
+        for (const v of doelen) {
+          if (tekort <= 0 || taken.length >= Math.min(B.parallel, nBudget)) break;
+          const extra = Math.min(v.deelvragen.length < 4 ? 3 : 2, tekort);
+          taken.push({ v, extra });
+          tekort -= extra;
+        }
+        const nieuw = await pool(taken, B.parallel, (t) => vraag(uitbreidPrompt({ vraagstuk: t.v, extra: t.extra, gen, inv: s.inv, fouten: s.vul?.laatste })));
+        taken.forEach((t, i) => {
+          const n = nieuw[i];
+          if (!n) return;
+          const oud = gen.vraagstukken.find((x) => x.id === t.v.id);
+          if (!oud) return;
+          const kand: Generatie = { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x.id === t.v.id ? metId(n, t.v.id) : x)) };
+          const rk = keur(kand);
+          const eigen = rk.perId[t.v.id] ?? [];
+          const fouten = eigen.length ? eigen : vraagstukFouten(rk) > vraagstukFouten(rap) ? andereFouten(rk, t.v.id) : puntenVan(n) <= puntenVan(oud) ? [`vorm: uitbreiding heeft ${puntenVan(n)} punten, moest ${puntenVan(oud) + t.extra} zijn`] : [];
+          const ok = fouten.length === 0;
+          log({ wat: `uitgebreid ${puntenVan(oud)} → ${puntenVan(n)} p (ronde ${s.rondes})${ok ? "" : ` afgewezen: ${foutHandtekening(fouten)}`}`, id: t.v.id, ok, fouten });
+          if (ok) {
+            gen = kand;
+            rap = rk;
+            s.vul!.wissels = 0;
+          } else vulMislukt(t.v.id, fouten);
+        });
+      } else {
+        // Aanvullen voor lengte en dekking: volledige vraagstukken met exacte punten, uit de paragrafen die nu het
+        // minst getoetst worden (ontbrekende eerst); open (vervang- of herkansings)taken gaan voor.
+        const f = rap.feiten;
         const tekortP = Math.max(0, k.punten - f.punten);
-        const tekortV = Math.max(0, Math.ceil(k.items * 0.85) - f.vragen);
-        let taken = s.aanvulling.open.filter((t) => t.vorige);
+        const tekortV = Math.max(0, minV - f.vragen);
+        let taken = s.aanvulling.open;
         if (!taken.length) {
-          const n = Math.min(B.parallel, nBudget, Math.max(1, Math.ceil(pars.length / 2), Math.ceil(tekortP / 7), Math.ceil(tekortV / 3.5)));
-          const per = Math.max(3, Math.min(9, Math.round((tekortP || 3 * n) / Math.max(1, n))));
-          taken = Array.from({ length: n }, (_, i) => ({ id: `aanvulling-${++s.aanvulling.n}`, punten: per, paragrafen: pars.filter((_, j) => j % n === i) }));
+          const telling = paragraafTelling(gen.vraagstukken, s.inv);
+          const mist = telling.filter((p) => p.n === 0);
+          const n = Math.max(1, Math.min(B.parallel, nBudget, Math.max(Math.ceil(tekortP / 6), Math.ceil(mist.length / 2), Math.ceil(tekortV / 4))));
+          const totaal = Math.max(3 * n, tekortP);
+          taken = Array.from({ length: n }, (_, i) => {
+            const punten = Math.max(3, Math.min(8, Math.round(totaal / n)));
+            const eigen = mist.filter((_, j) => j % n === i);
+            const pars = (eigen.length ? eigen : telling.slice((2 * i) % Math.max(1, telling.length)).concat(telling).slice(0, 2)).map((p) => `${p.code} ${p.titel}`);
+            return { id: `aanvulling-${++s.aanvulling.n}`, punten, paragrafen: pars };
+          });
         }
         taken = taken.slice(0, Math.min(B.parallel, nBudget));
-        const nieuw = await pool(taken, B.parallel, (t) => vraag(gerichtPrompt({ soort: "nieuw", id: t.id, punten: t.punten, paragrafen: t.paragrafen, gen, vorige: t.vorige, fouten: t.fouten })));
-        const open: AanvulTaak[] = [];
+        const nieuw = await pool(taken, B.parallel, (t) => vraag(aanvulPrompt({ id: t.id, punten: t.punten, paragrafen: t.paragrafen, gen, inv: s.inv, vorige: t.vorige, fouten: t.fouten })));
+        const open: AanvulTaak[] = s.aanvulling.open.filter((t) => !taken.includes(t));
         taken.forEach((t, i) => {
           const v = nieuw[i];
-          if (!v) return;
+          if (!v) {
+            open.push(t);
+            return;
+          }
           const voor = vraagstukFouten(rap);
           const kand: Generatie = { ...gen, vraagstukken: [...gen.vraagstukken, metId(v, t.id)] };
           const rk = keur(kand);
           const eigen = rk.perId[t.id] ?? [];
-          const ok = eigen.length === 0 && vraagstukFouten(rk) <= voor;
-          const fouten = eigen.length ? eigen : ok ? [] : Object.entries(rk.perId).filter(([id]) => id && id !== t.id).flatMap(([, l]) => l).slice(0, 8);
-          log({ wat: `aanvulling ${puntenVan(v)} p (ronde ${s.rondes})`, id: t.id, ok, fouten });
+          const fouten = eigen.length ? eigen : vraagstukFouten(rk) > voor ? andereFouten(rk, t.id) : [];
+          const ok = fouten.length === 0;
+          log({ wat: `aanvulling ${puntenVan(v)}/${t.punten} p (ronde ${s.rondes})${ok ? "" : ` afgewezen: ${foutHandtekening(fouten)}`}`, id: t.id, ok, fouten });
           if (ok) {
             gen = kand;
             rap = rk;
-          } else if ((s.pogingen[t.id] = (s.pogingen[t.id] ?? 0) + 1) < 2) open.push({ ...t, vorige: v, fouten });
+            s.vul!.gelijk = 0;
+            s.vul!.sig = undefined;
+            s.vul!.wissels = 0;
+            return;
+          }
+          vulMislukt(t.id, fouten);
+          // Herkansing met de redenen; na 2 pogingen een nieuwe taak (andere paragrafen/situatie).
+          if ((s.pogingen[t.id] = (s.pogingen[t.id] ?? 0) + 1) < 2) open.push({ ...t, vorige: v, fouten });
         });
         s.aanvulling.open = open;
       }
-      if (allesGoed(keur(gen), k)) s.fase = "afronden";
+      // Stopregel: twee keer achter elkaar op dezelfde manier mislukt → andere strategie.
+      if (s.vul.gelijk >= 2 || s.vul.mislukt >= 6) {
+        const r2 = keur(gen);
+        const alleenLengte = vraagstukFouten(r2) === 0 && r2.feiten.ontbrekendeParagrafen.length === 0 && r2.feiten.vragen >= minV;
+        if (alleenLengte && r2.feiten.lengtePct >= 88) {
+          (s.waarschuwingen ??= []).push(`lengte ${r2.feiten.lengtePct} % geaccepteerd (88–90 %) na ${s.vul.mislukt} mislukte aanvulling(en) (${s.vul.sig ?? "?"})`);
+          log({ wat: `andere strategie: lengte ${r2.feiten.lengtePct} % geaccepteerd met waarschuwing`, id: "", ok: true });
+          s.fase = "afronden";
+        } else if ((s.vul.wissels ?? 0) >= 3) {
+          // Beide strategieën twee keer zonder enige vooruitgang: vastgelopen; stoppen spaart geld (het vangnet blijft de grens).
+          s.stopReden = "vastgelopen";
+          log({ wat: `gestopt: aanvullen en uitbreiden lopen vast (${s.vul.sig ?? "?"})`, id: "", ok: false, fouten: s.vul.laatste });
+          s.fase = "afronden";
+        } else if (s.vul.strategie === "nieuw") {
+          log({ wat: `andere strategie: uitbreiden in plaats van nieuwe vraagstukken (${s.vul.mislukt}× mislukt, laatst ${s.vul.sig ?? "?"})`, id: "", ok: true });
+          s.vul = { gelijk: 0, mislukt: 0, strategie: "uitbreiden", laatste: s.vul.laatste, uit: s.vul.uit, wissels: (s.vul.wissels ?? 0) + 1 };
+          s.aanvulling.open = [];
+        } else {
+          // Ook uitbreiden loopt vast: terug naar nieuwe vraagstukken (andere paragrafen), teller op nul.
+          log({ wat: `andere strategie: weer nieuwe vraagstukken (uitbreiden ${s.vul.mislukt}× mislukt)`, id: "", ok: true });
+          s.vul = { gelijk: 0, mislukt: 0, strategie: "nieuw", uit: s.vul.uit, wissels: (s.vul.wissels ?? 0) + 1 };
+        }
+      }
+      if (s.fase === "herstel" && allesGoed(keur(gen), k) && !s.aanvulling.open.some((t) => t.id.startsWith("vervang-"))) s.fase = "afronden";
     }
     s.gen = gen;
   } else if (s.fase === "afronden") {
     let gen = s.gen!;
-    // Gestopt op tijd/vangnet: wat nog fout is, valt weg (een afgekeurd vraagstuk wordt nooit geplaatst).
-    const r0 = keur(gen);
-    const weg = fouteIds(r0, gen);
-    if (weg.length) {
-      for (const id of weg) log({ wat: "geschrapt (afronden)", id, ok: false, fouten: r0.perId[id] });
-      gen = { ...gen, vraagstukken: gen.vraagstukken.filter((v) => !weg.includes(v.id)) };
+    // Gestopt op tijd/vangnet: wat nog fout is, valt weg (een afgekeurd vraagstuk wordt nooit geplaatst). Liever
+    // alleen de laatste deelvraag als het vraagstuk daarmee goed is.
+    for (let n = 0; n < 20; n++) {
+      const r0 = keur(gen);
+      const id = fouteIds(r0, gen)[0];
+      if (!id) break;
+      const v = gen.vraagstukken.find((x) => x.id === id)!;
+      const v2 = zonderStaart(v);
+      const metStaart = v2 ? { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x.id === id ? v2 : x)) } : null;
+      if (metStaart && !keur(metStaart).perId[id]?.length) {
+        log({ wat: `deelvraag ${v.deelvragen.at(-1)!.id} geschrapt (afronden)`, id, ok: false, fouten: r0.perId[id] });
+        gen = metStaart;
+      } else {
+        log({ wat: "geschrapt (afronden)", id, ok: false, fouten: r0.perId[id] });
+        gen = { ...gen, vraagstukken: gen.vraagstukken.filter((x) => x.id !== id) };
+      }
     }
     s.lengteVoorInkorten = keur(gen).feiten.lengtePct;
     const kort = inkorten(gen, s.inv, k);
     kort.stappen.forEach(log);
     s.gen = kort.gen;
     const r = keur(s.gen);
-    s.restFouten = r.fouten;
+    // Geaccepteerde lengte 88–90 % staat als waarschuwing, niet als open bevinding.
+    s.restFouten = s.waarschuwingen?.length ? r.fouten.filter((f) => !/^lengte: \d+ punten = (88|89) %/.test(f)) : r.fouten;
     s.fase = "klaar";
     opts.log?.("klaar", monitoring(s, r));
   }
@@ -338,6 +473,8 @@ export function monitoring(s: Stap0Staat, r?: Keuringsrapport): Record<string, u
     lengte: { ruw: s.ruwLengtePct, voorInkorten: s.lengteVoorInkorten, eind: f?.lengtePct },
     ruwFouten: s.ruwFouten,
     restFouten: s.restFouten ?? [],
+    waarschuwingen: s.waarschuwingen ?? [],
+    vulStrategie: s.vul?.strategie,
     stopReden: s.stopReden,
     ...(f ? { vragen: f.vragen, punten: f.punten, figuren: f.figuren, figurenGo: f.figurenGo } : {}),
   };
