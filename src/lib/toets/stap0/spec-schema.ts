@@ -3,6 +3,7 @@ const str = { type: "string", minLength: 1 } as const;
 const num = { type: "number" } as const;
 const controle = {
   type: "array",
+  description: "Alleen metingen van wat IN déze figuur getekend staat. Wat de leerling zelf tekent (pijl, lijn, punten) controleer je in antwoordmodel.figuur.",
   items: {
     type: "object",
     additionalProperties: false,
@@ -223,7 +224,7 @@ const vraagVelden = {
     properties: {
       juist: { enum: ["A", "B", "C", "D", "E"] },
       regels: { type: "array", items: str },
-      figuur: { $ref: "#/definitions/figuur" },
+      figuur: { $ref: "#/definitions/figuur", description: "Antwoordfiguur: dezelfde figuur mét in rood wat de leerling tekent, met controle daarop. Verplicht bij een tekenvraag." },
       verbergLeerlingFiguur: { type: "boolean" },
       opmerking: { type: "string" },
     },
@@ -235,6 +236,7 @@ const vraagVelden = {
   rtti: { enum: ["R", "T1", "T2", "I"] },
   leerdoel: { type: "string" },
   begrip: { type: "string" },
+  tekenvraag: { type: "boolean", description: "true als de leerling iets in de figuur tekent; dan is antwoordmodel.figuur verplicht en staan de controles daar." },
   parameters: { $ref: "#/definitions/parameters" },
   berekeningen: {
     type: "array",
@@ -247,6 +249,11 @@ const vraagVelden = {
   },
 } as const;
 const se = { enum: ["SE4.1", "SE4.2", "SE4.3", "SE4.4", "ALG"] } as const;
+/** Tekenvraag → antwoordfiguur verplicht (lokaal afgedwongen met ajv; voor xAI weggelaten, de keuring doet het ook). */
+const tekenAntwoord = {
+  if: { required: ["tekenvraag"], properties: { tekenvraag: { const: true } } },
+  then: { properties: { antwoordmodel: { required: ["regels", "figuur"] } } },
+} as const;
 const basisVereist = ["id", "vraagtype", "niveau", "punten", "stam", "antwoordmodel", "scorestappen", "rtti"];
 
 export const SPEC_SCHEMA = {
@@ -267,12 +274,14 @@ export const SPEC_SCHEMA = {
       additionalProperties: false,
       required: ["soort", ...basisVereist, "se", "hoofdstuk", "context"],
       properties: { soort: { const: "vraag" }, se, hoofdstuk: str, ...vraagVelden },
+      ...tekenAntwoord,
     },
     deelvraag: {
       type: "object",
       additionalProperties: false,
       required: basisVereist,
       properties: { ...vraagVelden },
+      ...tekenAntwoord,
     },
     vraagstuk: {
       type: "object",

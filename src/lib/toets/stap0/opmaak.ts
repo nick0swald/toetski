@@ -21,8 +21,10 @@ export const ONDERWERP: Record<SeCode, { kort: string; lang: string; letter: str
 };
 /** SE-indeling alleen in klas 4 (of als de klas onbekend is, zoals de vaste voorbeeldtoets). */
 export const isSeToets = (jaar?: number) => jaar === undefined || jaar >= 4;
-export const seLabel = (k: SeCode, jaar?: number) => (isSeToets(jaar) ? seNaam(k) : ONDERWERP[k].kort);
-export const seOmschrijving = (k: SeCode, jaar?: number) => (isSeToets(jaar) ? SE_INFO[k].naam : ONDERWERP[k].lang);
+/** Onderwerplabel uit de inhoud (klas 1–3; gezet door de pijplijn), bv. "Geluid" i.p.v. "Geluid, energie, stoffen". */
+export const ondVan = (vragen: { se: SeCode; onderwerp?: string }[], k: SeCode) => vragen.find((q) => q.se === k && q.onderwerp)?.onderwerp;
+export const seLabel = (k: SeCode, jaar?: number, ond?: string) => (isSeToets(jaar) ? seNaam(k) : (ond ?? ONDERWERP[k].kort));
+export const seOmschrijving = (k: SeCode, jaar?: number, ond?: string) => (isSeToets(jaar) ? SE_INFO[k].naam : (ond ?? ONDERWERP[k].lang));
 export const indelingKop = (jaar?: number) => (isSeToets(jaar) ? "SE-toets" : "Onderwerp");
 export const jaarVan = (vragen: { jaar?: number }[]) => vragen[0]?.jaar;
 

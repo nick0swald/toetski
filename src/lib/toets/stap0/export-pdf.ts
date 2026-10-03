@@ -10,7 +10,7 @@ import type { Pijplijnresultaat } from "./pijplijn.ts";
 import { figuurSvg } from "./figuren/index.ts";
 import { cijferGrafiekSvg, cijferTabel, cesuur, formule } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
-import { antwoordKop, bandTekst, contextTitel, indelingKop, INSTRUCTIE_CSE, INVULVELDEN, jaarVan, matrijsTotalen, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, voorbladTekst, vraagstukBereik } from "./opmaak.ts";
+import { antwoordKop, bandTekst, contextTitel, indelingKop, INSTRUCTIE_CSE, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, voorbladTekst, vraagstukBereik } from "./opmaak.ts";
 import { A4, Beeld, Bijeen, type Blok, CM, type Fonts, GeenNummer, Ingesprongen, Lijn, Lijnen, maakPdf, Onderaan, PaginaEinde, Para, Ruimte, ST, Tabel } from "./pdf-opmaak.ts";
 
 export type PngRender = (svg: string, breedtePx: number) => Promise<Uint8Array>;
@@ -117,9 +117,9 @@ function antwoordBox(q: OpmaakVraag, antwFig: Fig | null): Blok {
   return ind(new Tabel([[{ inhoud }]], { kolommen: [IW], rand: { kleur: se.kleur, lw: 0.9 }, bg: "#fbfbfb", pad: { l: 7, r: 7, t: 5, b: 6 } }));
 }
 
-function sectieKop(se: SeCode, jaar?: number): Blok {
-  const l = seLabel(se, jaar);
-  const o = seOmschrijving(se, jaar);
+function sectieKop(se: SeCode, jaar?: number, ond?: string): Blok {
+  const l = seLabel(se, jaar, ond);
+  const o = seOmschrijving(se, jaar, ond);
   return new Tabel([[{ inhoud: [new Para(l === o ? l : `${l} · ${o}`, ST.sectie)], bg: SE_INFO[se].kleur }]], { kolommen: [TW], pad: { l: 6, r: 6, t: 7, b: 8 } });
 }
 
@@ -156,8 +156,8 @@ function legenda(vragen: OpmaakVraag[]): Blok {
       const n = vragen.filter((q) => q.se === k);
       const p = n.reduce((s, q) => s + q.punten, 0);
       return [
-        { inhoud: [new Para(seLabel(k, jaar), ST.bandw)], bg: SE_INFO[k].kleur },
-        { inhoud: [new Para(seOmschrijving(k, jaar), ST.cell)], bg: SE_INFO[k].tint },
+        { inhoud: [new Para(seLabel(k, jaar, ondVan(vragen, k)), ST.bandw)], bg: SE_INFO[k].kleur },
+        { inhoud: [new Para(seOmschrijving(k, jaar, ondVan(vragen, k)), ST.cell)], bg: SE_INFO[k].tint },
         { inhoud: [new Para(`${n.length} ${n.length === 1 ? "vraag" : "vragen"} · ${p} p`, ST.cell)], bg: SE_INFO[k].tint },
       ];
     }),
@@ -218,8 +218,8 @@ function matrijs(vragen: OpmaakVraag[]): Blok[] {
     new Ruimte(12),
     (() => {
       const jaar = jaarVan(vragen);
-      const naarSe = new Map(SE_ORDE.map((k) => [seLabel(k, jaar), k]));
-      return new Bijeen([new Para(`<b>Totaal per ${indelingKop(jaar).toLowerCase() === "se-toets" ? "SE-toets" : "onderwerp"}</b>`, ST.body, 2), klein(indelingKop(jaar), t.perSe.map((r) => ({ ...r, sleutel: seLabel(r.sleutel as SeCode, jaar) })), (k) => SE_INFO[naarSe.get(k) as SeCode]?.kleur)]);
+      const naarSe = new Map(SE_ORDE.map((k) => [seLabel(k, jaar, ondVan(vragen, k)), k]));
+      return new Bijeen([new Para(`<b>Totaal per ${indelingKop(jaar).toLowerCase() === "se-toets" ? "SE-toets" : "onderwerp"}</b>`, ST.body, 2), klein(indelingKop(jaar), t.perSe.map((r) => ({ ...r, sleutel: seLabel(r.sleutel as SeCode, jaar, ondVan(vragen, r.sleutel as SeCode)) })), (k) => SE_INFO[naarSe.get(k) as SeCode]?.kleur)]);
     })(),
     new Ruimte(8),
     new Bijeen([new Para("<b>Totaal per RTTI-categorie</b>", ST.body, 2), klein("RTTI", t.perRtti)]),
@@ -294,7 +294,7 @@ function vragenMetSecties(vragen: OpmaakVraag[], docent: boolean, figs: Map<stri
     const voor: Blok[] = [];
     if (q.se !== vorige) {
       out.push(new PaginaEinde());
-      voor.push(sectieKop(q.se, q.jaar), new Ruimte(12));
+      voor.push(sectieKop(q.se, q.jaar, q.onderwerp), new Ruimte(12));
       vorige = q.se;
     }
     out.push(vraagBlok(q, docent, figs, alle, voor));
@@ -350,9 +350,9 @@ function voorblad(toets: ToetsSpec, vragen: OpmaakVraag[], deel: { naam: string;
 }
 
 /** CSE-contexttitel: vet, iets ingesprongen (op de nummerkolom), daaronder een dikke grijze balk over de volle breedte. */
-function titelBlok(titel: string, se: SeCode, jaar?: number): Blok {
+function titelBlok(titel: string, se: SeCode, jaar?: number, ond?: string): Blok {
   return new Bijeen([
-    new Tabel([[[], [new Para(titel, ST.ltitel)], { inhoud: [new Para(`<font color="#808080">${seLabel(se, jaar)}</font>`, ST.lklein)], uitlijning: "rechts" as const }]], {
+    new Tabel([[[], [new Para(titel, ST.ltitel)], { inhoud: [new Para(`<font color="#808080">${seLabel(se, jaar, ond)}</font>`, ST.lklein)], uitlijning: "rechts" as const }]], {
       kolommen: [K_P, TW - K_P - 2 * CM, 2 * CM],
       pad: { l: 0, r: 0, t: 0, b: 1 },
       va: "midden",
@@ -371,7 +371,7 @@ function lDataTabel(rijen: string[][]): Blok {
 function leerlingVraag(q: OpmaakVraag, figs: Map<string, Fig>): Blok[] {
   const blokken: Blok[] = [];
   const titel = contextTitel(q);
-  if (titel) blokken.push(titelBlok(titel, q.se, q.jaar));
+  if (titel) blokken.push(titelBlok(titel, q.se, q.jaar, q.onderwerp));
   for (const c of q.gedeeldeContext ?? []) blokken.push(ind(new Para(c, ST.lbody, 6)));
   if (q.tabel) blokken.push(lDataTabel(q.tabel), new Ruimte(8));
   const fig = figs.get(`${q.id}/leerling`);

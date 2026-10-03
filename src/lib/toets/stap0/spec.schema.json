@@ -95,6 +95,7 @@
       },
       "controle": {
        "type": "array",
+       "description": "Alleen metingen van wat IN déze figuur getekend staat. Wat de leerling zelf tekent (pijl, lijn, punten) controleer je in antwoordmodel.figuur.",
        "items": {
         "type": "object",
         "additionalProperties": false,
@@ -228,6 +229,7 @@
       },
       "controle": {
        "type": "array",
+       "description": "Alleen metingen van wat IN déze figuur getekend staat. Wat de leerling zelf tekent (pijl, lijn, punten) controleer je in antwoordmodel.figuur.",
        "items": {
         "type": "object",
         "additionalProperties": false,
@@ -359,6 +361,7 @@
       },
       "controle": {
        "type": "array",
+       "description": "Alleen metingen van wat IN déze figuur getekend staat. Wat de leerling zelf tekent (pijl, lijn, punten) controleer je in antwoordmodel.figuur.",
        "items": {
         "type": "object",
         "additionalProperties": false,
@@ -490,6 +493,7 @@
       },
       "controle": {
        "type": "array",
+       "description": "Alleen metingen van wat IN déze figuur getekend staat. Wat de leerling zelf tekent (pijl, lijn, punten) controleer je in antwoordmodel.figuur.",
        "items": {
         "type": "object",
         "additionalProperties": false,
@@ -592,6 +596,7 @@
       },
       "controle": {
        "type": "array",
+       "description": "Alleen metingen van wat IN déze figuur getekend staat. Wat de leerling zelf tekent (pijl, lijn, punten) controleer je in antwoordmodel.figuur.",
        "items": {
         "type": "object",
         "additionalProperties": false,
@@ -874,7 +879,8 @@
        }
       },
       "figuur": {
-       "$ref": "#/definitions/figuur"
+       "$ref": "#/definitions/figuur",
+       "description": "Antwoordfiguur: dezelfde figuur mét in rood wat de leerling tekent, met controle daarop. Verplicht bij een tekenvraag."
       },
       "verbergLeerlingFiguur": {
        "type": "boolean"
@@ -919,6 +925,10 @@
     "begrip": {
      "type": "string"
     },
+    "tekenvraag": {
+     "type": "boolean",
+     "description": "true als de leerling iets in de figuur tekent; dan is antwoordmodel.figuur verplicht en staan de controles daar."
+    },
     "parameters": {
      "$ref": "#/definitions/parameters"
     },
@@ -955,6 +965,26 @@
         "minimum": 0
        }
       }
+     }
+    }
+   },
+   "if": {
+    "required": [
+     "tekenvraag"
+    ],
+    "properties": {
+     "tekenvraag": {
+      "const": true
+     }
+    }
+   },
+   "then": {
+    "properties": {
+     "antwoordmodel": {
+      "required": [
+       "regels",
+       "figuur"
+      ]
      }
     }
    }
@@ -1092,7 +1122,8 @@
        }
       },
       "figuur": {
-       "$ref": "#/definitions/figuur"
+       "$ref": "#/definitions/figuur",
+       "description": "Antwoordfiguur: dezelfde figuur mét in rood wat de leerling tekent, met controle daarop. Verplicht bij een tekenvraag."
       },
       "verbergLeerlingFiguur": {
        "type": "boolean"
@@ -1137,6 +1168,10 @@
     "begrip": {
      "type": "string"
     },
+    "tekenvraag": {
+     "type": "boolean",
+     "description": "true als de leerling iets in de figuur tekent; dan is antwoordmodel.figuur verplicht en staan de controles daar."
+    },
     "parameters": {
      "$ref": "#/definitions/parameters"
     },
@@ -1173,6 +1208,26 @@
         "minimum": 0
        }
       }
+     }
+    }
+   },
+   "if": {
+    "required": [
+     "tekenvraag"
+    ],
+    "properties": {
+     "tekenvraag": {
+      "const": true
+     }
+    }
+   },
+   "then": {
+    "properties": {
+     "antwoordmodel": {
+      "required": [
+       "regels",
+       "figuur"
+      ]
      }
     }
    }

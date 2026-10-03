@@ -64,7 +64,15 @@ export interface FiguurOordeel {
  * Go/no-go: elke `controle` koppelt een meting uit de SVG aan een parameter (of een vaste waarde). Daarnaast:
  * grafiek-asgetallen op de juiste plek, krachtenfiguur op ware grootte.
  */
-export function keurFiguur(f: FiguurSpec, params: Record<string, number>, vraag?: Pick<VraagSpec, "stam" | "parameters">): FiguurOordeel {
+/** Lege of halve tekenfiguur: de leerling tekent er zelf in (geen pijlen, geen reeksen, of vrije ruimte voor een tak). */
+export function isTekenFiguur(f: FiguurSpec): boolean {
+  if (f.type === "krachten") return f.pijlen.length === 0;
+  if (f.type === "grafiek") return !f.panelen?.length && f.reeksen.every((r) => r.rood || r.punten.length <= 1);
+  if (f.type === "schakelschema") return Boolean(f.vrijeRuimte);
+  return false;
+}
+
+export function keurFiguur(f: FiguurSpec, params: Record<string, number>, vraag?: Pick<VraagSpec, "stam" | "parameters">, opts: { rol?: "leerling" | "antwoord"; teken?: boolean } = {}): FiguurOordeel {
   const svg = figuurSvg(f);
   if (f.type === "ai-afbeelding") {
     // Stap 0: spec-keuring + placeholder. De beeldkeuring (go/no-go op het gegenereerde beeld) zit in de beeldstroom.
@@ -82,7 +90,9 @@ export function keurFiguur(f: FiguurSpec, params: Record<string, number>, vraag?
     }
     if (gemeten === undefined || Number.isNaN(gemeten)) {
       const kan = Object.keys(m).filter((k) => !["breedteCm", "asfouten"].includes(k)).slice(0, 12);
-      fouten.push(`${f.type}: meting ${c.meting} niet gevonden in de figuur (meetbaar in deze figuur: ${kan.join(", ") || "niets"}; een pijl/lijn die de leerling zelf tekent hoort met zijn controle in antwoordmodel.figuur)`);
+      if (opts.rol === "leerling" && opts.teken)
+        fouten.push(`${f.type}: tekenvraag: "${c.meting}" tekent de leerling zelf en staat dus niet in de leerlingfiguur. Zet deze controle in antwoordmodel.figuur (dezelfde figuur mét de rode pijl/lijn) en haal hem uit de leerlingfiguur (meetbaar in de leerlingfiguur: ${kan.join(", ") || "niets"})`);
+      else fouten.push(`${f.type}: meting ${c.meting} niet gevonden in de figuur (meetbaar in deze figuur: ${kan.join(", ") || "niets"}; een pijl/lijn die de leerling zelf tekent hoort met zijn controle in antwoordmodel.figuur)`);
       continue;
     }
     const tol = c.tolerantie ?? STANDAARD_TOL[f.type];
@@ -90,7 +100,8 @@ export function keurFiguur(f: FiguurSpec, params: Record<string, number>, vraag?
   }
   if (f.type === "grafiek" && m.asfouten) fouten.push(`grafiek: ${m.asfouten} asgetallen staan niet op hun plek`);
   if (f.type === "krachten" && Math.abs((m.breedteCm ?? 0) - f.breedteCm) > 1e-6) fouten.push("krachten: figuur niet op ware grootte");
-  if (!f.controle?.length) fouten.push(`${f.type}: geen controle gedefinieerd (go/no-go niet mogelijk)`);
+  // Een lege tekenfiguur voor de leerling heeft niets om te meten; de controle zit dan in antwoordmodel.figuur.
+  if (!f.controle?.length && !(opts.rol === "leerling" && opts.teken && isTekenFiguur(f))) fouten.push(`${f.type}: geen controle gedefinieerd (go/no-go niet mogelijk)`);
   return { go: fouten.length === 0, fouten, metingen: m, svg };
 }
 

@@ -10,7 +10,7 @@ import { figuurSvg } from "./figuren/index.ts";
 import { cijferGrafiekSvg, cijferTabel, cesuur, formule } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
 import { PAGE_A4, PAGE_MARGINS, pageNumberChrome } from "../docx-pagina.ts";
-import { antwoordKop, bandTekst, contextTitel, indelingKop, INSTRUCTIE_CSE, INVULVELDEN, jaarVan, matrijsTotalen, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, vraagstukBereik } from "./opmaak.ts";
+import { antwoordKop, bandTekst, contextTitel, indelingKop, INSTRUCTIE_CSE, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, vraagstukBereik } from "./opmaak.ts";
 
 type Kind = Paragraph | Table;
 const FONT = "Arial";
@@ -142,8 +142,8 @@ async function vragen(qs: OpmaakVraag[], docent: boolean, png: PngRender, alle: 
   for (const q of qs) {
     if (q.se !== vorige) {
       out.push(new Paragraph({ children: [new PageBreak()] }));
-      const l = seLabel(q.se, q.jaar);
-      const o = seOmschrijving(q.se, q.jaar);
+      const l = seLabel(q.se, q.jaar, q.onderwerp);
+      const o = seOmschrijving(q.se, q.jaar, q.onderwerp);
       out.push(tabel([[cel([para(l === o ? l : `${l} · ${o}`, { bold: true, kleur: "FFFFFF", size: 26, midden: true, na: 0 })], { w: TW, bg: SE_INFO[q.se].kleur })]], [TW]), para("", { na: 120 }));
       vorige = q.se;
     }
@@ -158,8 +158,8 @@ function legenda(qs: OpmaakVraag[]): Table {
     SE_ORDE.filter((k) => qs.some((q) => q.se === k)).map((k) => {
       const n = qs.filter((q) => q.se === k);
       return [
-        cel([para(seLabel(k, jaar), { bold: true, kleur: "FFFFFF", size: 20, midden: true, na: 0 })], { w: 1304, bg: SE_INFO[k].kleur, va: true }),
-        cel([para(seOmschrijving(k, jaar), { size: 19, na: 0 })], { w: TW - 3004, bg: SE_INFO[k].tint, va: true }),
+        cel([para(seLabel(k, jaar, ondVan(qs, k)), { bold: true, kleur: "FFFFFF", size: 20, midden: true, na: 0 })], { w: 1304, bg: SE_INFO[k].kleur, va: true }),
+        cel([para(seOmschrijving(k, jaar, ondVan(qs, k)), { size: 19, na: 0 })], { w: TW - 3004, bg: SE_INFO[k].tint, va: true }),
         cel([para(`${n.length} ${n.length === 1 ? "vraag" : "vragen"} · ${n.reduce((s, q) => s + q.punten, 0)} p`, { size: 19, na: 0 })], { w: 1700, bg: SE_INFO[k].tint, va: true }),
       ];
     }),
@@ -273,7 +273,7 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
       1,
       (r) => res.vragen[r]?.se ?? "ALG",
     ),
-    ...[[`Totaal per ${jaarVan(res.vragen) !== undefined && jaarVan(res.vragen)! < 4 ? "onderwerp" : "SE-toets"}`, t.perSe.map((r) => ({ ...r, sleutel: seLabel(r.sleutel as SeCode, jaarVan(res.vragen)) }))], ["Totaal per RTTI-categorie", t.perRtti], ["Totaal per examenniveau", t.perNiveau], ["Totaal per hoofdstuk / onderwerp", t.perHoofdstuk]].flatMap(([titel, rijen]) => [
+    ...[[`Totaal per ${jaarVan(res.vragen) !== undefined && jaarVan(res.vragen)! < 4 ? "onderwerp" : "SE-toets"}`, t.perSe.map((r) => ({ ...r, sleutel: seLabel(r.sleutel as SeCode, jaarVan(res.vragen), ondVan(res.vragen, r.sleutel as SeCode)) }))], ["Totaal per RTTI-categorie", t.perRtti], ["Totaal per examenniveau", t.perNiveau], ["Totaal per hoofdstuk / onderwerp", t.perHoofdstuk]].flatMap(([titel, rijen]) => [
       para(`<b>${titel as string}</b>`, { voor: 200, na: 60 }),
       rasterTabel(["", "vragen", "punten", "%"], [...(rijen as typeof t.perSe).map((r) => [r.sleutel, String(r.vragen), String(r.punten), r.pct.toFixed(1).replace(".", ",")]), ["Totaal", String(t.vragen), String(t.punten), "100,0"]], [2950, 900, 900, 800]),
     ]),

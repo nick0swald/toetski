@@ -5,7 +5,8 @@
 import type { Fixture, FiguurSpec, OpmaakVraag, SeCode, ToetsSpec, VraagSpec } from "./spec.ts";
 import { valideerSpec, valideerToets } from "./valideer.ts";
 import { controleerBerekeningen } from "./reken.ts";
-import { keurFiguur, paramMap } from "./figuren/index.ts";
+import { onderwerpUitInhoud } from "./inhoud-keuring.ts";
+import { isTekenFiguur, keurFiguur, paramMap } from "./figuren/index.ts";
 import { isSeToets, ONDERWERP } from "./opmaak.ts";
 
 export const SE_VOLGORDE: SeCode[] = ["SE4.1", "SE4.2", "SE4.3", "SE4.4", "ALG"];
@@ -74,9 +75,13 @@ export function verwerkToets(toets: ToetsSpec, fixtures: Fixture[]): Pijplijnres
         [it.q.figuur, "leerling"],
         [it.q.antwoordmodel.figuur, "antwoord"],
       ];
+      const leerFig = it.q.figuur;
+      const teken = Boolean(leerFig) && (it.q.tekenvraag ?? (/\b(teken|schets)\b/i.test(it.q.stam) || isTekenFiguur(leerFig!)));
+      if (teken && !it.q.antwoordmodel.figuur)
+        kOuder.fouten.push(`${it.q.id}: tekenvraag zonder antwoordfiguur: zet in antwoordmodel.figuur dezelfde figuur mét in rood wat de leerling tekent, met de controle daarop (de leerlingfiguur blijft leeg of half af)`);
       for (const [f, rol] of figs) {
         if (!f) continue;
-        const o = keurFiguur(f, params, it.q);
+        const o = keurFiguur(f, params, it.q, { rol, teken });
         kOuder.figuren.push({ rol, type: f.type, go: o.go, metingen: o.metingen, svg: o.svg });
         kOuder.fouten.push(...o.fouten.map((x) => `${it.q.id} (${rol}): ${x}`));
       }
@@ -94,6 +99,14 @@ export function verwerkToets(toets: ToetsSpec, fixtures: Fixture[]): Pijplijnres
     const prefix = isSeToets(jaar) ? g.q.se : ONDERWERP[g.q.se].letter;
     return { ...g.q, nr: i + 1, jaar, code: `${prefix}-${String(teller[g.q.se]).padStart(2, "0")}`, vraagstuk: g.vs, ouderId: g.ouderId, gedeeldeContext: g.gedeeld, aanloop: g.aanloop } as OpmaakVraag;
   });
+  // Klas 1–3: het onderwerplabel volgt uit de inhoud (alle teksten van de vragen in die SE-groep).
+  if (!isSeToets(toets.klas?.leerjaar))
+    for (const k of new Set(vragen.map((v) => v.se))) {
+      const groep = vragen.filter((v) => v.se === k);
+      const tekst = groep.map((v) => [v.vraagstuk?.titel ?? "", ...(v.gedeeldeContext ?? []), ...(v.aanloop ?? []), v.stam, v.leerdoel ?? "", ...v.antwoordmodel.regels].join(" ")).join(" ");
+      const ond = onderwerpUitInhoud(k, tekst);
+      if (ond) for (const v of groep) v.onderwerp = ond;
+    }
   const ouderVan = new Map(vragen.map((v) => [v.nr, (v as OpmaakVraag & { ouderId: string }).ouderId]));
   const delen = (toets.delen ?? [{ naam: "", vragen: toets.vragen }]).map((d) => ({
     naam: d.naam,

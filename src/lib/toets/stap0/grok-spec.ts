@@ -12,10 +12,11 @@
 import { SPEC_SCHEMA } from "./spec-schema.ts";
 import type { Fixture, FiguurSpec, OpmaakVraag, ToetsSpec, VraagstukSpec } from "./spec.ts";
 import { verwerkToets, type Pijplijnresultaat } from "./pijplijn.ts";
-import { getalInTekst, nl } from "./reken.ts";
+import { nl } from "./reken.ts";
 import { annoteerKalibratie, relevanteVraagtypen, type Kalibratie } from "../kalibratie.ts";
 import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { overlap, woorden } from "../eval/rubric.ts";
+import { afrondFouten, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekFiguurVerwijzingen, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
 import type { GegenereerdeToets, Leerweg, RttiVerdeling, Vraag } from "../types";
 
 export interface SpecInvoer {
@@ -40,7 +41,7 @@ export function naarXaiSchema(x: unknown): unknown {
   if (!x || typeof x !== "object") return x;
   const o: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
-    if (k === "$schema" || k === "$id" || k === "title") continue;
+    if (k === "$schema" || k === "$id" || k === "title" || k === "if" || k === "then") continue;
     if (k === "anyOf" && Array.isArray(v) && v.every((s) => s && typeof s === "object" && Object.keys(s).join() === "required")) continue;
     if (k === "definitions") o.$defs = naarXaiSchema(v);
     else if (k === "$ref" && typeof v === "string") o.$ref = v.replace("#/definitions/", "#/$defs/");
@@ -80,11 +81,14 @@ export const SPEC_SYSTEM = `Je bent een ervaren toetsconstructeur natuur- en sch
 OPBOUW (CSE-stijl)
 - De toets bestaat uit vraagstukken (soort "vraagstuk"). Elk vraagstuk = één situatie met een korte titel (2–4 woorden) en een korte inleiding (context, 2–4 zinnen), gevolgd door 3 of 4 samenhangende deelvragen over díe situatie.
 - Elk vraagstuk gaat over een ANDERE situatie, met een ander voorwerp en een andere persoon. Geen twee vraagstukken over hetzelfde apparaat of dezelfde handeling.
+- SAMENHANG: alle deelvragen van een vraagstuk gaan over díe ene situatie uit de inleiding (zelfde persoon, voorwerp en plek). Geen deelvraag over een andere situatie (dus geen vraag over een auto in een vraagstuk over een echo); begint een nieuwe situatie, maak dan een nieuw vraagstuk. Een figuur in een vraagstuk hoort bij die situatie.
 - Een deelvraag mag eigen extra informatie hebben in "context" (die komt vóór de opdracht). De "stam" is de opdracht zelf ("Bereken …", "Leg uit …", "Welke … ?"). Herhaal de inleiding niet in de stam.
 - Mix van vraagvormen zoals in het CSE: meerkeuze (4 opties, precies één juist), berekeningen (formule zelf kiezen, punten per stap), uitlegvragen ("Leg uit …", "Leg uit waarom …"), en inzichtvragen (I): nieuwe situatie, voorspellen, verband leggen of redeneren in meerdere stappen. Gebruik in elke toets meerdere uitlegvragen en minstens twee I-vragen.
-- Geen weggevers: een deelvraag mag nooit het antwoord van een andere deelvraag (in hetzelfde of een ander vraagstuk) verklappen, ook niet in de context, de opties of een tabel. Geef geen uitkomst die eerder berekend moet worden. Let vooral op meerkeuzeopties: een (juiste of foute) optie mag geen antwoord op een andere vraag bevatten.
+- Geen weggevers: een deelvraag mag nooit het antwoord van een andere deelvraag (in hetzelfde of een ander vraagstuk) verklappen, ook niet in de context, de opties of een tabel. Noem een uitkomst die eerder berekend moet worden niet (met eenheid) in een volgende deelvraag; wil je verder rekenen, schrijf dan "Ga uit van …" met een ANDERE waarde. Let vooral op meerkeuzeopties: een (juiste of foute) optie mag geen uitspraak bevatten die een andere vraag beantwoordt.
 - Elk begrip en elke redenering maar één keer: "begrip" (2–6 woorden) noemt wat de deelvraag toetst, bijv. "frequentie uit trillingstijd", "amplitude en luidheid", "geluid heeft tussenstof nodig". Geen twee deelvragen in de toets met hetzelfde begrip of dezelfde redenering (ook niet in andere woorden).
 - Meerkeuze: ALTIJD "opties" (2–4 stuks) én "juist". Opties zonder letters (de software zet A–D ervoor). Bij een keuze tussen figuren A–D zijn de opties "beeld A", "beeld B", … (of "diagram A", …). Juist/onjuist-vraag: opties ["juist", "onjuist"]. Afleiders plausibel (typische denkfouten), niet overlappend, ongeveer even lang. Wissel de plaats van het juiste antwoord af. Scorestap: 1 punt voor de juiste letter.
+- Weinig losse weetvragen: hoogstens het percentage uit de WEETVRAGEN-regel van de opdracht van de punten mag uit 1-punts reproductievragen (rtti R) komen; maak de rest toepassen (T1/T2), inzicht (I) of vragen van 2–3 punten.
+- Alleen stof uit de LESSTOF hieronder, met de woorden van de lesstof (bijv. "resulterende kracht" als de lesstof dat zegt, niet "nettokracht"; geen versnelling, stabiliteit of andere stof die er niet in staat).
 - Realistische, herkenbare situaties uit het dagelijks leven van een vmbo-leerling, met realistische getallen.
 - Namen: gewone Nederlandse voornamen (ook meercultureel), per vraagstuk een andere naam. GEEN schoolnamen, geen plaatsnamen van scholen, geen merknamen of productnamen, geen namen van methodes of uitgevers, geen "Toetski".
 - Neem NOOIT een vraag uit het boek, de lesstof of een examen letterlijk over. Bedenk nieuwe situaties en nieuwe getallen; ook geen zinnen uit de lesstof overschrijven.
@@ -103,6 +107,7 @@ REKENEN (wordt door code nagerekend; een fout = de vraag wordt niet geplaatst)
 - berekening: naam, formule met parameternamen en eerdere stapnamen (alleen + - * / ^, haakjes, sqrt, sin, cos (graden), round, ceil), waarde = de exacte uitkomst, eenheid, afgerond = de uitkomst zoals die in het antwoordmodel staat ("7,9"). Die afgeronde waarde moet letterlijk in antwoordmodel.regels staan. Gebruik getallen zonder machten van 10 (dus "0,0008", niet "8·10^-4").
 - Parameters van het vraagstuk ("parameters" op vraagstukniveau) gelden voor alle deelvragen.
 - Gebruik overal dezelfde waarde voor g (die uit de lesstof; anders 10 N/kg).
+- AFRONDEN: rond de einduitkomst af op hetzelfde aantal significante cijfers als het gegeven met de minste significante cijfers (minimaal 2), tenzij de vraag zelf zegt hoe je afrondt. Doe dat in de hele toets op dezelfde manier. Zet in het antwoordmodel de onafgeronde waarde erbij: "Fz = 4,0 × 9,8 = 39,2 N ≈ 39 N".
 
 FIGUREN (alleen als de vraag er echt een nodig heeft; de software tekent ze exact)
 - Toegestane typen: grafiek, oscilloscoop, schakelschema, krachten, maatcilinder, en ai-afbeelding.
@@ -115,7 +120,11 @@ FIGUREN (alleen als de vraag er echt een nodig heeft; de software tekent ze exac
 - Bij precies 4 keuzefiguren (A–D) zet de software ze in een 2×2-raster; gebruik daarvoor panelen met labels A, B, C, D.
 - breedteCm 6–11 (krachtenfiguur: ware grootte, max 14).
 - ai-afbeelding: ALLEEN voor een foto of situatieplaatje dat de situatie herkenbaar maakt, nooit om iets af te lezen of te meten; beschrijving zonder getallen en meetwaarden; hoogstens 2 per toets. Geen getallen of meetwoorden (aflezen, hokjes, grafiek) in een vraag die alleen een ai-afbeelding heeft.
-- Verwijs in de tekst nooit naar een figuur of tabel die er niet is. Een tabel: "tabel" als lijst rijen, de eerste rij zijn de kopjes.
+- Verwijs in de tekst nooit naar een figuur of tabel die er niet is ("Je ziet …", "in de figuur", "beeld A–D", "de tabel"): wie verwijst, levert de figuur (met panelen A–D als je naar A–D verwijst) of de tabel ook echt mee. Een tabel: "tabel" als lijst rijen, de eerste rij zijn de kopjes.
+- TEKENVRAAG (de leerling tekent een pijl, lijn, punten of een tak): zet "tekenvraag": true. De LEERLINGFIGUUR toont alleen wat er al staat (bij krachten: het voorwerp, het aangrijpingspunt en eventueel gegeven pijlen; bij een grafiek: alleen het lege assenstelsel, "reeksen": []) en heeft alleen controles op wat er staat (of geen). De ANTWOORDFIGUUR ("antwoordmodel.figuur") is dezelfde figuur mét in rood ("rood": true) wat de leerling tekent, en heeft de controle daarop. Nooit een controle in de leerlingfiguur op iets dat de leerling nog moet tekenen, en nooit een los punt in een leeg assenstelsel. Voorbeeld (krachten, 1 cm ≙ 10 N, leerling tekent Fz = 40 N):
+  "tekenvraag": true,
+  "figuur": {"type":"krachten","breedteCm":6,"hoogteCm":7,"schaalN":10,"voorwerp":"krat","punt":[3,5],"puntLabel":"Z","pijlen":[],"controle":[{"meting":"pijlen","verwacht":0}]},
+  "antwoordmodel": {"regels":["pijl van 4,0 cm recht omlaag vanuit Z"],"figuur":{"type":"krachten","breedteCm":6,"hoogteCm":7,"schaalN":10,"voorwerp":"krat","punt":[3,5],"puntLabel":"Z","pijlen":[{"naam":"Fz","grootteN":40,"hoek":270,"rood":true}],"controle":[{"meting":"Fz.N","verwacht":40},{"meting":"Fz.hoek","verwacht":270}]}}
 
 IDS: kleine letters, cijfers en streepjes; elke deelvraag-id uniek (bijv. "fietsbel-a").
 SE-code ("se"): SE4.1 krachten/druk/werktuigen, SE4.2 energie/geluid/materie (dichtheid, fasen, stoffen), SE4.3 elektriciteit, SE4.4 arbeid/vermogen/beweging, ALG algemene vaardigheden.`;
@@ -135,6 +144,7 @@ export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "pun
     `FIGUREN: gebruik in deze toets 2–4 figuren uit de toegestane typen waar de lesstof dat vraagt (bijv. een oscilloscoopbeeld bij geluid, een grafiek bij beweging of metingen, een schakelschema bij elektriciteit, een krachtenfiguur bij krachten), elk met "controle".`,
     pars.length ? `PARAGRAFEN: elke paragraaf krijgt minstens één deelvraag, verdeeld naar de hoeveelheid stof: ${pars.map((p) => `${p.code} ${p.titel}`).join("; ")}.` : "",
     inv.leerjaar <= 2 ? `NIVEAU: onderbouw klas ${inv.leerjaar}: korte inleidingen, eenvoudige taal, rekenwerk in 1–2 stappen; wel CSE-opbouw met vraagstukken.` : "",
+    `WEETVRAGEN: hoogstens ${Math.round((MAX_1P_R[inv.leerweg] ?? 0.35) * 100)}% van de punten (${Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * kal.punten)} punten) uit 1-punts R-vragen.`,
     typen ? `VRAAGTYPE: vul "vraagtype" met nr, code en naam uit deze lijst (nr=code): ${typen}. Gebruik minstens 5 verschillende typen.` : "",
     `\nLESSTOF:\n${inv.bronmateriaal}`,
     inv.antwoordenmateriaal ? `\nANTWOORDEN BIJ DE LESSTOF (alleen als achtergrond; niets letterlijk overnemen):\n${inv.antwoordenmateriaal}` : "",
@@ -165,6 +175,11 @@ function vormRegel(v: Kalibratie["vorm"], items: number): string {
 export function normaliseer(gen: Generatie): Generatie {
   const g = structuredClone(gen);
   for (const v of g.vraagstukken ?? []) {
+    (v.deelvragen ?? []).forEach((d, i) => {
+      const teken = d.tekenvraag ?? /\b(teken|schets)\b/i.test(kaal(d.stam ?? ""));
+      if (d.figuur) d.figuur = normaliseerTekenfiguur(d.figuur, teken);
+      else if (i === 0 && v.figuur) v.figuur = normaliseerTekenfiguur(v.figuur, teken);
+    });
     for (const d of v.deelvragen ?? []) {
       if (!d.antwoordmodel?.juist || d.opties?.length) continue;
       const f = d.figuur ?? v.figuur;
@@ -180,7 +195,23 @@ export function ontbrekendeParagrafen(vs: VraagstukSpec[], inv: Pick<SpecInvoer,
   const pars = extractParagrafen(inv.bronmateriaal, inv.antwoordenmateriaal);
   if (pars.length < 2) return [];
   let n = 0;
-  const pseudo = vs.flatMap((v) => v.deelvragen.map((d) => ({ nummer: ++n, domein: v.hoofdstuk, leerdoel: d.leerdoel ?? "", stam: kaal(d.stam), context: kaal([...v.context, ...(d.context ?? [])].join(" ")) }) as unknown as Vraag));
+  // Een paragraafcode in het leerdoel telt alleen als de deelvraag ook inhoudelijk over die paragraaf gaat
+  // (een kernwoord raakt); anders valt de code weg en telt alleen de inhoud (geen dekking via een fout label).
+  const kern = paragraafKern(inv.bronmateriaal, inv.antwoordenmateriaal);
+  // Valt een code weg, dan telt de deelvraag voor de paragrafen waarvan hij wél een kernwoord raakt (of voor geen
+  // enkele: "0.0" blokkeert de zwakke titelwoord-terugval, die anders op een hoofdstukwoord als "krachten" matcht).
+  // Zonder code in het leerdoel: ook op kernwoorden (niet op losse titelwoorden).
+  const metKern = pars.filter((p) => kern.get(p.code)?.length);
+  const opKern = (d: VraagstukSpec["deelvragen"][number], behalve?: string) => {
+    const c = metKern.filter((p) => p.code !== behalve && raaktKern(d, kern.get(p.code))).map((p) => p.code);
+    return c.length ? c.join(" ") : "0.0";
+  };
+  const leerdoelVan = (d: VraagstukSpec["deelvragen"][number]) => {
+    const l = d.leerdoel ?? "";
+    if (!/\b\d{1,2}\.\d{1,2}\b/.test(l)) return metKern.length ? `${l} ${opKern(d)}` : l;
+    return l.replace(/\b(\d{1,2}\.\d{1,2})\b/g, (code) => (raaktKern(d, kern.get(code)) ? code : opKern(d, code)));
+  };
+  const pseudo = vs.flatMap((v) => v.deelvragen.map((d) => ({ nummer: ++n, domein: v.hoofdstuk.replace(/\d{1,2}\.\d{1,2}/g, ""), leerdoel: leerdoelVan(d), stam: kaal(d.stam), context: kaal([...v.context, ...(d.context ?? [])].join(" ")) }) as unknown as Vraag));
   return paragraafDekking(pseudo, pars).filter((d) => !d.vragen.length).map((d) => d.paragraaf);
 }
 
@@ -248,6 +279,12 @@ export interface Keuringsrapport {
     weggevers: string[];
     dubbeleBegrippen: string[];
     ontbrekendeParagrafen: string[];
+    figuurVerwijzingen: string[];
+    samenhang: string[];
+    /** Aandeel punten uit 1-punts R-vragen en de grens voor deze leerweg. */
+    eenPuntsR: { pct: number; max: number };
+    buitenLesstof: string[];
+    afronding: string[];
     afgekeurd: string[];
   };
 }
@@ -258,21 +295,21 @@ function tekstVan(d: { context?: string[]; stam: string; opties?: string[]; tabe
   return kaal([...(d.context ?? []), d.stam, ...(d.opties ?? []), ...(d.tabel ?? []).flat()].join(" \n "));
 }
 
-/** Weggevers die code kan zien: een afgeronde uitkomst of het juiste MC-antwoord staat in de tekst van een andere deelvraag. */
+/**
+ * Weggevers die code kan zien:
+ * - getal: de afgeronde uitkomst van A staat MET eenheid in een andere deelvraag van hetzelfde vraagstuk (zie
+ *   zoekGetalWeggevers; een los getal of hetzelfde getal in een ander vraagstuk telt niet);
+ * - uitspraak: het juiste MC-antwoord van A (≥ 14 tekens) staat letterlijk in de tekst van een andere deelvraag.
+ */
 export function zoekWeggevers(vs: VraagstukSpec[]): string[] {
-  const items = vs.flatMap((v) =>
-    v.deelvragen.map((d, i) => ({ v, d, eigen: tekstVan(d) + (i === 0 ? " " + kaal(v.context.join(" ")) : ""), gegeven: new Set([...(v.parameters ?? []), ...(d.parameters ?? [])].map((p) => p.weergave ?? nl(p.waarde))) })),
-  );
-  const uit: string[] = [];
+  const uit: string[] = zoekGetalWeggevers(vs);
+  const items = vs.flatMap((v) => v.deelvragen.map((d, i) => ({ v, d, eigen: tekstVan(d) + (i === 0 ? " " + kaal(v.context.join(" ")) : "") })));
   for (const a of items) {
-    const uitkomsten = (a.d.berekeningen ?? []).map((b) => b.afgerond).filter((x): x is string => Boolean(x && x.replace(/[^0-9]/g, "").length >= 2));
     const juist = a.d.opties && a.d.antwoordmodel.juist ? kaal(a.d.opties[a.d.antwoordmodel.juist.charCodeAt(0) - 65] ?? "") : "";
+    if (juist.length < 14 || /^(ja|nee|juist|onjuist|groter|kleiner|gelijk)/i.test(juist)) continue;
     for (const b of items) {
       if (a === b) continue;
-      const tb = b.eigen;
-      for (const u of uitkomsten) if (!a.gegeven.has(u) && !b.gegeven.has(u) && getalInTekst(u, tb)) uit.push(`${b.d.id} verklapt ${a.d.id} (${u})`);
-      if (juist.length >= 14 && !/^(ja|nee|juist|onjuist|groter|kleiner|gelijk)/i.test(juist) && tb.toLowerCase().includes(juist.toLowerCase()) && !(b.d.opties ?? []).some((o) => kaal(o).toLowerCase() === juist.toLowerCase()))
-        uit.push(`${b.d.id} verklapt ${a.d.id} ("${juist.slice(0, 40)}")`);
+      if (b.eigen.toLowerCase().includes(juist.toLowerCase()) && !(b.d.opties ?? []).some((o) => kaal(o).toLowerCase() === juist.toLowerCase())) uit.push(`${b.d.id} verklapt ${a.d.id} ("${juist.slice(0, 40)}")`);
     }
   }
   return [...new Set(uit)];
@@ -343,6 +380,16 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
   }
   const dubbel = zoekDubbeleBegrippen(gen.vraagstukken);
   for (const d of dubbel) voeg(d.vraagstuk, `dubbel begrip: ${d.tekst}`);
+  const figVerwijzingen = zoekFiguurVerwijzingen(gen.vraagstukken);
+  for (const b of figVerwijzingen) voeg(b.vraagstuk, `figuur: ${b.tekst}`);
+  const incoherent = zoekIncoherentie(gen.vraagstukken, inv.bronmateriaal);
+  for (const b of incoherent) voeg(b.vraagstuk, `samenhang: ${b.tekst}`);
+  const r1 = eenPuntsReproductie(gen.vraagstukken, inv.leerweg);
+  for (const b of r1.bevindingen) voeg(b.vraagstuk, `1p-R: ${b.tekst}`);
+  const buiten = buitenLesstof(gen.vraagstukken, inv.bronmateriaal, inv.antwoordenmateriaal);
+  for (const b of buiten) voeg(b.vraagstuk, `lesstof: ${b.tekst}`);
+  const afronding = afrondFouten(gen.vraagstukken);
+  for (const b of afronding) voeg(b.vraagstuk, `afronding: ${b.tekst}`);
   const ontbreekt = ontbrekendeParagrafen(gen.vraagstukken, inv);
   if (ontbreekt.length) voeg("", `dekking: geen deelvraag over ${ontbreekt.map((p) => `${p.code} ${p.titel}`).join("; ")}`);
   const alle = gen.vraagstukken.flatMap((v) => v.deelvragen ?? []);
@@ -373,6 +420,11 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
       weggevers,
       dubbeleBegrippen: dubbel.map((d) => d.tekst),
       ontbrekendeParagrafen: ontbreekt.map((p) => `${p.code} ${p.titel}`),
+      figuurVerwijzingen: figVerwijzingen.map((b) => b.tekst),
+      samenhang: incoherent.map((b) => b.tekst),
+      eenPuntsR: { pct: Math.round(r1.pct * 100) / 100, max: r1.max },
+      buitenLesstof: buiten.map((b) => b.tekst),
+      afronding: afronding.map((b) => b.tekst),
       afgekeurd: res.afgekeurd,
     },
   };

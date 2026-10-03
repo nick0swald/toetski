@@ -250,6 +250,11 @@ export interface VraagSpec {
   leerdoel?: string;
   /** Het getoetste begrip of de redenering in 2–6 woorden (bv. "frequentie uit trillingstijd"); geen twee vragen met hetzelfde begrip. */
   begrip?: string;
+  /**
+   * De leerling tekent iets in de figuur (pijl, lijn, punten, tak). Dan is de leerlingfiguur leeg of half af en
+   * staan de figuurcontroles van wat de leerling tekent in `antwoordmodel.figuur` (verplicht), niet in de leerlingfiguur.
+   */
+  tekenvraag?: boolean;
   parameters?: Parameter[];
   berekeningen?: Berekening[];
 }
@@ -278,6 +283,8 @@ export interface OpmaakVraag extends VraagSpec {
   code: string;
   /** Leerjaar van de toets (uit ToetsSpec.klas); bepaalt SE- of onderwerpteksten. */
   jaar?: number;
+  /** Klas 1–3: onderwerplabel van deze SE-groep op basis van de inhoud van de toets (bv. "Geluid"). */
+  onderwerp?: string;
   vraagstuk?: { id: string; titel: string; eerste: boolean; deel: number; aantal: number };
   /** Gedeelde context van het vraagstuk (alleen bij de eerste deelvraag) resp. de context van de vraag zelf. */
   gedeeldeContext?: string[];

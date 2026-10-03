@@ -18,7 +18,13 @@ function schemaValidator() {
 export function valideerSchema(spec: unknown): string[] {
   const v = schemaValidator();
   if (v(spec)) return [];
-  return (v.errors ?? []).slice(0, 12).map((e) => `${e.instancePath || "/"} ${e.message ?? ""}`.trim());
+  const errs = v.errors ?? [];
+  // Tekenvraag zonder antwoordfiguur: ajv zegt alleen "must match then"; geef een herstelbare melding.
+  const teken = errs
+    .filter((e) => e.keyword === "required" && (e.params as { missingProperty?: string }).missingProperty === "figuur" && /\/antwoordmodel$/.test(e.instancePath))
+    .map((e) => `${e.instancePath} tekenvraag: true vereist antwoordmodel.figuur: dezelfde figuur mét in rood wat de leerling tekent (bijv. de pijl Fz) en de controle daarop (Fz.N, Fz.hoek); de leerlingfiguur blijft leeg (pijlen: [])`);
+  const rest = errs.filter((e) => e.keyword !== "if" && !(teken.length && e.keyword === "required" && (e.params as { missingProperty?: string }).missingProperty === "figuur"));
+  return [...teken, ...rest.map((e) => `${e.instancePath || "/"} ${e.message ?? ""}`.trim())].slice(0, 12);
 }
 
 function regelsVoorVraag(q: VraagSpec | DeelvraagSpec, pad: string): string[] {

@@ -191,18 +191,18 @@ describe("stap 0 + Grok: spec-generatie (offline)", () => {
     assert.deepEqual(g.map((x) => x.length), [4, 4]);
   });
   it("aanvullen: te korte toets en ontbrekende paragraaf worden aangevuld (parallel, nieuwe vraagstukken)", async () => {
-    const inv3 = { ...inv, bronmateriaal: "13.1 Geluid maken\nTrillingen.\n13.2 Toonhoogte\nFrequentie.\n13.3 Trillingstijd\nOscilloscoop." };
+    const inv3 = { ...inv, bronmateriaal: "13.1 Het oor\nHet trommelvlies trilt mee.\n13.2 Toonhoogte\nFrequentie.\n13.3 Trillingstijd\nOscilloscoop." };
     let n = 0;
     const chat: ChatFn = async (m, schema) => {
       if (schema.naam === "toets_spec") return JSON.stringify({ titel: "x", vraagstukken: [kopie("start")] });
       const p = m.at(-1)!.content;
-      assert.match(p, /NIEUW vraagstuk[\s\S]*13\.1 Geluid maken/);
+      assert.match(p, /NIEUW vraagstuk[\s\S]*13\.1 Het oor/);
       const v = kopie(`nieuw${++n}`);
-      v.deelvragen.forEach((d) => (d.leerdoel = "13.1 geluid maken en trillingen"));
+      v.deelvragen.forEach((d) => (d.leerdoel = "13.1 het trommelvlies in het oor"));
       return JSON.stringify({ vraagstuk: v });
     };
     const g = await genereerSpec(inv3, { items: 8, punten: 12 }, chat);
-    assert.equal(n, 1);
+    assert.equal(n, 1, JSON.stringify({ s: g.stappen, f: g.rapport.fouten, e: g.eerste.fouten }, null, 1));
     assert.deepEqual(g.rapport.fouten, []);
     assert.deepEqual(g.rapport.feiten.ontbrekendeParagrafen, []);
     assert.equal(g.rapport.feiten.lengtePct, 100);
