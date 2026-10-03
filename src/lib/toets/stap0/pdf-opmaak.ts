@@ -456,7 +456,7 @@ export interface Fonts {
 
 /** Zet de blokken op A4 (marges 2,5 cm) met paginanummers onderaan; geeft de PDF-bytes. */
 export async function maakPdf(blokken: Blok[], fonts: Fonts, meta: { titel: string }): Promise<Uint8Array> {
-  const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true, font: Buffer.from(fonts.regular) as unknown as string, info: { Title: meta.titel, Author: "Toetski", CreationDate: new Date(Date.UTC(2026, 9, 9)) } });
+  const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true, font: Buffer.from(fonts.regular) as unknown as string, info: { Title: meta.titel, Author: "", Creator: "", Producer: "", CreationDate: new Date(Date.UTC(2026, 9, 9)) } });
   const namen = {} as Record<FontAlias, string>;
   for (const [alias, bytes] of [["Arial", fonts.regular], ["Arial-Bold", fonts.bold], ["Sym", fonts.symbool]] as const) {
     doc.font(Buffer.from(bytes) as unknown as string); // één keer parsen; pdfkit cachet onder de PostScript-naam

@@ -73,11 +73,13 @@ describe("aanvullen na 143 % → 82 % (pilotrun 3 okt, offline)", () => {
       if (x.fase !== "herstel" || !x.gen) return;
       if (!x.aanvulling.open.some((t) => t.id.startsWith("vervang-"))) laagsteZonderVervang = Math.min(laagsteZonderVervang, lengte(x.gen));
     });
-    const vervang = s.stappen.find((x) => /^vervangen door nieuw vraagstuk vervang-1 \(5 p\)/.test(x.wat));
+    const vervang = s.stappen.find((x) => /^vervangen door nieuw vraagstuk vervang-1 \([56] p\)/.test(x.wat));
     assert.ok(vervang, s.stappen.map((x) => x.wat).join("\n"));
-    assert.equal(vervang.id, "onweer");
+    // Sinds de figuurbescherming kan eerst-schrappen een ander (figuurloos) vraagstuk kiezen; het koppige vraagstuk
+    // dat overblijft wordt vervangen, nooit zomaar geschrapt.
+    assert.ok(["onweer", "metro"].includes(vervang.id), vervang.id);
     assert.ok(!s.stappen.some((x) => /^geschrapt na \d+ pogingen/.test(x.wat) && x.id === "onweer"), "niet zomaar geschrapt");
-    assert.ok(s.stappen.some((x) => /^aanvulling \d+\/5 p/.test(x.wat) && x.id === "vervang-1" && x.ok), "vervanger geplaatst");
+    assert.ok(s.stappen.some((x) => /^aanvulling \d+\/[56] p/.test(x.wat) && x.id === "vervang-1" && x.ok), "vervanger geplaatst");
     assert.ok(laagsteZonderVervang >= 90, `lengte zakte onder 90 % zonder vervanger (${laagsteZonderVervang} %)`);
     assert.deepEqual(s.restFouten, []);
     const eind = lengte(s.gen!);
@@ -90,7 +92,7 @@ describe("aanvullen na 143 % → 82 % (pilotrun 3 okt, offline)", () => {
     const aan = prompts.filter((p) => /NIEUW VRAAGSTUK/.test(p));
     assert.ok(aan.length >= 2);
     const p = aan[0]!;
-    assert.match(p, /precies 5 punten in 3 deelvragen, met in deze volgorde 1 p, 2 p, 2 p/);
+    assert.match(p, /precies 5 punten in 3 deelvragen, met in deze volgorde 1 p, 2 p, 2 p|precies 6 punten in 4 deelvragen, met in deze volgorde 1 p, 1 p, 2 p, 2 p/);
     assert.match(p, /Paragrafen \(uit dezelfde lesstof; nu het minst getoetst\): 13\.\d/);
     assert.match(p, /BEGRIPPEN DIE OP ZIJN[^\n]*veilige blootstellingstijd bij dB/);
     assert.match(p, /1-punts weetvragen \(R\): nog hoogstens \d+/);

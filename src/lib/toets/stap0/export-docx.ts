@@ -7,10 +7,10 @@ import type { FiguurSpec, OpmaakVraag, SeCode, ToetsSpec } from "./spec.ts";
 import type { Pijplijnresultaat } from "./pijplijn.ts";
 import type { PngRender } from "./export-pdf.ts";
 import { figuurSvg } from "./figuren/index.ts";
-import { cijferGrafiekSvg, cijferTabel, cesuur, formule } from "./cijfer-n.ts";
+import { cijferGrafiekSvg, cijferTabel, cesuur, cesuurPct, formule } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
 import { PAGE_A4, PAGE_MARGINS, pageNumberChrome } from "../docx-pagina.ts";
-import { antwoordKop, bandTekst, contextTitel, indelingKop, INSTRUCTIE_CSE, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, vraagstukBereik } from "./opmaak.ts";
+import { leerdoelMetDoel, typeSleutel, vraagtypeNaam, antwoordKop, bandTekst, contextTitel, indelingKop, instructieVoor, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, vraagstukBereik } from "./opmaak.ts";
 
 type Kind = Paragraph | Table;
 const FONT = "Arial";
@@ -206,7 +206,7 @@ function voorbladDocx(toets: ToetsSpec, qs: OpmaakVraag[], deel: { naam: string;
   for (const r of v.onder) out.push(para(r, { size: LB, na: 0 }));
   if (v.voetcode) out.push(para(v.voetcode, { size: 16, voor: 200 }));
   out.push(new Paragraph({ children: [new PageBreak()] }));
-  for (const b of INSTRUCTIE_CSE) {
+  for (const b of instructieVoor(qs)) {
     out.push(para(`<b>${b.kop}</b>`, { size: LB, na: 20 }));
     for (const r of b.regels) out.push(para(b.regels.length > 1 ? `–  ${r}` : r, { size: LB, na: 20 }));
     out.push(para("", { na: 120 }));
@@ -240,7 +240,7 @@ async function leerlingVragenDocx(qs: OpmaakVraag[], png: PngRender): Promise<Ki
 }
 
 const doc = (kinderen: Kind[]) =>
-  new Document({ styles: { default: { document: { run: { font: FONT, size: 21 } } } }, sections: [{ properties: { page: { size: PAGE_A4, margin: { ...PAGE_MARGINS, bottom: PAGE_MARGINS.top } } }, ...pageNumberChrome(), children: kinderen }] });
+  new Document({ creator: "", lastModifiedBy: "", styles: { default: { document: { run: { font: FONT, size: 21 } } } }, sections: [{ properties: { page: { size: PAGE_A4, margin: { ...PAGE_MARGINS, bottom: PAGE_MARGINS.top } } }, ...pageNumberChrome(), children: kinderen }] });
 
 export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: PngRender): Promise<{ leerling: Uint8Array; docent: Uint8Array }> {
   const L: Kind[] = [];
@@ -268,18 +268,18 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
     para("Toetsmatrijs", { bold: true, size: 26, na: 120 }),
     rasterTabel(
       ["Nr", "Code", "Hoofdstuk / onderwerp", "Leerdoel", "Vraagtype", "RTTI", "Niveau", "p"],
-      [...res.vragen.map((q) => [String(q.nr), q.code, q.hoofdstuk, q.leerdoel ?? "–", q.vraagtype.code, q.rtti, q.niveau, String(q.punten)]), ["", "", "Totaal", "", "", "", "", String(t.punten)]],
+      [...res.vragen.map((q) => [String(q.nr), q.code, q.hoofdstuk, leerdoelMetDoel(q), typeSleutel(q), q.rtti, q.niveau, String(q.punten)]), ["", "", "Totaal", "", "", "", "", String(t.punten)]],
       [454, 1077, 1928, 2608, 907, 567, 964, 565],
       1,
       (r) => res.vragen[r]?.se ?? "ALG",
     ),
-    ...[[`Totaal per ${jaarVan(res.vragen) !== undefined && jaarVan(res.vragen)! < 4 ? "onderwerp" : "SE-toets"}`, t.perSe.map((r) => ({ ...r, sleutel: seLabel(r.sleutel as SeCode, jaarVan(res.vragen), ondVan(res.vragen, r.sleutel as SeCode)) }))], ["Totaal per RTTI-categorie", t.perRtti], ["Totaal per examenniveau", t.perNiveau], ["Totaal per hoofdstuk / onderwerp", t.perHoofdstuk]].flatMap(([titel, rijen]) => [
+    ...[[`Totaal per ${jaarVan(res.vragen) !== undefined && jaarVan(res.vragen)! < 4 ? "onderwerp" : "SE-toets"}`, t.perSe.map((r) => ({ ...r, sleutel: seLabel(r.sleutel as SeCode, jaarVan(res.vragen), ondVan(res.vragen, r.sleutel as SeCode)) }))], ["Totaal per RTTI-categorie", t.perRtti], ["Totaal per examenniveau", t.perNiveau], ["Totaal per hoofdstuk / onderwerp", t.perHoofdstuk], ["Leerdoeldekking per paragraaf", t.perParagraaf], [`Spreiding vraagtypen (nummer uit de 62 CSE-vraagtypen; ${t.perVraagtype.length} verschillende typen)`, t.perVraagtype]].flatMap(([titel, rijen]) => [
       para(`<b>${titel as string}</b>`, { voor: 200, na: 60 }),
       rasterTabel(["", "vragen", "punten", "%"], [...(rijen as typeof t.perSe).map((r) => [r.sleutel, String(r.vragen), String(r.punten), r.pct.toFixed(1).replace(".", ",")]), ["Totaal", String(t.vragen), String(t.punten), "100,0"]], [2950, 900, 900, 800]),
     ]),
     new Paragraph({ children: [new PageBreak()] }),
     para("Cijferberekening", { bold: true, size: 26, na: 120 }),
-    para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlCijfer(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cesuur(max, n)} punten</b>.`, { na: 120 }),
+    para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlCijfer(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cesuur(max, n)} van de ${max} punten</b> (${cesuurPct(cesuur(max, n), max)} %).`, { na: 120 }),
     rasterTabel(
       Array(4).fill(["Score", "Cijfer"]).flat(),
       Array.from({ length: rijenN }, (_, r) => Array.from({ length: 4 }, (_, g) => { const it = ct[g * rijenN + r]; return it ? [String(it.score), nlCijfer(it.cijfer)] : ["", ""]; }).flat()),
@@ -290,7 +290,7 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
     para(`Register: vraagtype → ${indelingKop(jaarVan(res.vragen))} → hoofdstuk`, { bold: true, size: 26, na: 120 }),
     (() => {
       const qs = [...res.vragen].sort((a, b) => a.vraagtype.nr - b.vraagtype.nr || a.nr - b.nr);
-      return rasterTabel(["Nr", "Vraagtype", indelingKop(jaarVan(res.vragen)), "Ook in", "Hoofdstuk / onderwerp", "Vraag"], qs.map((q) => [String(q.vraagtype.nr), `${q.vraagtype.naam} (${q.vraagtype.code})`, q.code, q.ookIn ?? "–", q.hoofdstuk, String(q.nr)]), [454, 3685, 1077, 964, 2155, 735], 2, (r) => qs[r].se);
+      return rasterTabel(["Nr", "Vraagtype", indelingKop(jaarVan(res.vragen)), "Ook in", "Hoofdstuk / onderwerp", "Vraag"], qs.map((q) => [String(q.vraagtype.nr), vraagtypeNaam(q), q.code, q.ookIn ?? "–", q.hoofdstuk, String(q.nr)]), [454, 3685, 1077, 964, 2155, 735], 2, (r) => qs[r].se);
     })(),
     ...(await vragen(res.vragen, true, png, res.vragen)),
   ];

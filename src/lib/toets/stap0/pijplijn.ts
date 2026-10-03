@@ -31,6 +31,19 @@ export interface Pijplijnresultaat {
 }
 
 /** Plat maken: een vraagstuk wordt deelvragen met de gedeelde context en figuur alleen bij de eerste deelvraag. */
+/**
+ * Antwoordlijnen onder een open vraag (leerlingdeel PDF en Word): opgegeven aantal, anders naar punten (1 p → 2 lijnen,
+ * 2 p → 3, …, rekenvraag één extra, hoogstens 8). Meerkeuze en een pure tekenvraag (tekenen in de figuur) krijgen geen lijnen.
+ */
+export function standaardRegels(q: Pick<VraagSpec, "antwoordregels" | "opties" | "tekenvraag" | "stam" | "punten" | "berekeningen">): number {
+  if (typeof q.antwoordregels === "number") return q.antwoordregels;
+  if (q.opties?.length) return 0;
+  const stam = q.stam.replace(/<[^>]+>/g, "");
+  const teken = q.tekenvraag ?? /\b(teken|construeer|schets)\b/i.test(stam);
+  if (teken && !/\b(leg uit|bereken|bepaal|noteer|geef)\b/i.test(stam)) return 0;
+  return Math.min(8, Math.max(2, (q.punten ?? 1) + 1 + (q.berekeningen?.length || /\bbereken/i.test(stam) ? 1 : 0)));
+}
+
 function plat(fx: Fixture): { q: VraagSpec; extraParams?: VraagSpec["parameters"]; extraTekst: string; vs?: OpmaakVraag["vraagstuk"]; ouderId: string; gedeeld: string[]; aanloop: string[] }[] {
   if (fx.soort !== "vraagstuk") {
     const { soort: _s, ...q } = fx;
@@ -97,7 +110,7 @@ export function verwerkToets(toets: ToetsSpec, fixtures: Fixture[]): Pijplijnres
     teller[g.q.se] = (teller[g.q.se] ?? 0) + 1;
     const jaar = toets.klas?.leerjaar;
     const prefix = isSeToets(jaar) ? g.q.se : ONDERWERP[g.q.se].letter;
-    return { ...g.q, nr: i + 1, jaar, code: `${prefix}-${String(teller[g.q.se]).padStart(2, "0")}`, vraagstuk: g.vs, ouderId: g.ouderId, gedeeldeContext: g.gedeeld, aanloop: g.aanloop } as OpmaakVraag;
+    return { ...g.q, antwoordregels: standaardRegels(g.q), nr: i + 1, jaar, code: `${prefix}-${String(teller[g.q.se]).padStart(2, "0")}`, vraagstuk: g.vs, ouderId: g.ouderId, gedeeldeContext: g.gedeeld, aanloop: g.aanloop } as OpmaakVraag;
   });
   // Klas 1–3: het onderwerplabel volgt uit de inhoud (alle teksten van de vragen in die SE-groep).
   if (!isSeToets(toets.klas?.leerjaar))

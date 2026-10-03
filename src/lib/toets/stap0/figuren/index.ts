@@ -6,6 +6,7 @@ import { krachtenSvg, meetKrachten } from "./krachten.ts";
 import { maatcilinderSvg, meetMaatcilinder } from "./maatcilinder.ts";
 import { meetOscilloscoop, oscilloscoopSvg } from "./oscilloscoop.ts";
 import { meetSchakelschema, schakelschemaSvg } from "./schakelschema.ts";
+import { keurMeter, meetMeter, meterSvg } from "./meter.ts";
 
 export function figuurSvg(f: FiguurSpec): string {
   switch (f.type) {
@@ -19,6 +20,8 @@ export function figuurSvg(f: FiguurSpec): string {
       return krachtenSvg(f);
     case "oscilloscoop":
       return oscilloscoopSvg(f);
+    case "meter":
+      return meterSvg(f);
     case "ai-afbeelding":
       return aiAfbeeldingSvg(f);
   }
@@ -39,6 +42,8 @@ export function meetFiguur(f: FiguurSpec, svg: string): Record<string, number> {
       return meetKrachten(svg, f.schaalN);
     case "oscilloscoop":
       return meetOscilloscoop(svg);
+    case "meter":
+      return meetMeter(svg);
     case "ai-afbeelding":
       return { placeholder: 1 }; // niets te meten: een foto/situatieplaatje is nooit een meetfiguur
   }
@@ -50,6 +55,7 @@ const STANDAARD_TOL: Record<FiguurSpec["type"], number> = {
   grafiek: 0.05,
   krachten: 0.5, // N
   oscilloscoop: 0.05, // hokjes
+  meter: 0.01,
   "ai-afbeelding": 0,
 };
 
@@ -99,6 +105,7 @@ export function keurFiguur(f: FiguurSpec, params: Record<string, number>, vraag?
     if (Math.abs(gemeten - verwacht) > tol + 1e-9) fouten.push(`${f.type}: ${c.meting} = ${gemeten} in de figuur, verwacht ${verwacht}${c.parameter ? ` (${c.parameter})` : ""}`);
   }
   if (f.type === "grafiek" && m.asfouten) fouten.push(`grafiek: ${m.asfouten} asgetallen staan niet op hun plek`);
+  if (f.type === "meter") fouten.push(...keurMeter(f));
   if (f.type === "krachten" && Math.abs((m.breedteCm ?? 0) - f.breedteCm) > 1e-6) fouten.push("krachten: figuur niet op ware grootte");
   // Een lege tekenfiguur voor de leerling heeft niets om te meten; de controle zit dan in antwoordmodel.figuur.
   if (!f.controle?.length && !(opts.rol === "leerling" && opts.teken && isTekenFiguur(f))) fouten.push(`${f.type}: geen controle gedefinieerd (go/no-go niet mogelijk)`);

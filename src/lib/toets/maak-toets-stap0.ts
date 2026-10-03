@@ -5,6 +5,7 @@
  */
 import type { Stap0StapAntwoord } from "./stap0-server";
 import type { GegenereerdeToets, GenerateInput } from "./types";
+import type { Stap0Voortgang } from "./stap0-voortgang";
 
 const PILOT_SLEUTEL = "toetski:pilot";
 const LOPEND_SLEUTEL = "toetski:stap0-lopend";
@@ -39,11 +40,12 @@ export function leesPilotCode(loc: Pick<Location, "hash" | "pathname" | "search"
   return o?.getItem(PILOT_SLEUTEL) ?? undefined;
 }
 
-export async function stap0Status(pilot: string | undefined): Promise<{ aan: boolean; label?: string }> {
+export async function stap0Status(pilot: string | undefined): Promise<{ aan: boolean }> {
   if (!pilot) return { aan: false };
   try {
     const { stap0Pilot } = await import("./stap0-server");
-    return await stap0Pilot({ data: { pilot } });
+    // Alleen aan/uit doorgeven, ook als een (oudere) server meer terugstuurt.
+    return { aan: Boolean((await stap0Pilot({ data: { pilot } })).aan) };
   } catch {
     return { aan: false };
   }
@@ -60,7 +62,7 @@ type StapFn = (a: { data: { pilot?: string; input?: GenerateInput; staat?: unkno
 
 export async function maakToetsStap0(
   input: GenerateInput,
-  opts: { pilot: string; onStatus?: (tekst: string) => void; stap?: StapFn; nu?: () => number; opslag?: Opslag | null },
+  opts: { pilot: string; onStatus?: (tekst: string) => void; onVoortgang?: (v: Stap0Voortgang) => void; stap?: StapFn; nu?: () => number; opslag?: Opslag | null },
 ): Promise<{ ok: true; toets: GegenereerdeToets } | { ok: false; error: string; fallback: boolean }> {
   const stap: StapFn = opts.stap ?? (async (a) => (await import("./stap0-server")).stap0Stap(a as never));
   const nu = opts.nu ?? (() => Date.now());
@@ -81,7 +83,12 @@ export async function maakToetsStap0(
       /* vol: dan alleen in het geheugen */
     }
   };
-  opts.onStatus?.(laatste ? "Verder waar het gebleven was…" : "Toets schrijven (eerste versie, ± 1,5–2 minuten)…");
+  const meld = (v: Stap0Voortgang) => {
+    opts.onStatus?.(v.tekst);
+    opts.onVoortgang?.(v);
+  };
+  const vorige = laatste?.staat as { fase?: Stap0Voortgang["fase"]; rondes?: number } | undefined;
+  meld(laatste ? { fase: vorige?.fase ?? "herstel", ronde: vorige?.rondes ?? 0, tekst: "Verder waar het gebleven was…" } : { fase: "spec", ronde: 0, tekst: "Toets schrijven (eerste versie, ± 1,5–2 minuten)…" });
   for (let n = 0; n < MAX_STAPPEN; n++) {
     if (nu() - t0 > MAX_CLIENT_MS) return { ok: false, error: "Stap 0 duurde te lang.", fallback: true };
     let r: Stap0StapAntwoord | null = null;
@@ -101,11 +108,12 @@ export async function maakToetsStap0(
     const ok = r as Extract<Stap0StapAntwoord, { ok: true }>;
     laatste = { staat: ok.staat, mac: ok.mac };
     bewaar(laatste);
-    opts.onStatus?.(ok.status.tekst);
     if (ok.toets) {
+      meld({ fase: "opslaan", ronde: ok.status.ronde ?? 0, open: 0, tekst: "Klaar; toets opslaan…" });
       o?.removeItem(LOPEND_SLEUTEL);
       return { ok: true, toets: ok.toets };
     }
+    meld({ fase: (ok.status.fase as Stap0Voortgang["fase"]) ?? "herstel", ronde: ok.status.ronde ?? 0, open: ok.status.open, tekst: ok.status.tekst });
   }
   return { ok: false, error: "Te veel stappen.", fallback: true };
 }

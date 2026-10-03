@@ -205,7 +205,28 @@ export interface AiAfbeeldingFiguur {
   hoogteCm: number;
 }
 
-export type MeetFiguurSpec = MaatcilinderFiguur | SchakelschemaFiguur | GrafiekFiguur | KrachtenFiguur | OscilloscoopFiguur;
+/**
+ * Meter: wijzermeter (analoge spannings-/stroommeter: schaal min–max, streepjes, wijzer op `waarde`) of kWh-meter
+ * (telwerk met `cijfers` hele cijfers en `decimalen` rode decimalen). Meetsleutel: "waarde".
+ */
+export interface MeterFiguur {
+  type: "meter";
+  soort: "wijzer" | "kwh";
+  /** Eenheid op de wijzerplaat ("V", "A", "mA"); bij kWh: "kWh". */
+  eenheid: string;
+  min?: number;
+  max?: number;
+  streep?: number;
+  getalElke?: number;
+  waarde: number;
+  cijfers?: number;
+  decimalen?: number;
+  label?: string;
+  breedteCm: number;
+  controle?: FiguurControle[];
+}
+
+export type MeetFiguurSpec = MaatcilinderFiguur | SchakelschemaFiguur | GrafiekFiguur | KrachtenFiguur | OscilloscoopFiguur | MeterFiguur;
 export type FiguurSpec = MeetFiguurSpec | AiAfbeeldingFiguur;
 export type FiguurType = FiguurSpec["type"];
 
@@ -248,6 +269,8 @@ export interface VraagSpec {
   rtti: Rtti;
   /** Leerdoel (voor de toetsmatrijs), bv. "K/4.2 dichtheid berekenen met ρ = m/V". */
   leerdoel?: string;
+  /** Examendoel: CvTE-eindterm (klas 3–4, bv. "K/5.6") of SLO-kerndoel (klas 1–2, bv. "SLO-30C") dat deze vraag toetst. */
+  examendoel?: string;
   /** Het getoetste begrip of de redenering in 2–6 woorden (bv. "frequentie uit trillingstijd"); geen twee vragen met hetzelfde begrip. */
   begrip?: string;
   /**

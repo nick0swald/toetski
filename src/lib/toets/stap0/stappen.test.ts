@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { laadFixtures } from "./laad.ts";
 import { allesGoed, monitoring, nieuweStaat, STAP0_BUDGET, voerStapUit, type Stap0Staat, type StapChat } from "./stappen.ts";
 import { keurGeneratie, type SpecInvoer } from "./grok-spec.ts";
-import { controleer, onderteken, pilotGebruikers, stap0Modus, stap0Voor, stap0VangnetUsd } from "./pilot.server.ts";
+import { controleer, gebruikerTag, logStap0, onderteken, pilotAntwoord, pilotGebruikers, stap0Modus, stap0Voor, stap0VangnetUsd, zonderEmail } from "./pilot.server.ts";
 import { leesPilotCode, maakToetsStap0 } from "../maak-toets-stap0.ts";
 import type { VraagstukSpec } from "./spec.ts";
 
@@ -25,6 +25,8 @@ const kal = { items: 8, punten: 12 };
 /** Nep-chat: eerste generatie = `eerste`, gerichte aanroepen geven een goed vraagstuk met de gevraagde id. */
 function nepChat(eerste: VraagstukSpec[], o: { usd?: number; herstelUsd?: number; teller?: { n: number } } = {}): StapChat {
   return async (m, schema) => {
+    // Docent-review: standaard schoon en gratis (telt niet mee in de teller).
+    if (schema.naam === "docent_review") return { tekst: JSON.stringify({ bevindingen: [], figurenBeter: false }), usd: 0 };
     if (o.teller) o.teller.n++;
     if (schema.naam === "toets_spec") return { tekst: JSON.stringify({ titel: "x", vraagstukken: eerste }), usd: o.usd ?? 0.08 };
     const p = m.at(-1)!.content;
@@ -47,7 +49,7 @@ describe("stap 0 in losse stappen (offline)", () => {
     const teller = { n: 0 };
     const logs: [string, Record<string, unknown>][] = [];
     const { s, fasen } = await totKlaar(nieuweStaat(inv, kal, "t1"), nepChat([kopie("een"), fout("twee"), kopie("drie")], { teller }), { log: (k, d) => logs.push([k, d]) });
-    assert.deepEqual(fasen, ["herstel", "afronden", "klaar"]);
+    assert.deepEqual(fasen, ["herstel", "herstel", "afronden", "klaar"], "spec → (docent-review) → afronden → klaar");
     assert.equal(teller.n, 1, "afgekeurd vraagstuk geschrapt (lengte blijft ≥ 90 %), geen herstelaanroep");
     assert.deepEqual(s.gen!.vraagstukken.map((v) => v.id), ["een", "drie"]);
     assert.deepEqual(s.restFouten, []);
@@ -57,6 +59,48 @@ describe("stap 0 in losse stappen (offline)", () => {
     assert.deepEqual(m.restFouten, []);
     assert.equal(typeof m.totaalMs, "number");
     assert.ok(allesGoed(keurGeneratie(s.gen!, inv, kal), kal));
+  });
+
+  it("docent-review (mock): eerste review schoon → firstTimeRight true, log 'review'", async () => {
+    const logs: [string, Record<string, unknown>][] = [];
+    const { s } = await totKlaar(nieuweStaat(inv, kal, "r0"), nepChat([kopie("een"), kopie("drie")]), { log: (k, d) => logs.push([k, d]) });
+    assert.equal(s.fase, "klaar");
+    assert.ok(logs.some(([k]) => k === "review"));
+    const m = logs.find(([k]) => k === "klaar")![1];
+    assert.equal(m.firstTimeRight, true);
+    assert.equal(typeof (m.vraagtypen as { aantal: number }).aantal, "number");
+  });
+
+  it("docent-review (mock): bevinding → gericht herstel met 'docent-review' in de opdracht; firstTimeRight false; figuurtaak één keer en niet blokkerend", async () => {
+    const basis = nepChat([kopie("een"), kopie("drie")]);
+    let reviews = 0;
+    const herstelPrompts: string[] = [];
+    const chat: StapChat = async (m, schema, o) => {
+      if (schema.naam === "docent_review") {
+        reviews++;
+        return reviews === 1
+          ? { tekst: JSON.stringify({ bevindingen: [{ id: "een-a", soort: "rtti", ernst: "hoog", probleem: "weetvraag met T1", fix: "label R of maak er toepassing van" }], figurenBeter: true, figuurVoorstel: "oscilloscoopbeeld" }), usd: 0.04 }
+          : { tekst: JSON.stringify({ bevindingen: [], figurenBeter: false }), usd: 0.04 };
+      }
+      if (schema.naam !== "toets_spec") herstelPrompts.push(m.at(-1)!.content);
+      return basis(m, schema, o);
+    };
+    const logs: [string, Record<string, unknown>][] = [];
+    const { s } = await totKlaar(nieuweStaat(inv, kal, "r1"), chat, { log: (k, d) => logs.push([k, d]) });
+    assert.equal(s.fase, "klaar", "review blokkeert nooit");
+    assert.ok(herstelPrompts.some((p) => /docent-review/i.test(p)), "bevinding gaat naar gericht herstel");
+    assert.ok(reviews <= 2, "max 2 reviewrondes");
+    const m = logs.find(([k]) => k === "klaar")![1];
+    assert.equal(m.firstTimeRight, false);
+    assert.ok((m.reviewUsd as number) > 0);
+  });
+
+  it("docent-review (mock): mislukte review blokkeert niet", async () => {
+    const basis = nepChat([kopie("een"), kopie("drie")]);
+    const chat: StapChat = async (m, schema, o) => (schema.naam === "docent_review" ? Promise.reject(new Error("xAI API error 500")) : basis(m, schema, o));
+    const { s } = await totKlaar(nieuweStaat(inv, kal, "r2"), chat);
+    assert.equal(s.fase, "klaar");
+    assert.deepEqual(s.restFouten, []);
   });
 
   it("herstel tot alles goed is: hoogstens 4 parallel per stap, geen vaste limiet op het aantal aanroepen", async () => {
@@ -128,16 +172,37 @@ describe("stap 0 in losse stappen (offline)", () => {
 
 describe("stap-0-pilot: vlag per gebruiker en ondertekende toestand", () => {
   const code = "k".repeat(24);
-  const env = { STAP0_RENDERER: "pilot", STAP0_USERS: `nickoswald@live.nl:${code}, kort:abc`, XAI_API_KEY: "x" };
+  const env = { STAP0_RENDERER: "pilot", STAP0_USERS: `nick:${code}, kort:abc`, XAI_API_KEY: "x" };
   it("alleen gebruikers uit STAP0_USERS; standaard uit; 'aan' = iedereen", () => {
     assert.equal(stap0Modus({}), "uit");
     assert.equal(stap0Voor(code, {}), null);
-    assert.deepEqual(stap0Voor(code, env), { label: "nickoswald@live.nl" });
+    assert.deepEqual(stap0Voor(code, env), { label: "nick" });
     assert.equal(stap0Voor("x".repeat(24), env), null);
     assert.equal(stap0Voor(undefined, env), null);
-    assert.deepEqual(pilotGebruikers(env).map((g) => g.label), ["nickoswald@live.nl"], "te korte code telt niet");
+    assert.deepEqual(pilotGebruikers(env).map((g) => g.label), ["nick"], "te korte code telt niet");
     assert.equal(stap0Voor(code, { ...env, STAP0_RENDERER: "uit" }), null);
     assert.deepEqual(stap0Voor(undefined, { STAP0_RENDERER: "aan" }), { label: "iedereen" });
+  });
+  it("privacy: het label (ook als het een e-mailadres is) gaat nooit naar de client of in een logregel", () => {
+    const mail = "iemand@example.org";
+    const e = { STAP0_RENDERER: "pilot", STAP0_USERS: `${mail}:${code}` };
+    assert.deepEqual(pilotAntwoord(code, e), { aan: true });
+    assert.deepEqual(pilotAntwoord("x".repeat(24), e), { aan: false });
+    assert.ok(!JSON.stringify(pilotAntwoord(code, e)).includes("@"));
+    const tag = gebruikerTag(mail);
+    assert.match(tag, /^u-[0-9a-f]{8}$/);
+    assert.ok(!tag.includes(mail.split("@")[0]!));
+    assert.equal(zonderEmail(`fout bij ${mail}: x`), "fout bij [e-mail]: x");
+    const regels: string[] = [];
+    const oud = console.log;
+    console.log = (x: string) => regels.push(x);
+    try {
+      logStap0("stap", { wie: mail, fout: `kapot voor ${mail}` });
+    } finally {
+      console.log = oud;
+    }
+    assert.equal(regels.length, 1);
+    assert.ok(!regels[0]!.includes("@"), regels[0]);
   });
   it("STAP0_VANGNET_USD kan het vangnet alleen verlagen", () => {
     assert.equal(stap0VangnetUsd({}), undefined);
@@ -176,8 +241,10 @@ describe("stap-0-pilot: vlag per gebruiker en ondertekende toestand", () => {
       if (n === 2) return { ok: true as const, staat: { n: 3 }, mac: "m", status: { tekst: "klaar", fase: "klaar", usd: 0.2, open: 0 }, toets: { id: "stap0-x" } as never };
       return { ok: true as const, staat: { n: n + 1 }, mac: "m", status: { tekst: "…", fase: "herstel", usd: 0.1, open: 1 } };
     };
-    const r = await maakToetsStap0(input, { pilot: "p", stap, opslag: o });
+    const fasen: string[] = [];
+    const r = await maakToetsStap0(input, { pilot: "p", stap, opslag: o, onVoortgang: (v) => fasen.push(`${v.fase}:${v.ronde}`) });
     assert.equal(r.ok, true);
+    assert.deepEqual(fasen, ["spec:0", "herstel:0", "herstel:0", "opslaan:0"], "wachtbalk krijgt elke stap");
     assert.deepEqual(aanroepen, ["0", "1", "1", "2"], "stap 1 opnieuw vanaf de bewaarde toestand");
     assert.equal(m.get("toetski:stap0-lopend"), undefined, "na afloop opgeruimd");
     const nee = await maakToetsStap0(input, { pilot: "p", stap: async () => ({ ok: false as const, error: "niet in pilot", fallback: true }), opslag: o });

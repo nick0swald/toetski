@@ -15,10 +15,10 @@ const MAX_STAAT_TEKENS = 1_500_000;
 
 export const stap0Pilot = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.object({ pilot: z.string().max(200).optional() }).parse(input))
-  .handler(async ({ data }): Promise<{ aan: boolean; label?: string }> => {
-    const { stap0Voor } = await import("./stap0/pilot.server");
-    const wie = stap0Voor(data.pilot);
-    return wie ? { aan: true, label: wie.label } : { aan: false };
+  .handler(async ({ data }): Promise<{ aan: boolean }> => {
+    // Alleen aan/uit: het label uit STAP0_USERS blijft op de server.
+    const { pilotAntwoord } = await import("./stap0/pilot.server");
+    return pilotAntwoord(data.pilot);
   });
 
 const stapInput = z.object({
@@ -29,13 +29,13 @@ const stapInput = z.object({
 });
 
 export type Stap0StapAntwoord =
-  | { ok: true; staat: JsonWaarde; mac: string; status: { tekst: string; fase: string; usd: number; open: number }; toets?: GegenereerdeToets }
+  | { ok: true; staat: JsonWaarde; mac: string; status: { tekst: string; fase: string; usd: number; open: number; ronde?: number }; toets?: GegenereerdeToets }
   | { ok: false; error: string; fallback: boolean };
 
 export const stap0Stap = createServerFn({ method: "POST" })
   .validator((input: unknown) => stapInput.parse(input))
   .handler(async ({ data }): Promise<Stap0StapAntwoord> => {
-    const { stap0Voor, onderteken, controleer, productieChat, logStap0, stap0VangnetUsd } = await import("./stap0/pilot.server");
+    const { stap0Voor, onderteken, controleer, productieChat, logStap0, stap0VangnetUsd, gebruikerTag, zonderEmail } = await import("./stap0/pilot.server");
     const S = await import("./stap0/stappen");
     const G = await import("./stap0/grok-spec");
     const wie = stap0Voor(data.pilot);
@@ -47,12 +47,12 @@ export const stap0Stap = createServerFn({ method: "POST" })
         if ((data.input.ronde ?? 1) > 1 || data.input.feedback?.trim()) return { ok: false, error: "Feedbackronde: huidige pijplijn.", fallback: true };
         const v = await bereidVoor(data.input);
         if (!v.k) return { ok: false, error: "Geen NaSk-toets: huidige pijplijn.", fallback: true };
-        const inv = { titel: v.data.titel || "Toets", leerweg: v.data.leerweg, leerjaar: v.data.leerjaar, duurMinuten: v.data.duurMinuten, bronmateriaal: v.bron, antwoordenmateriaal: v.antwoorden || undefined, rttiDoel: v.data.rttiDoel };
+        const inv = { titel: v.data.titel || "Toets", leerweg: v.data.leerweg, leerjaar: v.data.leerjaar, duurMinuten: v.data.duurMinuten, bronmateriaal: v.bron, antwoordenmateriaal: v.antwoorden || undefined, rttiDoel: v.data.rttiDoel, plaatjes: data.input.plaatjes };
         const kal = { items: v.data.aantalVragen, punten: v.data.doelPunten, vorm: v.k.vorm, pct1p: v.k.pct1p };
         staat = S.nieuweStaat(inv, kal, crypto.randomUUID());
         staat.kalVol = { ...v.k, items: kal.items, punten: kal.punten };
         staat.cijferNorm = data.input.cijferNorm;
-        logStap0("stap", { id: staat.id, start: true, wie: wie.label, items: kal.items, punten: kal.punten });
+        logStap0("stap", { id: staat.id, start: true, wie: gebruikerTag(wie.label), items: kal.items, punten: kal.punten });
       } else {
         if (!data.staat || !data.mac) return { ok: false, error: "Toestand ontbreekt.", fallback: true };
         if (JSON.stringify(data.staat).length > MAX_STAAT_TEKENS) return { ok: false, error: "Toestand te groot.", fallback: true };
@@ -63,7 +63,7 @@ export const stap0Stap = createServerFn({ method: "POST" })
       const vangnetUsd = stap0VangnetUsd();
       const na = await S.voerStapUit(staat, productieChat, { log: logStap0, ...(vangnetUsd ? { budget: { vangnetUsd } } : {}) });
       const r = na.gen ? G.keurGeneratie(na.gen, na.inv, na.kal) : null;
-      const status = { tekst: na.laatsteFout ? "Eerste versie mislukte; nog één poging…" : S.statusTekst(na, r ? { fouten: r.fouten.length } : undefined), fase: na.fase, usd: na.kosten.usd, open: r?.fouten.length ?? 0 };
+      const status = { tekst: na.laatsteFout ? "Eerste versie mislukte; nog één poging…" : S.statusTekst(na, r ? { fouten: r.fouten.length } : undefined), fase: na.fase, usd: na.kosten.usd, open: r?.fouten.length ?? 0, ronde: na.rondes };
       let toets: GegenereerdeToets | undefined;
       if (na.fase === "klaar" && na.gen && r && na.kalVol) {
         toets = G.alsGegenereerdeToets(r.res, na.inv, na.kalVol, {
@@ -78,7 +78,7 @@ export const stap0Stap = createServerFn({ method: "POST" })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logStap0("stap", { fout: msg.slice(0, 200) });
-      return { ok: false, error: msg.slice(0, 300), fallback: true };
+      return { ok: false, error: zonderEmail(msg).slice(0, 300), fallback: true };
     }
   });
 
@@ -94,7 +94,7 @@ const bestandInput = z.object({
 export const stap0Bestand = createServerFn({ method: "POST" })
   .validator((input: unknown) => bestandInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true; naam: string; mime: string; base64: string } | { ok: false; error: string }> => {
-    const { stap0Voor } = await import("./stap0/pilot.server");
+    const { stap0Voor, zonderEmail } = await import("./stap0/pilot.server");
     if (!stap0Voor(data.pilot)) return { ok: false, error: "Stap 0 staat niet aan voor deze gebruiker." };
     try {
       if (JSON.stringify(data.gen ?? null).length > MAX_STAAT_TEKENS) return { ok: false, error: "Toets te groot." };
@@ -102,6 +102,6 @@ export const stap0Bestand = createServerFn({ method: "POST" })
       const b = await maakStap0Bestand(data.gen as never, data.inv as never, { deel: data.deel, formaat: data.formaat, splitsen: data.splitsen });
       return { ok: true, naam: b.naam, mime: b.mime, base64: Buffer.from(b.bytes).toString("base64") };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message.slice(0, 300) : "Export mislukt" };
+      return { ok: false, error: err instanceof Error ? zonderEmail(err.message).slice(0, 300) : "Export mislukt" };
     }
   });

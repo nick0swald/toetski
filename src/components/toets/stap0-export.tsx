@@ -47,7 +47,7 @@ export function Stap0Export({ toets }: { toets: GegenereerdeToets }) {
 
   return (
     <div className="mt-4 grid gap-3 rounded-[var(--radius-lg)] bg-surface p-4" data-testid="stap0-export">
-      <div className="text-sm font-semibold text-brand">Stap-0-export (pilot)</div>
+      <div className="text-sm font-semibold text-brand">Downloaden: leerlingdeel en docentdeel (aparte bestanden)</div>
       <div className="flex flex-wrap gap-2">
         {knop("leerling", "pdf", "Leerlingdeel PDF")}
         {knop("leerling", "docx", "Leerlingdeel Word")}

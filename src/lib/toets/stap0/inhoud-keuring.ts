@@ -23,7 +23,7 @@ const norm = (s: string) => kaal(s).toLowerCase().replace(/[^a-zà-ÿ0-9\s]/g, "
 
 // ── 4. figuurverwijzingen ────────────────────────────────────────────────────────────────────────
 const VERWIJS_FIG =
-  /\b(?:de|deze|het|die|onderstaande|bovenstaande|zie|in|uit|op)\s+(?:figuur|afbeelding|diagram|grafiek|tekening|oscilloscoopbeeld|schakelschema|schema|assenstelsel|maatcilinder)\b|\bfiguur\s+\d|\b(?:hieronder|hiernaast|hierboven)\b|\bje ziet\s+(?:hier\s+)?(?:een|het|de|twee|drie|vier)?\s*(?:figuur|grafiek|diagram|oscilloscoopbeeld|beelden?|schema|tekening|afbeelding|maatcilinder|krachten)/i;
+  /\b(?:de|deze|het|die|onderstaande|bovenstaande|zie|in|uit|op)\s+(?:figuur|afbeelding|diagram|grafiek|tekening|oscilloscoopbeeld|schakelschema|schema|assenstelsel|maatcilinder|meter|kWh-meter|wijzer)\b|\bfiguur\s+\d|\b(?:hieronder|hiernaast|hierboven)\b|\bje ziet\s+(?:hier\s+)?(?:een|het|de|twee|drie|vier)?\s*(?:figuur|grafiek|diagram|oscilloscoopbeeld|beelden?|schema|tekening|afbeelding|maatcilinder|krachten)/i;
 const VERWIJS_TABEL = /\b(?:de|deze|het|onderstaande|bovenstaande|zie|in|uit)\s+tabel\b|\btabel\s+\d/i;
 const LETTERS = /\b(?:beeld|beelden|diagram|diagrammen|grafiek|grafieken|figuur|figuren|oscilloscoopbeeld(?:en)?)\s+([A-F])(?:\s*(?:–|-|t\/m|tot en met|en|,)\s*([A-F]))?\b/gi;
 
@@ -404,4 +404,115 @@ export function begripTelling(vs: VraagstukSpec[], bron: string): { naam: string
 export function bloklijstRegel(bron: string): string {
   const l = BEGRIP_BLOKLIJST.filter((b) => b.bron.test(bron));
   return l.length ? `BEGRIPPEN-BLOKLIJST (worden vaak herhaald): elk hoogstens in zoveel vraagstukken van de HELE toets (ook niet in andere woorden), en binnen een vraagstuk niet twee keer dezelfde redenering: ${l.map((b) => `${b.naam} (${b.max})`).join("; ")}.` : "";
+}
+
+// ── 2b. weggevers over de hele toets: gegeven ≈ uitkomst elders ─────────────────────────────────────
+const EENHEID: Record<string, [string, number]> = {
+  W: ["W", 1], kW: ["W", 1e3], MW: ["W", 1e6],
+  J: ["J", 1], kJ: ["J", 1e3], MJ: ["J", 1e6],
+  Wh: ["J", 3600], kWh: ["J", 3.6e6],
+  A: ["A", 1], mA: ["A", 1e-3],
+  V: ["V", 1], kV: ["V", 1e3], mV: ["V", 1e-3],
+  "Ω": ["Ω", 1], "kΩ": ["Ω", 1e3],
+  s: ["s", 1], min: ["s", 60], h: ["s", 3600], uur: ["s", 3600],
+  m: ["m", 1], km: ["m", 1e3], cm: ["m", 1e-2], mm: ["m", 1e-3],
+  g: ["kg", 1e-3], kg: ["kg", 1],
+  N: ["N", 1], Hz: ["Hz", 1], "m/s": ["m/s", 1], "km/h": ["m/s", 1 / 3.6],
+};
+const GROOTHEID_RE = /(\d+(?:[.,]\d+)?)\s*(kWh|Wh|MJ|kJ|J|MW|kW|W|mA|A|kV|mV|V|kΩ|Ω|km\/h|m\/s|min|uur|h|s|km|cm|mm|m|kg|g|N|Hz)(?![\p{L}\d])/gu;
+const naarBasis = (getal: string, eenheid: string): { v: number; basis: string } | null => {
+  const e = EENHEID[eenheid];
+  const v = Number(getal.replace(",", "."));
+  return e && Number.isFinite(v) ? { v: v * e[1], basis: e[0] } : null;
+};
+/** Waarden met eenheid in een tekst, omgerekend naar de basiseenheid. */
+export function grootheden(t: string): { tekst: string; v: number; basis: string }[] {
+  return [...kaal(t).matchAll(GROOTHEID_RE)].flatMap((m) => {
+    const b = naarBasis(m[1]!, m[2]!);
+    return b ? [{ tekst: m[0], ...b }] : [];
+  });
+}
+
+/**
+ * Een "Ga uit van …"-waarde (of een waarde in een inleiding of MC-optie) die (bijna, ≤ 10 %) gelijk is aan een uitkomst die
+ * ergens anders in de toets berekend moet worden, verklapt die uitkomst ("Ga uit van 0,016 kW" na "Bereken het
+ * vermogen" = 15 W). Over de hele toets, ook tussen vraagstukken; omgerekend tussen eenheden (W ↔ kW, min ↔ h).
+ * Gegevens van A zelf (parameters van A of zijn vraagstuk) tellen niet.
+ */
+export function zoekGegevenWeggevers(vs: VraagstukSpec[]): Bevinding[] {
+  const uit: Bevinding[] = [];
+  const uitkomsten = vs.flatMap((v) =>
+    v.deelvragen.flatMap((a) =>
+      (a.berekeningen ?? []).flatMap((bk) => {
+        const b = bk.eenheid ? naarBasis(String(bk.waarde), bk.eenheid.trim()) : null;
+        const gegeven = new Set([...(v.parameters ?? []), ...(a.parameters ?? [])].map((p) => p.waarde));
+        return b && Math.abs(b.v) > 0 && !gegeven.has(bk.waarde) ? [{ vs: v, a, bk, ...b }] : [];
+      }),
+    ),
+  );
+  if (!uitkomsten.length) return uit;
+  for (const v of vs) {
+    const bronnen: { id: string; tekst: string; alleenGaUitVan: boolean }[] = [
+      { id: v.id, tekst: v.context.join(" "), alleenGaUitVan: false },
+      ...v.deelvragen.flatMap((d) => [
+        { id: d.id, tekst: [...(d.context ?? []), d.stam].join(" "), alleenGaUitVan: true },
+        { id: d.id, tekst: (d.opties ?? []).join(" | "), alleenGaUitVan: false },
+      ]),
+    ];
+    for (const br of bronnen) {
+      const t = kaal(br.tekst);
+      if (!t) continue;
+      const stukken = br.alleenGaUitVan ? [...t.matchAll(/\b(?:ga uit van|stel dat|neem aan dat|neem)\b[^.?!]*/gi)].map((m) => m[0]) : [t];
+      for (const stuk of stukken)
+        for (const g of grootheden(stuk))
+          for (const u of uitkomsten) {
+            if (u.basis !== g.basis || u.a.id === br.id) continue;
+            // de deelvraag die de uitkomst berekent, mag hem zelf niet gegeven krijgen; en wat A als gegeven heeft, telt niet
+            if ((u.a.parameters ?? []).some((p) => Math.abs(p.waarde - u.bk.waarde) < 1e-12)) continue;
+            const rel = Math.abs(g.v - u.v) / Math.abs(u.v);
+            const eigenVraagstuk = u.vs === v;
+            if (rel <= 0.1 && (eigenVraagstuk || rel <= 0.02))
+              uit.push({ id: br.id, vraagstuk: v.id, tekst: `"${g.tekst}" in ${br.id} ligt (bijna) op de uitkomst van ${u.a.id} (${u.bk.afgerond ?? u.bk.waarde} ${u.bk.eenheid}); kies een duidelijk andere waarde (minstens 20 % ernaast) of laat hem weg` });
+          }
+    }
+  }
+  const gezien = new Set<string>();
+  return uit.filter((b) => (gezien.has(b.tekst) ? false : (gezien.add(b.tekst), true)));
+}
+
+// ── 8. eerlijke RTTI: een weetvraag heet R ───────────────────────────────────────────────────────────
+const WEETVRAAG = /^(wat (is|zijn|betekent|wordt (er )?bedoeld met)|hoe (heet|noem je)|welke naam|noem (de|het|een) (naam|eenheid|functie|taak)|wat is de (taak|functie|naam|eenheid))\b/i;
+/** Een 1-punts weetvraag (definitie, naam, functie) zonder berekening of figuur met label T1/T2/I → R. */
+export function isWeetvraag(d: Pick<Deelvraag, "stam" | "punten" | "berekeningen" | "figuur" | "rtti" | "context">): boolean {
+  return d.punten === 1 && !d.berekeningen?.length && !d.figuur && !(d.context ?? []).length && WEETVRAAG.test(kaal(d.stam));
+}
+
+// ── 9. parafrase van een opgave uit de lesstof ─────────────────────────────────────────────────────────
+const STOP = new Set("de het een van en in op met voor dat die dit deze is zijn wordt worden je jij hij zij ze er om te aan bij als of ook nog wel niet uit naar door over tot dan wat welke waarom hoe leg uit geef noem noteer bereken beschrijf verklaar twee drie".split(" "));
+const stamWoord = (w: string) => w.replace(/(en|e|s)$/, "");
+const inhoudWoorden = (t: string) => norm(t).split(" ").filter((w) => w.length >= 4 && !STOP.has(w)).map(stamWoord);
+/**
+ * Een deelvraag die (bijna) dezelfde opdracht is als een opgave uit de lesstof (≥ 80 % van zijn inhoudswoorden staat in
+ * één opgavezin van het boek, minstens 4 woorden): ook in andere woorden telt ("noteer twee mogelijke oorzaken …").
+ */
+export function zoekBoekParafrase(vs: VraagstukSpec[], bron: string): Bevinding[] {
+  const opgaven = kaal(bron)
+    .split(/(?<=[.?!])\s+|\n+/)
+    .filter((z) => /\?$/.test(z.trim()) || /^\s*(\d+[a-z]?[.)]?\s*)?(noem|noteer|leg uit|bereken|geef|beschrijf|verklaar|bepaal|teken|welke|wat|waarom|hoe)\b/i.test(z))
+    .map((z) => new Set(inhoudWoorden(z)))
+    .filter((s) => s.size >= 3);
+  const uit: Bevinding[] = [];
+  for (const v of vs)
+    for (const d of v.deelvragen) {
+      const w = [...new Set(inhoudWoorden(d.stam))];
+      if (w.length < 4) continue;
+      for (const o of opgaven) {
+        const raak = w.filter((x) => o.has(x)).length / w.length;
+        if (raak >= 0.8 && o.size <= 2.5 * w.length) {
+          uit.push({ id: d.id, vraagstuk: v.id, tekst: `${d.id} lijkt op een opgave uit de lesstof (zelfde opdracht in andere woorden); bedenk een andere vraag of situatie` });
+          break;
+        }
+      }
+    }
+  return uit;
 }
