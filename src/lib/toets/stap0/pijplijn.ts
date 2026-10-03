@@ -6,6 +6,7 @@ import type { Fixture, FiguurSpec, OpmaakVraag, SeCode, ToetsSpec, VraagSpec } f
 import { valideerSpec, valideerToets } from "./valideer.ts";
 import { controleerBerekeningen } from "./reken.ts";
 import { keurFiguur, paramMap } from "./figuren/index.ts";
+import { isSeToets, ONDERWERP } from "./opmaak.ts";
 
 export const SE_VOLGORDE: SeCode[] = ["SE4.1", "SE4.2", "SE4.3", "SE4.4", "ALG"];
 
@@ -89,7 +90,9 @@ export function verwerkToets(toets: ToetsSpec, fixtures: Fixture[]): Pijplijnres
   const teller: Record<string, number> = {};
   const vragen: OpmaakVraag[] = geplaatst.map((g, i) => {
     teller[g.q.se] = (teller[g.q.se] ?? 0) + 1;
-    return { ...g.q, nr: i + 1, code: `${g.q.se}-${String(teller[g.q.se]).padStart(2, "0")}`, vraagstuk: g.vs, ouderId: g.ouderId, gedeeldeContext: g.gedeeld, aanloop: g.aanloop } as OpmaakVraag;
+    const jaar = toets.klas?.leerjaar;
+    const prefix = isSeToets(jaar) ? g.q.se : ONDERWERP[g.q.se].letter;
+    return { ...g.q, nr: i + 1, jaar, code: `${prefix}-${String(teller[g.q.se]).padStart(2, "0")}`, vraagstuk: g.vs, ouderId: g.ouderId, gedeeldeContext: g.gedeeld, aanloop: g.aanloop } as OpmaakVraag;
   });
   const ouderVan = new Map(vragen.map((v) => [v.nr, (v as OpmaakVraag & { ouderId: string }).ouderId]));
   const delen = (toets.delen ?? [{ naam: "", vragen: toets.vragen }]).map((d) => ({

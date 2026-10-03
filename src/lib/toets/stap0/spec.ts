@@ -248,6 +248,8 @@ export interface VraagSpec {
   rtti: Rtti;
   /** Leerdoel (voor de toetsmatrijs), bv. "K/4.2 dichtheid berekenen met ρ = m/V". */
   leerdoel?: string;
+  /** Het getoetste begrip of de redenering in 2–6 woorden (bv. "frequentie uit trillingstijd"); geen twee vragen met hetzelfde begrip. */
+  begrip?: string;
   parameters?: Parameter[];
   berekeningen?: Berekening[];
 }
@@ -272,8 +274,10 @@ export type Fixture = ({ soort: "vraag" } & VraagSpec) | VraagstukSpec;
 /** Platte vraag zoals de opmaak hem gebruikt (deelvragen erven van het vraagstuk). */
 export interface OpmaakVraag extends VraagSpec {
   nr: number;
-  /** SE-code + volgnummer, bv. "SE4.2-03". */
+  /** SE-code + volgnummer, bv. "SE4.2-03" (klas 4); in klas 1–3 onderwerpletter + volgnummer, bv. "E-03". */
   code: string;
+  /** Leerjaar van de toets (uit ToetsSpec.klas); bepaalt SE- of onderwerpteksten. */
+  jaar?: number;
   vraagstuk?: { id: string; titel: string; eerste: boolean; deel: number; aantal: number };
   /** Gedeelde context van het vraagstuk (alleen bij de eerste deelvraag) resp. de context van de vraag zelf. */
   gedeeldeContext?: string[];
@@ -295,6 +299,8 @@ export interface ToetsSpec {
   minuten?: number;
   /** Voorblad van het leerlingdeel (opbouw als de schooltoetsen/CSE + Toetski-leerlingblad). */
   voorblad?: Voorblad;
+  /** Klas en leerweg: in klas 1–3 geen SE-/PTA-teksten maar een indeling per onderwerp. Zonder klas: klas 4 (SE). */
+  klas?: { leerjaar: number; leerweg: string };
 }
 
 /** Velden van het voorblad. Alles optioneel; lege velden worden weggelaten (invulvelden blijven altijd staan). */

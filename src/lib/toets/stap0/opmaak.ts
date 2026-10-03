@@ -11,10 +11,31 @@ export const SE_INFO: Record<SeCode, { naam: string; kleur: string; tint: string
 export const SE_ORDE: SeCode[] = ["SE4.1", "SE4.2", "SE4.3", "SE4.4", "ALG"];
 export const seNaam = (k: SeCode) => (k === "ALG" ? "Algemeen" : k);
 
+/** Klas 1–3: geen SE-toetsen/PTA, maar onderwerpen (zelfde kleuren). */
+export const ONDERWERP: Record<SeCode, { kort: string; lang: string; letter: string }> = {
+  "SE4.1": { kort: "Krachten", lang: "Krachten, druk en werktuigen", letter: "K" },
+  "SE4.2": { kort: "Geluid, energie, stoffen", lang: "Geluid, energie, stoffen en materie", letter: "M" },
+  "SE4.3": { kort: "Elektriciteit", lang: "Elektriciteit", letter: "E" },
+  "SE4.4": { kort: "Beweging", lang: "Arbeid, vermogen en beweging", letter: "B" },
+  ALG: { kort: "Algemeen", lang: "Algemene vaardigheden (grafiek, aflezen, eenheden, rekenen)", letter: "A" },
+};
+/** SE-indeling alleen in klas 4 (of als de klas onbekend is, zoals de vaste voorbeeldtoets). */
+export const isSeToets = (jaar?: number) => jaar === undefined || jaar >= 4;
+export const seLabel = (k: SeCode, jaar?: number) => (isSeToets(jaar) ? seNaam(k) : ONDERWERP[k].kort);
+export const seOmschrijving = (k: SeCode, jaar?: number) => (isSeToets(jaar) ? SE_INFO[k].naam : ONDERWERP[k].lang);
+export const indelingKop = (jaar?: number) => (isSeToets(jaar) ? "SE-toets" : "Onderwerp");
+export const jaarVan = (vragen: { jaar?: number }[]) => vragen[0]?.jaar;
+
+/** Uitleg van de indeling in het docentdeel, passend bij klas en leerweg. */
+export function uitlegIndeling(klas?: { leerjaar: number; leerweg: string }): string {
+  if (!klas || klas.leerjaar >= 4)
+    return `De vragen zijn ingedeeld per SE-toets van het PTA klas 4 ${klas?.leerweg ?? "GT"}. Elke SE-toets heeft een eigen kleur; de code (bijvoorbeeld SE4.2-03) geeft de toets en het volgnummer binnen die toets. Vaardigheden die bij alle toetsen horen, staan onder Algemeen (grijs).`;
+  return `De vragen zijn ingedeeld per onderwerp (klas ${klas.leerjaar} ${klas.leerweg}). Elk onderwerp heeft een eigen kleur; de code (bijvoorbeeld E-03) geeft het onderwerp en het volgnummer binnen dat onderwerp. Vaardigheden die bij alle onderwerpen horen, staan onder Algemeen (grijs).`;
+}
+
 export const INSTRUCTIE =
   "Je mag Binas en een rekenmachine gebruiken. Gebruik g = 10 N/kg, tenzij anders vermeld. Schrijf bij rekenvragen altijd de formule, de berekening en het antwoord met de eenheid op. Bij een tekenvraag teken je in de figuur.";
-export const UITLEG_SE =
-  "De vragen zijn ingedeeld per SE-toets van het PTA klas 4 GT. Elke SE-toets heeft een eigen kleur; de code (bijvoorbeeld SE4.2-03) geeft de toets en het volgnummer binnen die toets. Vaardigheden die bij alle toetsen horen, staan onder Algemeen (grijs).";
+export const UITLEG_SE = uitlegIndeling();
 export const UITLEG_DOCENT =
   "<b>Bij het antwoordmodel.</b> Het antwoordmodel volgt de opbouw van het correctievoorschrift van het CvTE: maximumscore, antwoord en de verdeling van de scorepunten. Bij een meerkeuzevraag krijgt alleen de juiste letter het scorepunt. <b>RTTI:</b> R = reproductie, T1 = toepassen in een bekende situatie, T2 = toepassen in een nieuwe situatie, I = inzicht. <b>Niveau:</b> de examenniveaus waarin dit vraagtype voorkomt. Alle berekeningen zijn in code nagerekend en alle figuren automatisch gecontroleerd. Krachtenfiguren zijn op schaal 1 : 1 afgedrukt.";
 

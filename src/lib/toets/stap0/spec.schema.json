@@ -916,6 +916,9 @@
     "leerdoel": {
      "type": "string"
     },
+    "begrip": {
+     "type": "string"
+    },
     "parameters": {
      "$ref": "#/definitions/parameters"
     },
@@ -1129,6 +1132,9 @@
      ]
     },
     "leerdoel": {
+     "type": "string"
+    },
+    "begrip": {
      "type": "string"
     },
     "parameters": {

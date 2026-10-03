@@ -14,7 +14,8 @@ import type { Fixture, FiguurSpec, OpmaakVraag, ToetsSpec, VraagstukSpec } from 
 import { verwerkToets, type Pijplijnresultaat } from "./pijplijn.ts";
 import { getalInTekst, nl } from "./reken.ts";
 import { annoteerKalibratie, relevanteVraagtypen, type Kalibratie } from "../kalibratie.ts";
-import { extractParagrafen } from "../leerdoelen.ts";
+import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
+import { overlap, woorden } from "../eval/rubric.ts";
 import type { GegenereerdeToets, Leerweg, RttiVerdeling, Vraag } from "../types";
 
 export interface SpecInvoer {
@@ -30,11 +31,6 @@ export interface SpecInvoer {
 export interface Generatie {
   titel: string;
   vraagstukken: VraagstukSpec[];
-}
-
-export interface Herstel {
-  vraagstukken: VraagstukSpec[];
-  schrappen: string[];
 }
 
 // ── JSON-schema voor de structured output ────────────────────────────────────────────────────────
@@ -58,7 +54,9 @@ function defs(): Record<string, unknown> {
   const d = naarXaiSchema(SPEC_SCHEMA.definitions) as Record<string, Record<string, unknown>>;
   const vs = structuredClone(d.vraagstuk) as { properties: Record<string, Record<string, unknown>> };
   vs.properties.deelvragen = { ...vs.properties.deelvragen, minItems: 3, maxItems: 4 };
-  return { ...d, vraagstuk: vs };
+  const dv = structuredClone(d.deelvraag) as { required: string[] };
+  dv.required = [...dv.required, "begrip", "leerdoel"];
+  return { ...d, vraagstuk: vs, deelvraag: dv };
 }
 
 export function generatieSchema(): Record<string, unknown> {
@@ -71,14 +69,9 @@ export function generatieSchema(): Record<string, unknown> {
   };
 }
 
-export function herstelSchema(): Record<string, unknown> {
-  return {
-    type: "object",
-    additionalProperties: false,
-    required: ["vraagstukken", "schrappen"],
-    properties: { vraagstukken: { type: "array", items: { $ref: "#/$defs/vraagstuk" } }, schrappen: { type: "array", items: { type: "string" } } },
-    $defs: defs(),
-  };
+/** Eén vraagstuk (gerichte herstel- of vervangaanroep). */
+export function vraagstukSchema(): Record<string, unknown> {
+  return { type: "object", additionalProperties: false, required: ["vraagstuk"], properties: { vraagstuk: { $ref: "#/$defs/vraagstuk" } }, $defs: defs() };
 }
 
 // ── prompt ───────────────────────────────────────────────────────────────────────────────────────
@@ -89,7 +82,8 @@ OPBOUW (CSE-stijl)
 - Elk vraagstuk gaat over een ANDERE situatie, met een ander voorwerp en een andere persoon. Geen twee vraagstukken over hetzelfde apparaat of dezelfde handeling.
 - Een deelvraag mag eigen extra informatie hebben in "context" (die komt vóór de opdracht). De "stam" is de opdracht zelf ("Bereken …", "Leg uit …", "Welke … ?"). Herhaal de inleiding niet in de stam.
 - Mix van vraagvormen zoals in het CSE: meerkeuze (4 opties, precies één juist), berekeningen (formule zelf kiezen, punten per stap), uitlegvragen ("Leg uit …", "Leg uit waarom …"), en inzichtvragen (I): nieuwe situatie, voorspellen, verband leggen of redeneren in meerdere stappen. Gebruik in elke toets meerdere uitlegvragen en minstens twee I-vragen.
-- Geen weggevers: een deelvraag mag nooit het antwoord van een andere deelvraag (in hetzelfde of een ander vraagstuk) verklappen, ook niet in de context, de opties of een tabel. Geef geen uitkomst die eerder berekend moet worden.
+- Geen weggevers: een deelvraag mag nooit het antwoord van een andere deelvraag (in hetzelfde of een ander vraagstuk) verklappen, ook niet in de context, de opties of een tabel. Geef geen uitkomst die eerder berekend moet worden. Let vooral op meerkeuzeopties: een (juiste of foute) optie mag geen antwoord op een andere vraag bevatten.
+- Elk begrip en elke redenering maar één keer: "begrip" (2–6 woorden) noemt wat de deelvraag toetst, bijv. "frequentie uit trillingstijd", "amplitude en luidheid", "geluid heeft tussenstof nodig". Geen twee deelvragen in de toets met hetzelfde begrip of dezelfde redenering (ook niet in andere woorden).
 - Meerkeuze: ALTIJD "opties" (2–4 stuks) én "juist". Opties zonder letters (de software zet A–D ervoor). Bij een keuze tussen figuren A–D zijn de opties "beeld A", "beeld B", … (of "diagram A", …). Juist/onjuist-vraag: opties ["juist", "onjuist"]. Afleiders plausibel (typische denkfouten), niet overlappend, ongeveer even lang. Wissel de plaats van het juiste antwoord af. Scorestap: 1 punt voor de juiste letter.
 - Realistische, herkenbare situaties uit het dagelijks leven van een vmbo-leerling, met realistische getallen.
 - Namen: gewone Nederlandse voornamen (ook meercultureel), per vraagstuk een andere naam. GEEN schoolnamen, geen plaatsnamen van scholen, geen merknamen of productnamen, geen namen van methodes of uitgevers, geen "Toetski".
@@ -181,6 +175,55 @@ export function normaliseer(gen: Generatie): Generatie {
   return g;
 }
 
+/** Paragrafen uit de lesstof die (nog) geen deelvraag hebben. */
+export function ontbrekendeParagrafen(vs: VraagstukSpec[], inv: Pick<SpecInvoer, "bronmateriaal" | "antwoordenmateriaal">): { code: string; titel: string }[] {
+  const pars = extractParagrafen(inv.bronmateriaal, inv.antwoordenmateriaal);
+  if (pars.length < 2) return [];
+  let n = 0;
+  const pseudo = vs.flatMap((v) => v.deelvragen.map((d) => ({ nummer: ++n, domein: v.hoofdstuk, leerdoel: d.leerdoel ?? "", stam: kaal(d.stam), context: kaal([...v.context, ...(d.context ?? [])].join(" ")) }) as unknown as Vraag));
+  return paragraafDekking(pseudo, pars).filter((d) => !d.vragen.length).map((d) => d.paragraaf);
+}
+
+const normBegrip = (b: string) => kaal(b).toLowerCase().replace(/[^a-zà-ÿ0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !["van", "het", "een", "met", "uit", "bij", "and", "voor"].includes(w)).sort().join(" ");
+
+/** Dubbel getoetst begrip: zelfde begrip-label, of (in verschillende vraagstukken) bijna hetzelfde modelantwoord. */
+export function zoekDubbeleBegrippen(vs: VraagstukSpec[]): { id: string; vraagstuk: string; tekst: string }[] {
+  const items = vs.flatMap((v) => v.deelvragen.map((d) => ({ v, d, b: normBegrip(d.begrip ?? ""), aw: woorden(antwoordVan(d)) })));
+  const uit: { id: string; vraagstuk: string; tekst: string }[] = [];
+  for (let j = 0; j < items.length; j++) {
+    for (let i = 0; i < j; i++) {
+      const a = items[i]!;
+      const b = items[j]!;
+      const zelfdeLabel = a.b && a.b === b.b;
+      const zelfdeAntwoord = a.v !== b.v && a.aw.length >= 3 && b.aw.length >= 3 && Math.min(overlap(a.aw, b.aw), overlap(b.aw, a.aw)) >= 0.6;
+      if (zelfdeLabel || zelfdeAntwoord) uit.push({ id: b.d.id, vraagstuk: b.v.id, tekst: `${b.d.id} toetst hetzelfde als ${a.d.id} (${zelfdeLabel ? `begrip "${b.d.begrip}"` : "bijna hetzelfde antwoord"}); kies een ander begrip` });
+    }
+  }
+  return uit;
+}
+
+function antwoordVan(d: VraagstukSpec["deelvragen"][number]): string {
+  if (d.opties?.length && d.antwoordmodel.juist) return kaal(d.opties[d.antwoordmodel.juist.charCodeAt(0) - 65] ?? "");
+  return kaal(d.antwoordmodel.regels[0] ?? "");
+}
+
+/**
+ * Weggevers tussen vragen (zelfde maat als de eval-rubriek, maar ook binnen een vraagstuk): het antwoord van vraag B
+ * staat grotendeels (≥ 60 % van de inhoudswoorden) in de eigen tekst of de opties van vraag A.
+ */
+export function zoekKruisWeggevers(vs: VraagstukSpec[]): { gever: string; vraagstuk: string; tekst: string }[] {
+  const items = vs.flatMap((v) => v.deelvragen.map((d) => ({ v, d, eigen: woorden(tekstVan(d)), aw: woorden(antwoordVan(d)) })));
+  const uit: { gever: string; vraagstuk: string; tekst: string }[] = [];
+  for (const b of items) {
+    if (b.aw.length < 3) continue;
+    for (const a of items) {
+      if (a === b) continue;
+      if (overlap(b.aw, a.eigen) >= 0.6) uit.push({ gever: a.d.id, vraagstuk: a.v.id, tekst: `${a.d.id} verklapt het antwoord van ${b.d.id} ("${antwoordVan(b.d).slice(0, 50)}")${a.d.opties?.length ? " in de opties" : ""}` });
+    }
+  }
+  return uit;
+}
+
 // ── keuring ──────────────────────────────────────────────────────────────────────────────────────
 const MERKEN = /\b(Toetski|Nova|Malmberg|Noordhoff|ThiemeMeulenhoff|Cito|CvTE|Examenblad|Grok|xAI|Apple|iPhone|Samsung|Philips|Gazelle|Albert Heijn|Jumbo|Lidl|Coca[- ]?Cola)\b/;
 const SCHOOL = /\b(Aeres|Nordwin)\b|\b[A-Z][a-z]+\s+(College|Lyceum)\b|\b[A-Z][a-z]+school\b/;
@@ -203,6 +246,8 @@ export interface Keuringsrapport {
     figuren: number;
     figurenGo: number;
     weggevers: string[];
+    dubbeleBegrippen: string[];
+    ontbrekendeParagrafen: string[];
     afgekeurd: string[];
   };
 }
@@ -247,6 +292,7 @@ export function alsToetsSpec(gen: Generatie, inv: SpecInvoer): ToetsSpec {
     vragen: gen.vraagstukken.map((v) => v.id),
     minuten: inv.duurMinuten,
     nTerm: 1,
+    klas: { leerjaar: inv.leerjaar, leerweg: inv.leerweg },
     voorblad: {
       kop: inv.titel,
       leerweg: inv.leerweg === "GT" ? "VMBO-GL en TL" : `VMBO-${inv.leerweg}`,
@@ -290,6 +336,15 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
     const id = gen.vraagstukken.find((v) => v.deelvragen.some((d) => w.startsWith(d.id)))?.id ?? "";
     voeg(id, `weggever: ${w}`);
   }
+  const kruis = zoekKruisWeggevers(gen.vraagstukken);
+  for (const k of kruis) {
+    voeg(k.vraagstuk, `weggever: ${k.tekst}`);
+    weggevers.push(k.tekst);
+  }
+  const dubbel = zoekDubbeleBegrippen(gen.vraagstukken);
+  for (const d of dubbel) voeg(d.vraagstuk, `dubbel begrip: ${d.tekst}`);
+  const ontbreekt = ontbrekendeParagrafen(gen.vraagstukken, inv);
+  if (ontbreekt.length) voeg("", `dekking: geen deelvraag over ${ontbreekt.map((p) => `${p.code} ${p.titel}`).join("; ")}`);
   const alle = gen.vraagstukken.flatMap((v) => v.deelvragen ?? []);
   const punten = alle.reduce((s, d) => s + (d.punten ?? 0), 0);
   const lengtePct = Math.round((punten / kal.punten) * 100);
@@ -316,50 +371,147 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
       figuren: figs.length,
       figurenGo: figs.filter((f) => f.go).length,
       weggevers,
+      dubbeleBegrippen: dubbel.map((d) => d.tekst),
+      ontbrekendeParagrafen: ontbreekt.map((p) => `${p.code} ${p.titel}`),
       afgekeurd: res.afgekeurd,
     },
   };
 }
 
-export function herstelPrompt(r: Keuringsrapport): string {
-  const regels = Object.entries(r.perId)
-    .filter(([, l]) => l.length)
-    .map(([id, l]) => `${id ? `vraagstuk ${id}` : "toets"}:\n- ${l.join("\n- ")}`);
-  const f = r.feiten;
-  const verschil = f.doelPunten - f.punten;
-  const lengte = verschil === 0 ? "" : `\n\nPUNTEN: nu ${f.punten}, doel ${f.doelPunten}: ${verschil > 0 ? `voeg PRECIES ${verschil} punt(en) toe` : `haal PRECIES ${-verschil} punt(en) weg`} (pas punten + scorestappen van bestaande deelvragen aan of voeg een deelvraag toe/verwijder er een), zodat het totaal na het herstel ${f.doelPunten} is. Tel na.`;
-  return `De software heeft je toets gekeurd. Deze punten zijn FOUT:\n\n${regels.join("\n\n")}${lengte}\n\nHerstel ze. Stuur JSON volgens het schema: "vraagstukken" = alleen de vraagstukken die je verandert of toevoegt, elk VOLLEDIG met alle deelvragen (zelfde id = vervangen, nieuwe id = toevoegen); "schrappen" = ids van vraagstukken die weg moeten (liever herstellen dan schrappen). Elk genoemd vraagstuk MOET hersteld terugkomen. Houd je aan alle regels van de opdracht en reken elke berekening opnieuw na.`;
-}
-
-export function pasHerstelToe(gen: Generatie, h: Herstel): Generatie {
-  const weg = new Set(h.schrappen ?? []);
-  const nieuw = new Map((h.vraagstukken ?? []).map((v) => [v.id, v]));
-  const lijst = gen.vraagstukken.filter((v) => !weg.has(v.id)).map((v) => nieuw.get(v.id) ?? v);
-  for (const v of h.vraagstukken ?? []) if (!gen.vraagstukken.some((x) => x.id === v.id) && !weg.has(v.id)) lijst.push(v);
-  return { ...gen, vraagstukken: lijst };
-}
-
 export type ChatFn = (messages: { role: "system" | "user" | "assistant"; content: string }[], schema: { naam: string; schema: Record<string, unknown> }, maxTokens: number) => Promise<string>;
 
-/** Genereer + keur + maximaal één herstelronde. Gooit niet bij keurfouten: het rapport vertelt wat er mis is. */
-export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">, chat: ChatFn, opts: { maxTokens?: number; voorHerstel?: () => boolean } = {}) {
-  const max = opts.maxTokens ?? 30000;
-  const messages = [
+/** Kort overzicht van de andere vraagstukken (voor gerichte aanroepen: geen dubbele begrippen, personen of weggevers). */
+export function overzicht(gen: Generatie, behalve?: string): string {
+  return gen.vraagstukken
+    .filter((v) => v.id !== behalve)
+    .map((v) => `- ${v.id} "${v.titel}" (${kaal(v.context.join(" ")).slice(0, 110)}…): ${v.deelvragen.map((d) => `[${d.begrip ?? "?"}] ${kaal(d.stam).slice(0, 70)} → ${antwoordVan(d).slice(0, 50)}`).join(" | ")}`)
+    .join("\n");
+}
+
+export function gerichtPrompt(o: { soort: "herstel"; vraagstuk: VraagstukSpec; fouten: string[]; gen: Generatie } | { soort: "nieuw"; punten: number; paragrafen: string[]; gen: Generatie; fouten?: string[]; vorige?: VraagstukSpec; id: string }): string {
+  const ander = overzicht(o.gen, o.soort === "herstel" ? o.vraagstuk.id : o.id);
+  const kop = `Schrijf nu ALLEEN één vraagstuk (JSON: {"vraagstuk": …}). De rest van de toets staat al vast:\n${ander}\n\nGebruik een andere situatie, persoon en andere begrippen dan hierboven, en verklap geen antwoorden van die vragen.`;
+  if (o.soort === "herstel") {
+    const p = o.vraagstuk.deelvragen.reduce((s, d) => s + d.punten, 0);
+    return `${kop}\n\nDit vraagstuk is door de software AFGEKEURD:\n${JSON.stringify(o.vraagstuk)}\n\nFouten:\n- ${o.fouten.join("\n- ")}\n\nSchrijf het vraagstuk opnieuw zodat al deze fouten weg zijn: zelfde id ("${o.vraagstuk.id}"), zelfde onderwerp en paragrafen, samen precies ${p} punten, 3–4 deelvragen. Reken alles opnieuw na en controleer elke figuur-controle.`;
+  }
+  const extra = o.vorige && o.fouten?.length ? `\n\nJe vorige poging werd afgekeurd:\n${JSON.stringify(o.vorige)}\nFouten:\n- ${o.fouten.join("\n- ")}` : "";
+  return `${kop}\n\nNIEUW vraagstuk met id "${o.id}", samen precies ${o.punten} punten in 3–4 deelvragen${o.paragrafen.length ? `, over: ${o.paragrafen.join("; ")} (begin elk leerdoel met de paragraafcode)` : ""}. Houd je aan alle regels van de opdracht.${extra}`;
+}
+
+export interface Stap {
+  wat: string;
+  id: string;
+  ok: boolean;
+  fouten?: string[];
+}
+
+/**
+ * Genereer + keur + gericht herstel:
+ *  1. één aanroep voor de hele toets;
+ *  2. elk afgekeurd vraagstuk wordt OPNIEUW gegenereerd (gerichte aanroep met de keurfouten, max 2 pogingen);
+ *  3. pas als het dan nog niet goed is, wordt het geschrapt;
+ *  4. lengte (90–110 %) en paragraafdekking worden aangevuld met vervangende vraagstukken (elk max 2 pogingen), of
+ *     een te lange toets wordt ingekort door één vraagstuk met minder punten opnieuw te laten schrijven.
+ * Een mislukte of door het budget geweigerde gerichte aanroep breekt de generatie niet af (staat in `stappen`).
+ */
+/** Vraagstuk onder een vaste id, met deelvraag-ids <id>-a, <id>-b … (geen botsing met de rest van de toets). */
+function metId(v: VraagstukSpec, id: string): VraagstukSpec {
+  return { ...v, id, deelvragen: v.deelvragen.map((d, i) => ({ ...d, id: `${id}-${String.fromCharCode(97 + i)}` })) };
+}
+
+export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten"> & Partial<Pick<Kalibratie, "vorm" | "pct1p">>, chat: ChatFn, opts: { maxTokens?: number; maxTokensGericht?: number; maxGericht?: number } = {}) {
+  const basis = [
     { role: "system" as const, content: SPEC_SYSTEM },
     { role: "user" as const, content: specPrompt(inv, kal) },
   ];
-  const raw = await chat(messages, { naam: "toets_spec", schema: generatieSchema() }, max);
+  const raw = await chat(basis, { naam: "toets_spec", schema: generatieSchema() }, opts.maxTokens ?? 16000);
   let gen = normaliseer(JSON.parse(raw) as Generatie);
   const eerste = keurGeneratie(gen, inv, kal);
-  let rapport = eerste;
-  let hersteld = false;
-  if (eerste.fouten.length && (opts.voorHerstel?.() ?? true)) {
-    const raw2 = await chat([...messages, { role: "assistant", content: raw }, { role: "user", content: herstelPrompt(eerste) }], { naam: "toets_herstel", schema: herstelSchema() }, max);
-    gen = normaliseer(pasHerstelToe(gen, JSON.parse(raw2) as Herstel));
-    rapport = keurGeneratie(gen, inv, kal);
-    hersteld = true;
+  const stappen: Stap[] = [];
+  let gericht = 0;
+  const maxGericht = opts.maxGericht ?? 8;
+  let gestopt = false;
+  const vraag = async (prompt: string): Promise<VraagstukSpec | null> => {
+    if (gestopt || gericht >= maxGericht) return null;
+    gericht++;
+    try {
+      const r = await chat([...basis, { role: "user", content: prompt }], { naam: "vraagstuk", schema: vraagstukSchema() }, opts.maxTokensGericht ?? 6000);
+      const v = (JSON.parse(r) as { vraagstuk: VraagstukSpec }).vraagstuk;
+      return normaliseer({ titel: "", vraagstukken: [v] }).vraagstukken[0] ?? null;
+    } catch (e) {
+      if (/budget/.test(String((e as Error)?.message))) gestopt = true;
+      stappen.push({ wat: "aanroep mislukt", id: "", ok: false, fouten: [String((e as Error)?.message ?? e).slice(0, 160)] });
+      return null;
+    }
+  };
+  const vervang = (id: string, v: VraagstukSpec) => ({ ...gen, vraagstukken: gen.vraagstukken.map((x) => (x.id === id ? metId(v, id) : x)) });
+
+  // 2. gericht opnieuw genereren (parallel per vraagstuk, max 2 pogingen)
+  for (let poging = 1; poging <= 2; poging++) {
+    const rap = keurGeneratie(gen, inv, kal);
+    const fout = gen.vraagstukken.filter((v) => rap.perId[v.id]?.length);
+    if (!fout.length) break;
+    const nieuw = await Promise.all(fout.map((v) => vraag(gerichtPrompt({ soort: "herstel", vraagstuk: v, fouten: rap.perId[v.id]!, gen }))));
+    fout.forEach((v, i) => {
+      const n = nieuw[i];
+      if (!n) return;
+      gen = vervang(v.id, n);
+      const na = keurGeneratie(gen, inv, kal).perId[v.id] ?? [];
+      stappen.push({ wat: `opnieuw (poging ${poging})`, id: v.id, ok: na.length === 0, fouten: na });
+    });
   }
-  return { gen, eerste, rapport, hersteld };
+  // 3. nog steeds fout → schrappen
+  const rap3 = keurGeneratie(gen, inv, kal);
+  const weg = gen.vraagstukken.filter((v) => rap3.perId[v.id]?.length).map((v) => v.id);
+  for (const id of weg) stappen.push({ wat: "geschrapt", id, ok: false, fouten: rap3.perId[id] });
+  gen = { ...gen, vraagstukken: gen.vraagstukken.filter((v) => !weg.includes(v.id)) };
+
+  // 4. lengte en dekking aanvullen
+  for (let ronde = 0; ronde < 3; ronde++) {
+    const r = keurGeneratie(gen, inv, kal);
+    const f = r.feiten;
+    const pars = f.ontbrekendeParagrafen;
+    const tekort = kal.punten - f.punten;
+    const teLang = f.lengtePct > 110;
+    const teKort = f.lengtePct < 90 || f.vragen < Math.ceil(kal.items * 0.85);
+    if (!teLang && !teKort && !pars.length) break;
+    if (teLang && !pars.length) {
+      // inkorten: het vraagstuk met de meeste punten opnieuw met minder punten
+      const groot = [...gen.vraagstukken].sort((a, b) => b.deelvragen.reduce((s, d) => s + d.punten, 0) - a.deelvragen.reduce((s, d) => s + d.punten, 0))[0];
+      if (!groot) break;
+      const p = groot.deelvragen.reduce((s, d) => s + d.punten, 0);
+      const doel = Math.max(3, p + tekort);
+      const v = await vraag(gerichtPrompt({ soort: "nieuw", id: groot.id, punten: doel, paragrafen: [...new Set(groot.deelvragen.map((d) => (d.leerdoel ?? "").split(" ")[0]!).filter(Boolean))], gen: { ...gen, vraagstukken: gen.vraagstukken.filter((x) => x.id !== groot.id) } }));
+      if (!v) break;
+      const kandidaat = vervang(groot.id, v);
+      const ok = !(keurGeneratie(kandidaat, inv, kal).perId[groot.id] ?? []).length;
+      stappen.push({ wat: `ingekort naar ${doel} p`, id: groot.id, ok });
+      if (ok) gen = kandidaat;
+      else break;
+      continue;
+    }
+    const punten = Math.max(3, Math.min(9, tekort > 0 ? tekort : 4));
+    const id = `aanvulling-${ronde + 1}`;
+    let vorige: VraagstukSpec | undefined;
+    let fouten: string[] | undefined;
+    let gelukt = false;
+    for (let poging = 1; poging <= 2 && !gelukt; poging++) {
+      const v = await vraag(gerichtPrompt({ soort: "nieuw", id, punten, paragrafen: pars, gen, vorige, fouten }));
+      if (!v) break;
+      const kandidaat: Generatie = { ...gen, vraagstukken: [...gen.vraagstukken, metId(v, id)] };
+      fouten = keurGeneratie(kandidaat, inv, kal).perId[id] ?? [];
+      vorige = v;
+      stappen.push({ wat: `aanvulling ${punten} p (poging ${poging})`, id, ok: fouten.length === 0, fouten });
+      if (!fouten.length) {
+        gen = kandidaat;
+        gelukt = true;
+      }
+    }
+    if (!gelukt) break;
+  }
+  const rapport = keurGeneratie(gen, inv, kal);
+  return { gen, eerste, rapport, hersteld: stappen.length > 0, stappen, gerichteAanroepen: gericht };
 }
 
 // ── adapter naar het bestaande toetsformaat (voor rubriek + rechter) ─────────────────────────────
@@ -388,7 +540,7 @@ export function alsGegenereerdeToets(res: Pijplijnresultaat, inv: SpecInvoer & {
   const metFiguur = new Set(res.vragen.filter((q) => q.figuur && q.vraagstuk).map((q) => q.vraagstuk!.id));
   const vragen: Vraag[] = res.vragen.map((q: OpmaakVraag) => {
     const ctx = [...(q.gedeeldeContext ?? []), ...(q.aanloop ?? [])].map(kaal).join(" ");
-    const fig = figuurTekst(q.figuur);
+    const fig = q.figuur ? figuurTekst(q.figuur).replace(/^\[(figuur|foto): /, `[$1 bij vraag ${q.nr}${q.figuur.type !== "ai-afbeelding" ? " (als afbeelding bijgevoegd)" : ""}: `) : "";
     const mc = Boolean(q.opties?.length);
     return {
       nummer: q.nr,

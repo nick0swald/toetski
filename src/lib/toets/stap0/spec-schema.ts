@@ -234,6 +234,7 @@ const vraagVelden = {
   },
   rtti: { enum: ["R", "T1", "T2", "I"] },
   leerdoel: { type: "string" },
+  begrip: { type: "string" },
   parameters: { $ref: "#/definitions/parameters" },
   berekeningen: {
     type: "array",
@@ -311,6 +312,7 @@ export const TOETS_SCHEMA = {
     },
     nTerm: { type: "number", minimum: 0, maximum: 3 },
     minuten: { type: "integer", minimum: 10, maximum: 240 },
+    klas: { type: "object", additionalProperties: false, required: ["leerjaar", "leerweg"], properties: { leerjaar: { type: "integer", minimum: 1, maximum: 6 }, leerweg: str } },
     voorblad: {
       type: "object",
       additionalProperties: false,

@@ -189,6 +189,8 @@ export interface Blok {
   onderaan?: boolean;
   /** Geen paginanummer op de huidige pagina (voorblad). */
   geenNummer?: boolean;
+  /** Langer dan een pagina: eerst naar een nieuwe pagina, dan pas opsplitsen (vraagstuk begint bovenaan). */
+  bovenaanAlsTeLang?: boolean;
 }
 
 /** Horizontale lijn over de volle breedte (CSE: lijn boven een contexttitel). */
@@ -426,6 +428,7 @@ export class Ingesprongen implements Blok {
 
 export class Bijeen implements Blok {
   bijeen = true;
+  bovenaanAlsTeLang?: boolean;
   blokken: Blok[];
   constructor(blokken: Blok[]) {
     this.blokken = blokken;
@@ -502,6 +505,7 @@ export async function maakPdf(blokken: Blok[], fonts: Fonts, meta: { titel: stri
         continue;
       }
       const delen = b.splits?.(doc, TW);
+      if (b.bovenaanAlsTeLang && h > onder - M && y > M + 0.5) nieuw();
       if (delen && delen.length > 1) flow(delen);
       else {
         if (y > M + 0.5) nieuw();

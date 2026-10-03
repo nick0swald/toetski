@@ -41,13 +41,17 @@ function boekKosten(soort, usd, extra = {}) {
   mkdirSync(join(ROOT, "eval-out"), { recursive: true });
   appendFileSync(join(ROOT, "eval-out", "kosten.jsonl"), JSON.stringify({ t: new Date().toISOString(), script: "stap0-ronde", soort, usd, runKosten, ...extra }) + "\n");
 }
+/** Worst case van aanroepen die nu lopen (parallelle herstel- en rechteraanroepen tellen samen mee). */
+let gereserveerd = 0;
 function budgetCheck(budget, schatting, wat) {
-  if (runKosten + schatting > budget) {
-    console.error(`[budget] STOP vóór ${wat}: run-kosten ${runKosten.toFixed(4)} + worst case ${schatting.toFixed(4)} > budget ${budget.toFixed(4)} (USD)`);
+  if (runKosten + gereserveerd + schatting > budget) {
+    console.error(`[budget] STOP vóór ${wat}: run-kosten ${runKosten.toFixed(4)} + lopend ${gereserveerd.toFixed(4)} + worst case ${schatting.toFixed(4)} > budget ${budget.toFixed(4)} (USD)`);
     return false;
   }
+  gereserveerd += schatting;
   return true;
 }
+const vrijgeven = (schatting) => (gereserveerd = Math.max(0, gereserveerd - schatting));
 /** Hartslag voor de waakhond zolang er een aanroep loopt (elke aanroep heeft zelf een timeout). */
 function hartslag() {
   const f = process.env.WAAKHOND_HARTSLAG;
@@ -102,6 +106,7 @@ async function maakChat(budget) {
       return raw;
     } finally {
       stop();
+      vrijgeven(sch);
       boekKosten(schema.naam, k.usd, { ms: Date.now() - t0, tokensIn: k.tokensIn, tokensUit: k.tokensUit, redeneren: k.tokensRedeneren, mislukt: k.mislukt });
     }
   };
@@ -111,30 +116,62 @@ async function maakChat(budget) {
 async function droogChat() {
   const { laadFixtures } = await S("stap0/laad.ts");
   const vs = laadFixtures().filter((f) => f.soort === "vraagstuk");
-  return async (_m, schema) => JSON.stringify(schema.naam === "toets_spec" ? { titel: "Droog", vraagstukken: vs } : { vraagstukken: [], schrappen: [] });
+  return async (_m, schema) => JSON.stringify(schema.naam === "toets_spec" ? { titel: "Droog", vraagstukken: vs } : { vraagstuk: vs[0] });
 }
 
-async function rechter(toets, input, budget) {
+/**
+ * Figuren uit het leerlingdeel als PNG (data-URL) voor de rechter: elke deterministische figuur één keer (ongeveer
+ * 150 dpi), met het eerste vraagnummer waar hij bij staat. AI-afbeeldingen (staan uit in stap 0) worden overgeslagen.
+ */
+async function rechterFiguren(res) {
+  const { figuurSvg } = await S("stap0/figuren/index.ts");
+  const { pngRender } = await S("stap0/node.server.ts");
+  const gezien = new Set();
+  const uit = [];
+  for (const q of res.vragen) {
+    const f = q.figuur;
+    if (!f || f.type === "ai-afbeelding") continue;
+    const svg = figuurSvg(f);
+    if (gezien.has(svg)) continue;
+    gezien.add(svg);
+    const px = Math.max(400, Math.min(1600, Math.round(((f.breedteCm ?? 10) / 2.54) * 150)));
+    const png = await pngRender(svg, px);
+    uit.push({ nr: q.nr, url: `data:image/png;base64,${Buffer.from(png).toString("base64")}` });
+  }
+  return uit.slice(0, 16);
+}
+/** Budget dat de generatie/herstel-aanroepen vrijlaten voor de rechter (3 runs met figuren). */
+const RECHTER_RESERVE = 0.22;
+const BEELD_TOKENS = 1500; // ruime schatting per afbeelding (detail high)
+
+async function rechter(toets, input, budget, figuren = []) {
   const R = await S("eval/rubric.ts");
   const { MODELLEN } = await S("config.ts");
-  const prompt = R.rechterPrompt(toets, input);
-  if (!budgetCheck(budget, worstCase(prompt.length + R.RECHTER_SYSTEM.length, 6000), "rechter")) return null;
+  const tekst = R.rechterPrompt(toets, input) + (figuren.length ? `\n\nDe figuren uit het leerlingdeel zijn hieronder als afbeeldingen bijgevoegd (figuur bij vraag N). Een vraag met [figuur] heeft dus wél een figuur: beoordeel de figuur zelf (klopt hij bij de vraag, is hij leesbaar, zijn de gevraagde waarden af te lezen) en trek géén punten af voor 'ontbrekende figuren'.` : "");
+  const content = figuren.length ? [{ type: "text", text: tekst }, ...figuren.flatMap((f) => [{ type: "text", text: `Figuur bij vraag ${f.nr}` }, { type: "image_url", image_url: { url: f.url, detail: "high" } }])] : tekst;
+  const sch = worstCase(tekst.length + R.RECHTER_SYSTEM.length + figuren.length * BEELD_TOKENS * 3, 6000);
+  if (!budgetCheck(budget, sch, "rechter")) return null;
   const stop = hartslag();
   try {
     const r = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${process.env.TOETSKI_XAI_API_KEY}` },
       signal: AbortSignal.timeout(170_000),
-      body: JSON.stringify({ model: MODELLEN.controle, reasoning_effort: "low", temperature: 0, max_tokens: 6000, response_format: { type: "json_object" }, messages: [{ role: "system", content: R.RECHTER_SYSTEM }, { role: "user", content: prompt }] }),
+      body: JSON.stringify({ model: MODELLEN.controle, reasoning_effort: "low", temperature: 0, max_tokens: 6000, response_format: { type: "json_object" }, messages: [{ role: "system", content: R.RECHTER_SYSTEM }, { role: "user", content }] }),
     });
     const j = await r.json();
     const usd = (j.usage?.cost_in_usd_ticks ?? 0) / 1e10;
-    boekKosten("rechter", usd);
+    boekKosten("rechter", usd, { tokensIn: j.usage?.prompt_tokens, tokensUit: j.usage?.completion_tokens, beelden: figuren.length, status: r.status });
+    if (!r.ok) throw new Error(`rechter HTTP ${r.status}: ${JSON.stringify(j).slice(0, 200)}`);
     const o = R.parseRechter(j.choices?.[0]?.message?.content ?? "");
-    if (o) o.kostenUsd = usd;
+    if (o) {
+      o.kostenUsd = usd;
+      o.versie = `${o.versie ?? R.RECHTER_VERSIE}${figuren.length ? "+figuren" : ""}`;
+    }
     return o ?? null;
   } finally {
     stop();
+    vrijgeven(sch);
   }
 }
 
@@ -154,11 +191,11 @@ async function genereer(caseNaam, droog) {
   const uit = join(resolve(opt("uit", join(ROOT, "eval-out"))), String(naam), caseNaam);
   mkdirSync(uit, { recursive: true });
   console.log(`${caseNaam}: doel ${kal.items} vragen / ${kal.punten} p · RTTI ${JSON.stringify(inv.rttiDoel)}`);
-  const chat = droog ? await droogChat() : await maakChat(budget);
+  const chat = droog ? await droogChat() : await maakChat(budget - RECHTER_RESERVE);
   const t0 = Date.now();
   let g;
   try {
-    g = await G.genereerSpec(inv, kal, chat, { maxTokens: 30000 });
+    g = await G.genereerSpec(inv, kal, chat);
   } catch (e) {
     console.error(`generatie mislukt: ${e?.message ?? e}`);
     writeFileSync(join(uit, "resultaat.json"), JSON.stringify({ case: caseNaam, ok: false, fout: String(e?.message ?? e), kostenUsd: runKosten }, null, 1));
@@ -180,13 +217,15 @@ async function genereer(caseNaam, droog) {
   writeFileSync(join(uit, "docent.docx"), docx.docent);
   const toets = G.alsGegenereerdeToets(rap.res, inv, kal);
   writeFileSync(join(uit, "toets.json"), JSON.stringify(toets, null, 1));
-  writeFileSync(join(uit, "keuring.json"), JSON.stringify({ eerste: g.eerste.fouten, na: rap.fouten, feiten: rap.feiten, hersteld: g.hersteld, keuringen: rap.res.keuringen.map(({ figuren, ...k }) => ({ ...k, figuren: figuren.map(({ svg: _s, ...f }) => f) })) }, null, 1));
+  writeFileSync(join(uit, "keuring.json"), JSON.stringify({ eerste: g.eerste.fouten, na: rap.fouten, feiten: rap.feiten, hersteld: g.hersteld, stappen: g.stappen, gerichteAanroepen: g.gerichteAanroepen, keuringen: rap.res.keuringen.map(({ figuren, ...k }) => ({ ...k, figuren: figuren.map(({ svg: _s, ...f }) => f) })) }, null, 1));
   // Rubriek + rechter.
   const n = droog ? 0 : Number(opt("rechter", 3));
   const input = { ...c.input };
   let oordeel = null;
   if (n > 0) {
-    const lijst = (await Promise.all(Array.from({ length: n }, () => rechter(toets, input, budget).catch((e) => (console.error(`rechter: ${e?.message}`), null))))).filter(Boolean);
+    const figuren = await rechterFiguren(rap.res);
+    console.log(`rechter: ${figuren.length} figuren als afbeelding`);
+    const lijst = (await Promise.all(Array.from({ length: n }, () => rechter(toets, input, budget, figuren).catch((e) => (console.error(`rechter: ${e?.message}`), null))))).filter(Boolean);
     if (lijst.length) {
       const gem = (xs) => Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) / 100;
       const punten = {};
@@ -221,6 +260,8 @@ async function genereer(caseNaam, droog) {
     eersteKeuringFouten: g.eerste.fouten.length,
     restFouten: rap.fouten,
     hersteld: g.hersteld,
+    stappen: g.stappen,
+    gerichteAanroepen: g.gerichteAanroepen,
     topProblemen: oordeel?.topProblemen ?? [],
     kostenUsd: Math.round(runKosten * 10000) / 10000,
     tijden: { generatieMs: tGen - t0, renderMs },

@@ -10,7 +10,7 @@ import { figuurSvg } from "./figuren/index.ts";
 import { cijferGrafiekSvg, cijferTabel, cesuur, formule } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
 import { PAGE_A4, PAGE_MARGINS, pageNumberChrome } from "../docx-pagina.ts";
-import { antwoordKop, bandTekst, contextTitel, INSTRUCTIE_CSE, INVULVELDEN, matrijsTotalen, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seNaam, UITLEG_DOCENT, UITLEG_SE, vraagstukBereik } from "./opmaak.ts";
+import { antwoordKop, bandTekst, contextTitel, indelingKop, INSTRUCTIE_CSE, INVULVELDEN, jaarVan, matrijsTotalen, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, vraagstukBereik } from "./opmaak.ts";
 
 type Kind = Paragraph | Table;
 const FONT = "Arial";
@@ -48,8 +48,9 @@ function runs(markup: string, basis: { size?: number; bold?: boolean; kleur?: st
   return out;
 }
 
-const para = (markup: string, o: { size?: number; bold?: boolean; kleur?: string; na?: number; voor?: number; links?: number; midden?: boolean; rechts?: boolean; lijnOnder?: boolean } = {}) =>
+const para = (markup: string, o: { size?: number; bold?: boolean; kleur?: string; na?: number; voor?: number; links?: number; midden?: boolean; rechts?: boolean; lijnOnder?: boolean; bijVolgende?: boolean } = {}) =>
   new Paragraph({
+    keepNext: o.bijVolgende || undefined,
     children: runs(markup, o),
     spacing: { after: o.na ?? 60, before: o.voor ?? 0 },
     indent: o.links ? { left: o.links } : undefined,
@@ -141,7 +142,9 @@ async function vragen(qs: OpmaakVraag[], docent: boolean, png: PngRender, alle: 
   for (const q of qs) {
     if (q.se !== vorige) {
       out.push(new Paragraph({ children: [new PageBreak()] }));
-      out.push(tabel([[cel([para(`${seNaam(q.se)} · ${SE_INFO[q.se].naam}`, { bold: true, kleur: "FFFFFF", size: 26, midden: true, na: 0 })], { w: TW, bg: SE_INFO[q.se].kleur })]], [TW]), para("", { na: 120 }));
+      const l = seLabel(q.se, q.jaar);
+      const o = seOmschrijving(q.se, q.jaar);
+      out.push(tabel([[cel([para(l === o ? l : `${l} · ${o}`, { bold: true, kleur: "FFFFFF", size: 26, midden: true, na: 0 })], { w: TW, bg: SE_INFO[q.se].kleur })]], [TW]), para("", { na: 120 }));
       vorige = q.se;
     }
     out.push(...(await vraag(q, docent, png, alle)));
@@ -150,12 +153,13 @@ async function vragen(qs: OpmaakVraag[], docent: boolean, png: PngRender, alle: 
 }
 
 function legenda(qs: OpmaakVraag[]): Table {
+  const jaar = jaarVan(qs);
   return tabel(
     SE_ORDE.filter((k) => qs.some((q) => q.se === k)).map((k) => {
       const n = qs.filter((q) => q.se === k);
       return [
-        cel([para(seNaam(k), { bold: true, kleur: "FFFFFF", size: 20, midden: true, na: 0 })], { w: 1304, bg: SE_INFO[k].kleur, va: true }),
-        cel([para(SE_INFO[k].naam, { size: 19, na: 0 })], { w: TW - 3004, bg: SE_INFO[k].tint, va: true }),
+        cel([para(seLabel(k, jaar), { bold: true, kleur: "FFFFFF", size: 20, midden: true, na: 0 })], { w: 1304, bg: SE_INFO[k].kleur, va: true }),
+        cel([para(seOmschrijving(k, jaar), { size: 19, na: 0 })], { w: TW - 3004, bg: SE_INFO[k].tint, va: true }),
         cel([para(`${n.length} ${n.length === 1 ? "vraag" : "vragen"} · ${n.reduce((s, q) => s + q.punten, 0)} p`, { size: 19, na: 0 })], { w: 1700, bg: SE_INFO[k].tint, va: true }),
       ];
     }),
@@ -212,12 +216,12 @@ function voorbladDocx(toets: ToetsSpec, qs: OpmaakVraag[], deel: { naam: string;
 
 async function leerlingVragenDocx(qs: OpmaakVraag[], png: PngRender): Promise<Kind[]> {
   const out: Kind[] = [];
-  let vorige: SeCode | null = null;
   for (const [i, q] of qs.entries()) {
-    if (i > 0 && (q.se !== vorige || (q.vraagstuk?.eerste && q.vraagstuk.aantal > 1))) out.push(new Paragraph({ children: [new PageBreak()] }));
-    vorige = q.se;
+    // Word kan niet meten: na de instructiepagina een paginagrens, daarna geen vaste grens per vraagstuk
+    // (korte vraagstukken delen een pagina); de titel blijft bij de context (keepNext).
+    if (i === 0) out.push(new Paragraph({ children: [new PageBreak()] }));
     const titel = contextTitel(q);
-    if (titel) out.push(para(`<b>${titel}</b>`, { size: 26, lijnOnder: true, links: 540, voor: 120, na: 200 }));
+    if (titel) out.push(para(`<b>${titel}</b>`, { size: 26, lijnOnder: true, links: 540, voor: i === 0 ? 120 : 360, na: 200, bijVolgende: true }));
     const blok: Kind[] = (q.gedeeldeContext ?? []).map((c) => para(c, { size: LB, na: 100 }));
     if (q.tabel) blok.push(tabel(q.tabel.map((r, ri) => r.map((c, j) => cel([para(c, { size: 20, bold: ri === 0 || j === 0, na: 0 })], { w: Math.floor((TW - IND) / r.length), rand: true }))), q.tabel[0].map(() => Math.floor((TW - IND) / q.tabel![0].length)), { kleur: "#000000", size: 4 }));
     const aanloop = q.aanloop ?? [];
@@ -257,7 +261,7 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
   const px = (cm: number) => Math.round((cm / 2.54) * 96);
   const D: Kind[] = [
     ...kop(toets, "Docentdeel: antwoordsleutel, toetsmatrijs en cijferberekening", res.vragen),
-    para(UITLEG_SE, { na: 120 }),
+    para(uitlegIndeling(toets.klas), { na: 120 }),
     legenda(res.vragen),
     para(UITLEG_DOCENT, { voor: 160 }),
     new Paragraph({ children: [new PageBreak()] }),
@@ -269,7 +273,7 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
       1,
       (r) => res.vragen[r]?.se ?? "ALG",
     ),
-    ...[["Totaal per SE-toets", t.perSe], ["Totaal per RTTI-categorie", t.perRtti], ["Totaal per examenniveau", t.perNiveau], ["Totaal per hoofdstuk / onderwerp", t.perHoofdstuk]].flatMap(([titel, rijen]) => [
+    ...[[`Totaal per ${jaarVan(res.vragen) !== undefined && jaarVan(res.vragen)! < 4 ? "onderwerp" : "SE-toets"}`, t.perSe.map((r) => ({ ...r, sleutel: seLabel(r.sleutel as SeCode, jaarVan(res.vragen)) }))], ["Totaal per RTTI-categorie", t.perRtti], ["Totaal per examenniveau", t.perNiveau], ["Totaal per hoofdstuk / onderwerp", t.perHoofdstuk]].flatMap(([titel, rijen]) => [
       para(`<b>${titel as string}</b>`, { voor: 200, na: 60 }),
       rasterTabel(["", "vragen", "punten", "%"], [...(rijen as typeof t.perSe).map((r) => [r.sleutel, String(r.vragen), String(r.punten), r.pct.toFixed(1).replace(".", ",")]), ["Totaal", String(t.vragen), String(t.punten), "100,0"]], [2950, 900, 900, 800]),
     ]),
@@ -283,10 +287,10 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
     ),
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200 }, children: [new ImageRun({ type: "png", data: await png(gsvg, Math.round((12 / 2.54) * 200)), transformation: { width: px(12), height: px(gh) }, altText: { title: "Cijfergrafiek", description: "cijfer tegen score", name: "cijfergrafiek" } })] }),
     new Paragraph({ children: [new PageBreak()] }),
-    para("Register: vraagtype → SE-toets → onderwerp", { bold: true, size: 26, na: 120 }),
+    para(`Register: vraagtype → ${indelingKop(jaarVan(res.vragen))} → hoofdstuk`, { bold: true, size: 26, na: 120 }),
     (() => {
       const qs = [...res.vragen].sort((a, b) => a.vraagtype.nr - b.vraagtype.nr || a.nr - b.nr);
-      return rasterTabel(["Nr", "Vraagtype", "SE-toets", "Ook in", "Hoofdstuk / onderwerp", "Vraag"], qs.map((q) => [String(q.vraagtype.nr), `${q.vraagtype.naam} (${q.vraagtype.code})`, q.code, q.ookIn ?? "–", q.hoofdstuk, String(q.nr)]), [454, 3685, 1077, 964, 2155, 735], 2, (r) => qs[r].se);
+      return rasterTabel(["Nr", "Vraagtype", indelingKop(jaarVan(res.vragen)), "Ook in", "Hoofdstuk / onderwerp", "Vraag"], qs.map((q) => [String(q.vraagtype.nr), `${q.vraagtype.naam} (${q.vraagtype.code})`, q.code, q.ookIn ?? "–", q.hoofdstuk, String(q.nr)]), [454, 3685, 1077, 964, 2155, 735], 2, (r) => qs[r].se);
     })(),
     ...(await vragen(res.vragen, true, png, res.vragen)),
   ];
