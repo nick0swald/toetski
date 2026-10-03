@@ -19,7 +19,20 @@ export type BronLeesResultaat = {
   paginaAantal?: number;
   afgekapt: boolean;
   scan?: boolean;
+  /** Zichtbare waarschuwing als er tekst is weggelaten (wat en hoeveel); nooit stil inkorten. */
+  melding?: string;
 };
+
+const nl = (n: number) => n.toLocaleString("nl-NL");
+
+/** Waarschuwing die noemt wat er wegvalt als de tekst langer is dan het maximum (null = niets weggelaten). */
+export function inkortMelding(volledig: string, max: number, naam = "De lesstof"): string | null {
+  if (volledig.length <= max) return null;
+  const weg = volledig.slice(max);
+  const koppen = [...new Set([...weg.matchAll(/^[ \t]*((?:H\d+|Hoofdstuk \d+|Paragraaf \d+|\d+\.\d+)\b[^\n]{0,50})/gim)].map((m) => m[1]!.trim().replace(/\s+/g, " ")))].slice(0, 6);
+  const wat = koppen.length ? `met o.a. ${koppen.join("; ")}` : `vanaf "${weg.trim().slice(0, 60).replace(/\s+/g, " ")}…"`;
+  return `${naam} is te lang (${nl(volledig.length)} tekens, maximaal ${nl(max)}). Weggelaten: de laatste ${nl(weg.length)} tekens, ${wat}. Lever die stof apart in als je hem wilt toetsen.`;
+}
 
 function isPdf(file: File): boolean {
   const name = file.name.toLowerCase();
@@ -34,10 +47,10 @@ function isDocx(file: File): boolean {
   );
 }
 
-function kappen(text: string, max: number): { text: string; afgekapt: boolean } {
+function kappen(text: string, max: number): { text: string; afgekapt: boolean; melding?: string } {
   const trimmed = text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   if (trimmed.length <= max) return { text: trimmed, afgekapt: false };
-  return { text: trimmed.slice(0, max).trimEnd() + "\n\n[tekst ingekort]", afgekapt: true };
+  return { text: trimmed.slice(0, max).trimEnd() + "\n\n[tekst ingekort]", afgekapt: true, melding: inkortMelding(trimmed, max) ?? undefined };
 }
 
 function tekstUitItems(items: Array<{ str?: unknown }>): string {
@@ -89,13 +102,17 @@ async function leesPdf(
       "Deze pdf is een scan zonder leesbare tekst. Probeer een scherpere pdf, of plak de lesstof.",
     );
   }
-  const { text, afgekapt } = kappen(raw, MAX_BRON_TEKENS);
+  const { text, afgekapt, melding } = kappen(raw, MAX_BRON_TEKENS);
+  const maxPag = scan ? 50 : 80;
+  const pagMelding = paginaAantal > maxPag ? `${file.name}: alleen pagina 1–${maxPag} van ${paginaAantal} zijn gelezen; pagina ${maxPag + 1}–${paginaAantal} zijn weggelaten.` : "";
+  const alle = [pagMelding, melding ? `${file.name}: ${melding}` : ""].filter(Boolean).join(" ");
   return {
     text,
     soort: "pdf",
     paginaAantal,
-    afgekapt: afgekapt || paginaAantal > (scan ? 50 : 80),
+    afgekapt: afgekapt || paginaAantal > maxPag,
     scan,
+    ...(alle ? { melding: alle } : {}),
   };
 }
 
@@ -111,7 +128,7 @@ export async function leesBronBestand(
     const result = await leesPdf(file, onVoortgang);
     if (maxTekens < MAX_BRON_TEKENS) {
       const gekapt = kappen(result.text, maxTekens);
-      return { ...result, ...gekapt };
+      return { ...result, ...gekapt, ...(gekapt.melding ? { melding: `${file.name}: ${gekapt.melding}` } : {}) };
     }
     return result;
   }
@@ -119,13 +136,13 @@ export async function leesBronBestand(
     const mammoth = await import("mammoth");
     const buf = await file.arrayBuffer();
     const extracted = await mammoth.extractRawText({ arrayBuffer: buf });
-    const { text, afgekapt } = kappen(extracted.value, maxTekens);
+    const { text, afgekapt, melding } = kappen(extracted.value, maxTekens);
     if (!text) throw new Error("Geen tekst in dit Word-bestand.");
-    return { text, soort: "docx", afgekapt };
+    return { text, soort: "docx", afgekapt, ...(melding ? { melding: `${file.name}: ${melding}` } : {}) };
   }
-  const { text, afgekapt } = kappen(await file.text(), maxTekens);
+  const { text, afgekapt, melding } = kappen(await file.text(), maxTekens);
   if (!text) throw new Error("Geen tekst in dit bestand.");
-  return { text, soort: "tekst", afgekapt };
+  return { text, soort: "tekst", afgekapt, ...(melding ? { melding: `${file.name}: ${melding}` } : {}) };
 }
 
 export function bestandTeGroot(file: File): boolean {
