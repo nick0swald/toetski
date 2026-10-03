@@ -59,6 +59,15 @@ export function leidJuistAf(d: Pick<Deelvraag, "opties" | "antwoordmodel">): Let
     const bevat = on.flatMap((o, i) => (o.length >= 3 && new RegExp(`(^| )${esc(o)}( |$)`).test(r) ? [i] : []));
     if (bevat.length === 1) return letter(bevat[0]!);
   }
+  // Uitleg in plaats van een letter: de optie die duidelijk de meeste inhoudswoorden met de uitleg deelt (≥ 2 en
+  // minstens twee keer zoveel als de nummer twee).
+  const stop = new Set("zijn naar door deze wordt worden heeft hebben maar want omdat alleen ook niet geen meer minder over onder naast tussen haar hun zelf".split(" "));
+  const woorden = (t: string) => new Set(norm(t).split(" ").filter((w) => w.length >= 4 && !stop.has(w)).map((w) => w.replace(/(en|e|s)$/, "")));
+  const uitleg = woorden(regels.join(" "));
+  const score = opties.map((o) => [...woorden(o)].filter((w) => uitleg.has(w)).length);
+  const volgorde = [...score.keys()].sort((a, b) => score[b]! - score[a]!);
+  const [eerste, tweede] = [score[volgorde[0]!]!, score[volgorde[1]!] ?? 0];
+  if (eerste >= 2 && eerste >= 2 * tweede) return letter(volgorde[0]!);
   return undefined;
 }
 
@@ -424,6 +433,44 @@ export function rondSig(x: number, n: number): string | null {
   const s = dec >= 0 ? nl(x, dec) : nl(Number(x.toPrecision(n)));
   return significant(s) === n ? s : null;
 }
+const GROOTHEID_NAAM: Record<string, string> = { Hz: "een frequentie", "m/s": "een snelheid", "km/h": "een snelheid", s: "een tijd", min: "een tijd", h: "een tijd", m: "een afstand", km: "een afstand", cm: "een lengte", kg: "een massa", g: "een massa", N: "een kracht", W: "een vermogen", kW: "een vermogen", J: "een energie", kJ: "een energie", kWh: "een energie", V: "een spanning", A: "een stroomsterkte", "°C": "een temperatuur", dB: "een geluidsniveau" };
+/**
+ * Tekstparameter die niet in de vraagtekst staat: staat er in het antwoordmodel een regel "Ga uit van …" met die
+ * waarde, dan verhuist die regel naar de vraag; anders komt er "Ga uit van <grootheid> van <waarde> <eenheid>." voor.
+ */
+function fixGegevenInTekst(v: VraagstukSpec, d: Deelvraag, stappen: AutoStap[]): void {
+  const tekst = () => kaal([...v.context, ...(d.context ?? []), d.stam, ...(d.tabel ?? []).flat(), ...(d.opties ?? [])].join(" "));
+  for (const p of d.parameters ?? []) {
+    if (p.bron !== "tekst") continue;
+    const w = p.weergave ?? nl(p.waarde);
+    if (getalInTekst(w, tekst())) continue;
+    const i = d.antwoordmodel.regels.findIndex((r) => /^\s*ga (er)?\s*(van )?uit\b/i.test(kaal(r)) && getalInTekst(w, kaal(r)));
+    let zin: string;
+    if (i >= 0) {
+      zin = kaal(d.antwoordmodel.regels[i]!).replace(/\b[A-Za-z]+_[A-Za-z0-9]+\s*=\s*/g, "").replace(/\.?\s*$/, ".");
+      d.antwoordmodel.regels.splice(i, 1);
+    } else {
+      const e = (p.eenheid ?? "").trim();
+      zin = `Ga uit van ${GROOTHEID_NAAM[e] ? `${GROOTHEID_NAAM[e]} van ` : ""}${w}${e ? ` ${e}` : ""}.`;
+    }
+    d.stam = `${zin} ${d.stam}`;
+    stappen.push({ id: d.id, wat: `gegeven ${p.naam} = ${w} stond niet in de vraag → "${zin}"` });
+  }
+}
+
+/** Afgeronde uitkomst die in het antwoordmodel in een andere notatie staat ("470" vs "4,7 × 10²"): neem die notatie over. */
+function fixAfgerondVorm(d: Deelvraag, stappen: AutoStap[]): void {
+  const tekst = kaal([...d.antwoordmodel.regels, ...d.scorestappen.map((x) => x.omschrijving)].join(" "));
+  for (const b of d.berekeningen ?? []) {
+    if (!b.afgerond || getalInTekst(b.afgerond, tekst)) continue;
+    const doel = leesNl(b.afgerond);
+    const kand = [...tekst.matchAll(/\d+(?:,\d+)?(?:\s*[×x·]\s*10\s*(?:\^\s*-?\d+|[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+))?/g)].map((m) => m[0].trim()).filter((t) => Math.abs(leesNl(t) - doel) <= 1e-9 * Math.max(1, Math.abs(doel)));
+    if (!kand.length) continue;
+    stappen.push({ id: d.id, wat: `afgerond ${b.afgerond} → "${kand.at(-1)}" (zo staat het in het antwoordmodel)` });
+    b.afgerond = kand.at(-1)!;
+  }
+}
+
 function fixValidatie(v: VraagstukSpec, d: Deelvraag, stappen: AutoStap[]): void {
   if (!d.vraagtype) {
     normaliseerVraagtype(d);
@@ -439,6 +486,8 @@ function fixValidatie(v: VraagstukSpec, d: Deelvraag, stappen: AutoStap[]): void
     stappen.push({ id: d.id, wat: `losse juiste letter ${d.antwoordmodel.juist} bij een open vraag weggehaald` });
     delete d.antwoordmodel.juist;
   }
+  fixGegevenInTekst(v, d, stappen);
+  fixAfgerondVorm(d, stappen);
   const a = afrondDoel(v, d);
   if (!a || !(a.sf > a.verwacht + 1 || a.sf < a.ondergrens)) return;
   const oud = a.laatste.afgerond!;
