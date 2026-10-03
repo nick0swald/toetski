@@ -202,7 +202,8 @@ async function genereer(caseNaam, droog) {
   const tGen = Date.now();
   writeFileSync(join(uit, "spec.json"), JSON.stringify(g.gen, null, 1));
   const rap = g.rapport;
-  console.log(`keuring 1: ${g.eerste.fouten.length} fout(en)${g.hersteld ? ` → na herstel ${rap.fouten.length}` : ""}`);
+  const nAuto = g.stappen.filter((s) => s.wat.startsWith("auto:")).length;
+  console.log(`keuring 1: ${g.eersteRuw?.fouten.length ?? g.eerste.fouten.length} fout(en) · na ${nAuto} auto-fix(es) ${g.eerste.fouten.length}${g.hersteld ? ` → na herstel ${rap.fouten.length}` : ""} · gerichte aanroepen ${g.gerichteAanroepen}`);
   for (const f of rap.fouten.slice(0, 30)) console.log(`  - ${f}`);
   // Render (deterministisch; alleen geplaatste vragen).
   const tR = performance.now();
@@ -215,7 +216,7 @@ async function genereer(caseNaam, droog) {
   writeFileSync(join(uit, "docent.docx"), docx.docent);
   const toets = G.alsGegenereerdeToets(rap.res, inv, kal);
   writeFileSync(join(uit, "toets.json"), JSON.stringify(toets, null, 1));
-  writeFileSync(join(uit, "keuring.json"), JSON.stringify({ eerste: g.eerste.fouten, na: rap.fouten, feiten: rap.feiten, hersteld: g.hersteld, stappen: g.stappen, gerichteAanroepen: g.gerichteAanroepen, keuringen: rap.res.keuringen.map(({ figuren, ...k }) => ({ ...k, figuren: figuren.map(({ svg: _s, ...f }) => f) })) }, null, 1));
+  writeFileSync(join(uit, "keuring.json"), JSON.stringify({ eersteRuw: g.eersteRuw?.fouten, eerste: g.eerste.fouten, na: rap.fouten, feiten: rap.feiten, hersteld: g.hersteld, stappen: g.stappen, gerichteAanroepen: g.gerichteAanroepen, keuringen: rap.res.keuringen.map(({ figuren, ...k }) => ({ ...k, figuren: figuren.map(({ svg: _s, ...f }) => f) })) }, null, 1));
   // Rubriek + rechter.
   const n = droog ? 0 : Number(opt("rechter", 2));
   const input = { ...c.input };

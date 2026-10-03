@@ -236,12 +236,37 @@ export function paragraafKern(bronmateriaal: string, antwoorden?: string): Map<s
     for (let j = i + 1; j < regels.length && !/^\s*(?:paragraaf\s+|§\s*)?\d{1,2}\.\d{1,2}\.?\s+[A-ZÀ-Ý]/.test(regels[j]!); j++) rest.push(regels[j]!);
     body.set(p.code, rest.join(" "));
   }
-  const kandidaat = new Map(pars.map((p) => [p.code, [...new Set([...woorden(p.titel), ...woorden((body.get(p.code) ?? "").split(/(?<=[.!?])\s/)[0] ?? "")])]]));
-  const df = new Map<string, number>();
-  for (const p of pars) for (const w of new Set(woorden(`${p.titel} ${body.get(p.code) ?? ""}`).map((x) => x.slice(0, 5)))) df.set(w, (df.get(w) ?? 0) + 1);
+  const kandidaat = new Map(pars.map((p) => [p.code, [...new Set([...woorden(p.titel), ...woorden((body.get(p.code) ?? "").split(/(?<=[.!?])\s/)[0] ?? "")])].filter((w) => !KERN_STOP.has(w))]));
+  const df5 = new Map<string, number>();
+  const dfVol = new Map<string, number>();
+  for (const p of pars) {
+    const ws = woorden(`${p.titel} ${body.get(p.code) ?? ""}`);
+    for (const w of new Set(ws.map((x) => x.slice(0, 5)))) df5.set(w, (df5.get(w) ?? 0) + 1);
+    for (const w of new Set(ws)) dfVol.set(w, (dfVol.get(w) ?? 0) + 1);
+  }
   const grens = Math.max(2, Math.ceil(pars.length / 2));
-  return new Map([...kandidaat].map(([c, ws]) => [c, ws.filter((w) => (df.get(w.slice(0, 5)) ?? 0) < grens)]));
+  const algemeen = [...dfVol].filter(([w, n]) => n >= grens && w.length >= 4).map(([w]) => w);
+  // Samenstelling met een algemeen woord ("geluidssnelheid" in een hoofdstuk Geluid): het hele woord telt als het zelf
+  // zeldzaam is, en het tweede deel ("snelheid") als kernwoord.
+  const kern = (w: string): string[] => {
+    if ((df5.get(w.slice(0, 5)) ?? 0) < grens) return [w];
+    const uit: string[] = [];
+    if ((dfVol.get(w) ?? 0) < grens && w.length >= 9) uit.push(w);
+    for (const a of algemeen) {
+      if (!w.startsWith(a) || w.length - a.length < 4) continue;
+      let r = w.slice(a.length);
+      if (/^s[^aeiouy]/.test(r) && r.length >= 5) r = r.slice(1);
+      if (r.length >= 4 && !KERN_STOP.has(r) && (df5.get(r.slice(0, 5)) ?? 0) < grens) uit.push(r);
+    }
+    return uit;
+  };
+  return new Map([...kandidaat].map(([c, ws]) => [c, [...new Set(ws.flatMap(kern))]]));
 }
+
+/** Te algemene woorden voor een paragraafkern (staan in elke eerste zin). */
+const KERN_STOP = new Set(["nodig", "zich", "tijd", "heeft", "hebben", "worden", "wordt", "kunnen", "maken", "laten", "doen", "gaat", "veel", "meer", "elkaar", "dezelfde", "ongeveer", "daarom", "eerst", "later", "soorten", "voorwerp", "andere", "bestaat", "elke", "eigen", "nooit", "zomaar", "heet", "aantal", "meet"]);
+/** Vergelijkingsprefix van een kernwoord: kort woord 5 letters, lang (samengesteld) woord ~70 % ("geluidssnel…" raakt "geluid…" niet). */
+const kernPrefix = (w: string) => w.slice(0, Math.max(5, Math.min(w.length, Math.ceil(w.length * 0.7))));
 
 /** Telt een deelvraag met paragraafcode p in het leerdoel echt mee voor p? Alleen als hij een kernwoord van p raakt. */
 export function raaktKern(d: Pick<Deelvraag, "stam" | "context" | "opties" | "begrip" | "leerdoel" | "antwoordmodel">, kern: string[] | undefined): boolean {
@@ -249,21 +274,25 @@ export function raaktKern(d: Pick<Deelvraag, "stam" | "context" | "opties" | "be
   const t = norm([alleTekst(d as Deelvraag), d.begrip ?? "", (d.leerdoel ?? "").replace(/\d{1,2}\.\d{1,2}/g, ""), ...(d.antwoordmodel?.regels ?? [])].join(" "));
   // Op woordbegin ("betekent" raakt "tekenen" niet).
   const ws = ` ${t}`;
-  return kern.some((w) => ws.includes(` ${w.slice(0, Math.min(w.length, 5))}`));
+  return kern.some((w) => ws.includes(` ${kernPrefix(w)}`));
 }
 
 // ── 2. getal-weggevers ───────────────────────────────────────────────────────────────────────────
 /**
  * Getal-weggever: de afgeronde uitkomst van A staat MET eenheid (dezelfde grootheid) in de tekst of opties van een
  * andere deelvraag B van HETZELFDE vraagstuk (zelfde context). Een los getal of hetzelfde getal in een ander
- * vraagstuk is toeval en telt niet. Gegeven waarden (parameters) tellen nooit.
+ * vraagstuk is toeval en telt niet. Gegeven waarden van het vraagstuk of van A zelf tellen niet; "Ga uit van <de
+ * uitkomst van A>" in B wel.
  */
 export function zoekGetalWeggevers(vs: VraagstukSpec[]): string[] {
   const uit: string[] = [];
   for (const v of vs) {
-    const gegeven = new Set([...(v.parameters ?? []), ...v.deelvragen.flatMap((d) => d.parameters ?? [])].map((p) => p.weergave ?? String(p.waarde).replace(".", ",")));
+    // Gegeven = parameters van het vraagstuk en van A zelf. Een parameter van B met dezelfde waarde als de uitkomst van A
+    // is juist de weggever ("Ga uit van 2,5 m/s²" terwijl A die 2,5 laat berekenen).
+    const weergave = (p: Parameter) => p.weergave ?? String(p.waarde).replace(".", ",");
     for (const a of v.deelvragen)
       for (const bk of a.berekeningen ?? []) {
+        const gegeven = new Set([...(v.parameters ?? []), ...(a.parameters ?? [])].map(weergave));
         const u = bk.afgerond;
         if (!u || gegeven.has(u) || u.replace(/[^0-9]/g, "").length < 2) continue;
         const eenheid = (bk.eenheid ?? "").trim();
@@ -310,4 +339,57 @@ export function normaliseerTekenfiguur(f: FiguurSpec | undefined, teken: boolean
   if (reeksen.length === f.reeksen.length) return f;
   const controle = reeksen.length ? f.controle : (f.controle ?? []).filter((c) => !/^y@/.test(c.meting));
   return { ...f, reeksen, controle: controle?.length ? controle : undefined };
+}
+
+// ── 3b. begrip-herhaling over vraagstukken (bloklijst) ───────────────────────────────────────────
+/**
+ * Begrippen/redeneringen die Grok graag herhaalt (gezien in ronde 1–4; de rechter strafte ze af). Een deelvraag toetst
+ * het begrip als `re` in de stam, opties, het begrip-label of het antwoord staat (en `niet` niet). `max` = hoeveel
+ * deelvragen in de hele toets dat begrip mogen toetsen. `bron` = alleen noemen in de prompt als de lesstof dit raakt.
+ */
+export const BEGRIP_BLOKLIJST: { naam: string; re: RegExp; niet?: RegExp; max: number; bron: RegExp }[] = [
+  { naam: "maatregel tegen geluidshinder bij bron, tussenstof of ontvanger", re: /\b(maatregel\w*|geluidshinder|hinder\w*|oordop\w*|geluidsscherm\w*|geluidswal\w*|dempen|geluidsisolatie|dubbel glas)\b[\s\S]*\b(bron|tussenstof|ontvanger)\b|\b(bron|tussenstof|ontvanger)\b[\s\S]*\b(maatregel\w*|geluidshinder|hinder\w*|beperk\w*)\b/i, max: 1, bron: /hinder/i },
+  { naam: "geluidsketen bron → tussenstof → ontvanger benoemen", re: /\bbron\b[\s\S]*\btussenstof\b[\s\S]*\bontvanger\b|\b(geluidsbron|ontvanger)\b[\s\S]*\bwat is\b/i, niet: /\b(maatregel\w*|hinder\w*|beperk\w*)\b/i, max: 1, bron: /tussenstof/i },
+  { naam: "geluid heeft een tussenstof nodig (luchtledig)", re: /\b(luchtledig\w*|vacu[uü]m|zonder lucht|geen lucht|tussenstof nodig|ruimte zonder)\b/i, max: 1, bron: /tussenstof/i },
+  { naam: "welke stof is de tussenstof / geleidt geluid", re: /\btussenstof\b/i, niet: /\b(maatregel\w*|hinder\w*|beperk\w*|luchtledig\w*|vacu[uü]m|zonder lucht|bron\b[\s\S]*ontvanger)\b/i, max: 1, bron: /tussenstof/i },
+  { naam: "geluid ontstaat door trillen (geluidsbron)", re: /\b(geluidsbron|ontstaat\b[\s\S]*\bgeluid|geluid\b[\s\S]*\bontstaat|trilt|trillend)\b/i, niet: /\b(frequentie|trillingstijd|amplitude|hokje)\b/i, max: 1, bron: /trill/i },
+  { naam: "veilige blootstellingstijd bij dB (vuistregel)", re: /\b(veilig\w*|vuistregel|blootstel\w*|gehoorschade|maximaal\s+\d+\s*(uur|minuten))\b[\s\S]*\bdB\b|\bdB\b[\s\S]*\b(veilig\w*|vuistregel|blootstel\w*|hoe lang)\b/i, max: 1, bron: /\bdB\b|decibel/i },
+  { naam: "onderdelen van het oor", re: /\b(trommelvlies|slakkenhuis|gehoorbeentjes|hamer|aambeeld|stijgbeugel|oorschelp|gehoorgang|haarcellen|haartjes|gehoorzenuw)\b/i, max: 2, bron: /trommelvlies|slakkenhuis/i },
+  { naam: "amplitude en luidheid", re: /\bamplitude\b[\s\S]*\b(hard\w*|zacht\w*|luid\w*|geluidssterkte|sterk\w*)\b|\b(hard\w*|zacht\w*|luid\w*)\b[\s\S]*\bamplitude\b/i, max: 1, bron: /amplitude/i },
+  { naam: "frequentie en toonhoogte", re: /\b(frequentie|trillingstijd)\b[\s\S]*\b(hoog|hoge|hoger|laag|lage|lager|toonhoogte)\b|\b(hoge|lage|hogere|lagere)\s+toon\b/i, max: 2, bron: /frequentie/i },
+  { naam: "gehoorbereik / infrasoon / ultrasoon", re: /\b(infrasoon|ultrasoon|gehoorgrens\w*|gehoorbereik|20\s?000\s?Hz|20\s?kHz|hondenfluit\w*)\b/i, max: 1, bron: /ultrasoon|infrasoon|gehoorgrens/i },
+  { naam: "afstand bij onweer (licht sneller dan geluid)", re: /\b(onweer\w*|bliksem\w*|donder\w*)\b/i, max: 1, bron: /onweer|bliksem/i },
+  { naam: "echo: afstand = v × t / 2", re: /\becho\w*\b/i, max: 2, bron: /echo/i },
+  { naam: "dubbele tijd → dubbele afstand (evenredig)", re: /\b(twee keer zo|dubbel\w*|verdubbel\w*|half zo)\b[\s\S]*\b(afstand|tijd|ver)\b/i, max: 1, bron: /afstand/i },
+  { naam: "welke kracht is dit (soort kracht benoemen)", re: /\b(welke kracht|hoe heet (die|deze) kracht|soort kracht)\b/i, max: 2, bron: /soorten krachten|zwaartekracht/i },
+  { naam: "zwaartekracht berekenen (Fz = m × g)", re: /\bFz\s*=\s*m\s*[×x·*]\s*g\b/i, max: 2, bron: /Fz\s*=\s*m/i },
+  { naam: "druk berekenen (p = F / A)", re: /\bp\s*=\s*F\s*\/\s*A\b/i, max: 2, bron: /\bdruk\b/i },
+  { naam: "veiligheid in de auto (gordel, airbag, kreukelzone)", re: /\b(airbag|gordel|kreukelzone|hoofdsteun)\b/i, max: 1, bron: /airbag|gordel|kreukelzone/i },
+  { naam: "reactieafstand / remweg / stopafstand", re: /\b(reactieafstand|remweg|stopafstand)\b/i, max: 2, bron: /remweg|stopafstand/i },
+];
+
+const begripTekst = (d: Deelvraag) => kaal([d.stam, ...(d.opties ?? []), d.begrip ?? "", ...(d.antwoordmodel?.regels ?? [])].join(" "));
+
+/**
+ * Begrip dat in méér vraagstukken getoetst wordt dan toegestaan (`max` = aantal vraagstukken per toets). Binnen één
+ * vraagstuk delen deelvragen hun situatie (onweer, echo …), dus daar telt het begrip één keer. Bevinding voor elk
+ * vraagstuk boven het maximum (de eerste blijven staan).
+ */
+export function zoekBegripHerhaling(vs: VraagstukSpec[]): Bevinding[] {
+  const uit: Bevinding[] = [];
+  for (const b of BEGRIP_BLOKLIJST) {
+    const raak = vs
+      .map((v) => ({ v, ds: v.deelvragen.filter((d) => b.re.test(begripTekst(d)) && !(b.niet && b.niet.test(begripTekst(d)))) }))
+      .filter((x) => x.ds.length);
+    if (raak.length <= b.max) continue;
+    const eerder = raak.slice(0, b.max).map((x) => x.ds[0]!.id);
+    for (const x of raak.slice(b.max)) uit.push({ id: x.ds[0]!.id, vraagstuk: x.v.id, tekst: `${x.ds.map((d) => d.id).join(", ")} toetst opnieuw "${b.naam}" (al in ${eerder.join(", ")}; hoogstens ${b.max === 1 ? "één vraagstuk" : `${b.max} vraagstukken`} per toets); toets hier een ander begrip uit de lesstof` });
+  }
+  return uit;
+}
+
+/** Bloklijst-regel voor de prompt: alleen begrippen die de lesstof raakt. */
+export function bloklijstRegel(bron: string): string {
+  const l = BEGRIP_BLOKLIJST.filter((b) => b.bron.test(bron));
+  return l.length ? `BEGRIPPEN-BLOKLIJST (worden vaak herhaald): elk hoogstens in zoveel vraagstukken van de HELE toets (ook niet in andere woorden), en binnen een vraagstuk niet twee keer dezelfde redenering: ${l.map((b) => `${b.naam} (${b.max})`).join("; ")}.` : "";
 }

@@ -10,9 +10,18 @@ export function nl(x: number, decimalen?: number): string {
   return s.replace(".", ",");
 }
 
-/** "7,9" → 7.9; "5,0·10^5" niet ondersteund (alleen gewone getallen). */
+const SUP: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁻": "-" };
+/** Mantisse en exponent van "1,4×10³", "1,4·10^3", "1,4 x 10^-3" (exponent 0 voor een gewoon getal). */
+function machtVan(s: string): { mantisse: string; exp: number } {
+  const t = s.replace(/\s/g, "").replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g, (c) => SUP[c]!);
+  const m = /^(-?[\d.,]+)(?:[×x·*]10\^?(-?\d+))$/.exec(t);
+  return m ? { mantisse: m[1]!, exp: Number(m[2]) } : { mantisse: t, exp: 0 };
+}
+
+/** "7,9" → 7.9; ook "1,4×10³" / "1,4·10^3" → 1400. */
 export function leesNl(s: string): number {
-  return Number(s.replace(/\s/g, "").replace(",", "."));
+  const { mantisse, exp } = machtVan(s);
+  return Number(mantisse.replace(",", ".")) * 10 ** exp;
 }
 
 type Token = { t: "num"; v: number } | { t: "id"; v: string } | { t: "op"; v: string };
@@ -127,9 +136,12 @@ export function rekenUit(formule: string, vars: Record<string, number>): number 
 }
 
 /** Halve eenheid van de laatste decimaal van een afgerond getal: "7,9" → 0,05; "1250" → 0,5. */
+/** Halve eenheid van het laatste cijfer. "1400" (geheel getal met nullen achteraan) is dubbelzinnig: dan de ruimste lezing (2 sig. cijfers → ±50). */
 function halveEenheid(s: string): number {
-  const d = s.includes(",") ? s.split(",")[1].length : 0;
-  return 0.5 * 10 ** -d;
+  const { mantisse, exp } = machtVan(s);
+  if (mantisse.includes(",")) return 0.5 * 10 ** (exp - mantisse.split(",")[1]!.length);
+  const nullen = /[1-9](0+)$/.exec(mantisse.replace(/^-/, ""))?.[1]?.length ?? 0;
+  return 0.5 * 10 ** (exp + nullen);
 }
 
 function stripOpmaak(s: string): string {

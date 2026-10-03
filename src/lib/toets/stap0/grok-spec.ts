@@ -16,7 +16,8 @@ import { nl } from "./reken.ts";
 import { annoteerKalibratie, relevanteVraagtypen, type Kalibratie } from "../kalibratie.ts";
 import { extractParagrafen, paragraafDekking } from "../leerdoelen.ts";
 import { overlap, woorden } from "../eval/rubric.ts";
-import { afrondFouten, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekFiguurVerwijzingen, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
+import { afrondFouten, bloklijstRegel, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekBegripHerhaling, zoekFiguurVerwijzingen, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
+import { autoHerstel } from "./auto-herstel.ts";
 import type { GegenereerdeToets, Leerweg, RttiVerdeling, Vraag } from "../types";
 
 export interface SpecInvoer {
@@ -125,9 +126,27 @@ FIGUREN (alleen als de vraag er echt een nodig heeft; de software tekent ze exac
   "tekenvraag": true,
   "figuur": {"type":"krachten","breedteCm":6,"hoogteCm":7,"schaalN":10,"voorwerp":"krat","punt":[3,5],"puntLabel":"Z","pijlen":[],"controle":[{"meting":"pijlen","verwacht":0}]},
   "antwoordmodel": {"regels":["pijl van 4,0 cm recht omlaag vanuit Z"],"figuur":{"type":"krachten","breedteCm":6,"hoogteCm":7,"schaalN":10,"voorwerp":"krat","punt":[3,5],"puntLabel":"Z","pijlen":[{"naam":"Fz","grootteN":40,"hoek":270,"rood":true}],"controle":[{"meting":"Fz.N","verwacht":40},{"meting":"Fz.hoek","verwacht":270}]}}
+- "controle" met "parameter": die parameter MOET in "parameters" staan (meestal bron "figuur") en in een berekening gebruikt worden; anders "verwacht" met het getal.
+
+FIGUUR-VOORBEELDEN (neem de vorm exact over; getallen en situatie zijn natuurlijk je eigen)
+- Oscilloscoop, één beeld, aflezen + rekenen (tijdbasis in het onderschrift, parameter bestaat):
+  "figuur": {"type":"oscilloscoop","hokjesX":10,"hokjesY":8,"panelen":[{"amplitude":2,"trillingstijd":4}],"onderschrift":"tijdbasis: 1 hokje = 0,5 ms","breedteCm":9,"controle":[{"meting":"T","parameter":"T_hok"},{"meting":"A","verwacht":2},{"meting":"tijdbasis","verwacht":0.5}]},
+  "parameters": [{"naam":"T_hok","waarde":4,"eenheid":"hokjes","bron":"figuur"},{"naam":"tb","waarde":0.5,"eenheid":"ms","bron":"figuur"}],
+  "berekeningen": [{"naam":"T","formule":"T_hok * tb","waarde":2,"eenheid":"ms","afgerond":"2,0"},{"naam":"f","formule":"1000 / T","waarde":500,"eenheid":"Hz","afgerond":"500"}]
+- Keuze uit vier beelden A–D (panelen MET labels; opties "beeld A" …; "juist" = de letter):
+  "figuur": {"type":"oscilloscoop","hokjesX":8,"hokjesY":6,"panelen":[{"label":"A","amplitude":2,"trillingstijd":4},{"label":"B","amplitude":1,"trillingstijd":4},{"label":"C","amplitude":2,"trillingstijd":2},{"label":"D","amplitude":1,"trillingstijd":8}],"onderschrift":"1 hokje = 1 ms","breedteCm":10,"controle":[{"meting":"A.T","verwacht":4},{"meting":"C.T","verwacht":2},{"meting":"tijdbasis","verwacht":1}]},
+  "stam": "Welk beeld hoort bij de hoogste toon?", "opties": ["beeld A","beeld B","beeld C","beeld D"], "antwoordmodel": {"regels":["C: kortste trillingstijd, dus de hoogste frequentie"],"juist":"C"}
+  (diagrammen A–D bij beweging: {"type":"grafiek","x":{"label":"t","min":0,"max":4,"stap":1},"y":{"label":"v","min":0,"max":4,"stap":1},"reeksen":[],"panelen":[{"label":"A","punten":[[0,0],[4,4]]},{"label":"B","punten":[[0,2],[4,2]]},{"label":"C","punten":[[0,4],[4,0]]},{"label":"D","punten":[[0,0],[2,4],[4,4]]}],"breedteCm":10,"controle":[{"meting":"A.trend","verwacht":1},{"meting":"B.trend","verwacht":0},{"meting":"C.trend","verwacht":-1}]})
+- Tekenvraag in een grafiek (leerling zet punten uit de tekst en tekent de lijn): leerling krijgt het LEGE assenstelsel, de antwoordfiguur de rode lijn:
+  "tekenvraag": true, "stam": "Bij 1 min is het 70 dB en bij 3 min 90 dB. Zet de punten in het diagram en verbind ze met een rechte lijn.",
+  "figuur": {"type":"grafiek","x":{"label":"t (min)","min":0,"max":4,"stap":1},"y":{"label":"L (dB)","min":0,"max":100,"stap":20},"reeksen":[],"breedteCm":9},
+  "antwoordmodel": {"regels":["punten (1; 70) en (3; 90), verbonden met een rechte lijn"],"figuur":{"type":"grafiek","x":{"label":"t (min)","min":0,"max":4,"stap":1},"y":{"label":"L (dB)","min":0,"max":100,"stap":20},"reeksen":[{"punten":[[1,70],[3,90]],"vorm":"lijn","rood":true}],"breedteCm":9,"controle":[{"meting":"y@1","verwacht":70},{"meting":"y@3","verwacht":90}]}}
 
 IDS: kleine letters, cijfers en streepjes; elke deelvraag-id uniek (bijv. "fietsbel-a").
 SE-code ("se"): SE4.1 krachten/druk/werktuigen, SE4.2 energie/geluid/materie (dichtheid, fasen, stoffen), SE4.3 elektriciteit, SE4.4 arbeid/vermogen/beweging, ALG algemene vaardigheden.`;
+
+/** De eerste generatie mikt op ~105 % van de punten (marge voor schrappen; inkorten is gratis). */
+export const LENGTE_DOEL = 1.05;
 
 export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten"> & Partial<Pick<Kalibratie, "vorm" | "pct1p">>): string {
   const pars = extractParagrafen(inv.bronmateriaal, inv.antwoordenmateriaal);
@@ -135,16 +154,19 @@ export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "pun
     .map((t, i) => `${i + 1}=${t.id} (${t.naam.split(/[(:;]/)[0]!.trim().slice(0, 50)})`)
     .join("; ");
   const r = inv.rttiDoel;
-  const nVs = [Math.max(2, Math.round(kal.items / 4)), Math.max(2, Math.round(kal.items / 3))];
+  const nVs = [Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 4)), Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 3))];
   return [
     `TOETS: "${inv.titel}" · NaSk · ${inv.leerweg} klas ${inv.leerjaar} · ${inv.duurMinuten} minuten.`,
-    `LENGTE: totaal precies ${kal.punten} punten (minimaal ${Math.ceil(kal.punten * 0.95)}, maximaal ${Math.floor(kal.punten * 1.05)}) verdeeld over ongeveer ${kal.items} deelvragen (minimaal ${Math.ceil(kal.items * 0.9)}), dus ${nVs[0]}–${nVs[1]} vraagstukken van 3 of 4 deelvragen. Tel de punten na voordat je antwoordt.`,
+    // Ruim 105 %: een afgekeurd vraagstuk dat geschrapt wordt, laat de toets dan niet onder 90 % zakken; te lang wordt
+    // deterministisch ingekort (geen extra aanroep).
+    `LENGTE: totaal ${Math.round(kal.punten * LENGTE_DOEL)} punten (minimaal ${kal.punten}, maximaal ${Math.floor(kal.punten * 1.1)}) verdeeld over ongeveer ${Math.ceil(kal.items * LENGTE_DOEL)} deelvragen (minimaal ${kal.items}), dus ${nVs[0]}–${nVs[1]} vraagstukken van 3 of 4 deelvragen. Tel de punten na voordat je antwoordt.`,
     `RTTI-doel (percentage van de punten): R ${r.R}%, T1 ${r.T1}%, T2 ${r.T2}%, I ${r.I}%.`,
     kal.vorm ? `VRAAGVORMEN (aantal deelvragen, ongeveer, zoals echte toetsen van deze klas): ${vormRegel(kal.vorm, kal.items)}${kal.pct1p ? `; ongeveer ${kal.pct1p}% van de deelvragen is 1 punt` : ""}.` : "",
     `FIGUREN: gebruik in deze toets 2–4 figuren uit de toegestane typen waar de lesstof dat vraagt (bijv. een oscilloscoopbeeld bij geluid, een grafiek bij beweging of metingen, een schakelschema bij elektriciteit, een krachtenfiguur bij krachten), elk met "controle".`,
     pars.length ? `PARAGRAFEN: elke paragraaf krijgt minstens één deelvraag, verdeeld naar de hoeveelheid stof: ${pars.map((p) => `${p.code} ${p.titel}`).join("; ")}.` : "",
     inv.leerjaar <= 2 ? `NIVEAU: onderbouw klas ${inv.leerjaar}: korte inleidingen, eenvoudige taal, rekenwerk in 1–2 stappen; wel CSE-opbouw met vraagstukken.` : "",
     `WEETVRAGEN: hoogstens ${Math.round((MAX_1P_R[inv.leerweg] ?? 0.35) * 100)}% van de punten (${Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * kal.punten)} punten) uit 1-punts R-vragen.`,
+    bloklijstRegel(inv.bronmateriaal),
     typen ? `VRAAGTYPE: vul "vraagtype" met nr, code en naam uit deze lijst (nr=code): ${typen}. Gebruik minstens 5 verschillende typen.` : "",
     `\nLESSTOF:\n${inv.bronmateriaal}`,
     inv.antwoordenmateriaal ? `\nANTWOORDEN BIJ DE LESSTOF (alleen als achtergrond; niets letterlijk overnemen):\n${inv.antwoordenmateriaal}` : "",
@@ -278,6 +300,7 @@ export interface Keuringsrapport {
     figurenGo: number;
     weggevers: string[];
     dubbeleBegrippen: string[];
+    begripHerhaling: string[];
     ontbrekendeParagrafen: string[];
     figuurVerwijzingen: string[];
     samenhang: string[];
@@ -342,6 +365,18 @@ export function alsToetsSpec(gen: Generatie, inv: SpecInvoer): ToetsSpec {
   };
 }
 
+/**
+ * Leesbare hoofdstuk-/onderwerpnaam voor de opmaak ("Onderwerp: H3 Krachten" i.p.v. "Onderwerp: 3"): een kaal nummer
+ * wordt aangevuld met de hoofdstuktitel uit de lesstof ("Hoofdstuk 3 Krachten (…)").
+ */
+export function hoofdstukNaam(h: string, bron: string): string {
+  const m = /^\s*(?:H|hoofdstuk\s*)?(\d{1,2})(?:\.\d{1,2})?\s*$/i.exec(h ?? "");
+  if (!m) return h;
+  const kop = new RegExp(`^\\s*(?:Hoofdstuk|H)\\s*${m[1]}\\b[\\s:.–-]*([^\\n(]+)`, "im").exec(bron);
+  const titel = kop?.[1]?.trim().replace(/[\s:.–-]+$/, "");
+  return titel ? `H${m[1]} ${titel}` : `H${m[1]}`;
+}
+
 export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): Keuringsrapport {
   const perId: Record<string, string[]> = { "": [] };
   const voeg = (id: string, f: string) => (perId[id] ??= []).push(f);
@@ -364,7 +399,7 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
     if (overgenomen(v.context.join(" "), `${inv.bronmateriaal}\n${inv.antwoordenmateriaal ?? ""}`)) voeg(v.id, `${v.id}: inleiding letterlijk uit de lesstof overgenomen`);
   }
   const toets = alsToetsSpec(gen, inv);
-  const fixtures: Fixture[] = gen.vraagstukken.map((v) => ({ ...v, soort: "vraagstuk" }) as Fixture);
+  const fixtures: Fixture[] = gen.vraagstukken.map((v) => ({ ...v, soort: "vraagstuk", hoofdstuk: hoofdstukNaam(v.hoofdstuk, inv.bronmateriaal) }) as Fixture);
   const res = verwerkToets(toets, fixtures);
   for (const k of res.keuringen) for (const f of k.fouten) voeg(k.id, f);
   for (const f of res.toetsFouten) voeg("", f);
@@ -380,6 +415,8 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
   }
   const dubbel = zoekDubbeleBegrippen(gen.vraagstukken);
   for (const d of dubbel) voeg(d.vraagstuk, `dubbel begrip: ${d.tekst}`);
+  const herhaling = zoekBegripHerhaling(gen.vraagstukken);
+  for (const b of herhaling) voeg(b.vraagstuk, `begrip: ${b.tekst}`);
   const figVerwijzingen = zoekFiguurVerwijzingen(gen.vraagstukken);
   for (const b of figVerwijzingen) voeg(b.vraagstuk, `figuur: ${b.tekst}`);
   const incoherent = zoekIncoherentie(gen.vraagstukken, inv.bronmateriaal);
@@ -419,6 +456,7 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
       figurenGo: figs.filter((f) => f.go).length,
       weggevers,
       dubbeleBegrippen: dubbel.map((d) => d.tekst),
+      begripHerhaling: herhaling.map((b) => b.tekst),
       ontbrekendeParagrafen: ontbreekt.map((p) => `${p.code} ${p.titel}`),
       figuurVerwijzingen: figVerwijzingen.map((b) => b.tekst),
       samenhang: incoherent.map((b) => b.tekst),
@@ -428,6 +466,12 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
       afgekeurd: res.afgekeurd,
     },
   };
+}
+
+/** xAI-serverfout (HTTP 5xx / "internal"): de aanroep kostte niets en mag één keer opnieuw. */
+export function isServerfout(e: unknown): boolean {
+  const m = String((e as Error)?.message ?? e);
+  return /\b(HTTP|error|status)\s*5\d\d\b|\b5\d\d\b.*\binternal\b|"code":"internal"/i.test(m);
 }
 
 export type ChatFn = (messages: { role: "system" | "user" | "assistant"; content: string }[], schema: { naam: string; schema: Record<string, unknown> }, maxTokens: number) => Promise<string>;
@@ -538,10 +582,27 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
     { role: "system" as const, content: SPEC_SYSTEM },
     { role: "user" as const, content: specPrompt(inv, kal) },
   ];
-  const raw = await chat(basis, { naam: "toets_spec", schema: generatieSchema() }, opts.maxTokens ?? 16000);
-  let gen = normaliseer(JSON.parse(raw) as Generatie);
-  const eerste = keurGeneratie(gen, inv, kal);
   const stappen: Stap[] = [];
+  // Eén xAI-5xx (serverfout, kost niets) wordt één keer opnieuw geprobeerd; telt niet als gerichte aanroep.
+  const metHerkansing = async (f: () => Promise<string>, wat: string): Promise<string> => {
+    try {
+      return await f();
+    } catch (e) {
+      if (!isServerfout(e)) throw e;
+      stappen.push({ wat: `xAI-serverfout, opnieuw (${wat})`, id: "", ok: false, fouten: [String((e as Error)?.message ?? e).slice(0, 120)] });
+      return await f();
+    }
+  };
+  const auto = <G extends Generatie>(g: G): G => {
+    const r = autoHerstel(g);
+    for (const a of r.stappen) stappen.push({ wat: `auto: ${a.wat}`, id: a.id, ok: true });
+    return r.gen;
+  };
+  const raw = await metHerkansing(() => chat(basis, { naam: "toets_spec", schema: generatieSchema() }, opts.maxTokens ?? 16000), "toets");
+  const ruw = normaliseer(JSON.parse(raw) as Generatie);
+  const eersteRuw = keurGeneratie(ruw, inv, kal);
+  let gen = auto(ruw);
+  const eerste = keurGeneratie(gen, inv, kal);
   let gericht = 0;
   const maxGericht = opts.maxGericht ?? 8;
   let gestopt = false;
@@ -549,9 +610,9 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
     if (gestopt || gericht >= maxGericht) return null;
     gericht++;
     try {
-      const r = await chat([...basis, { role: "user", content: prompt }], { naam: "vraagstuk", schema: vraagstukSchema() }, opts.maxTokensGericht ?? 6000);
+      const r = await metHerkansing(() => chat([...basis, { role: "user", content: prompt }], { naam: "vraagstuk", schema: vraagstukSchema() }, opts.maxTokensGericht ?? 6000), "vraagstuk");
       const v = (JSON.parse(r) as { vraagstuk: VraagstukSpec }).vraagstuk;
-      return normaliseer({ titel: "", vraagstukken: [v] }).vraagstukken[0] ?? null;
+      return auto(normaliseer({ titel: "", vraagstukken: [v] })).vraagstukken[0] ?? null;
     } catch (e) {
       if (/budget/.test(String((e as Error)?.message))) gestopt = true;
       stappen.push({ wat: "aanroep mislukt", id: "", ok: false, fouten: [String((e as Error)?.message ?? e).slice(0, 160)] });
@@ -622,7 +683,7 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
   gen = kort.gen;
   stappen.push(...kort.stappen);
   const rapport = keurGeneratie(gen, inv, kal);
-  return { gen, eerste, rapport, hersteld: stappen.length > 0, stappen, gerichteAanroepen: gericht };
+  return { gen, eerste, eersteRuw, rapport, hersteld: stappen.length > 0, stappen, gerichteAanroepen: gericht };
 }
 
 // ── adapter naar het bestaande toetsformaat (voor rubriek + rechter) ─────────────────────────────
