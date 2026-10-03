@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { laadFixtures } from "./laad.ts";
 import { allesGoed, monitoring, nieuweStaat, STAP0_BUDGET, voerStapUit, type Stap0Staat, type StapChat } from "./stappen.ts";
 import { keurGeneratie, type SpecInvoer } from "./grok-spec.ts";
-import { controleer, onderteken, pilotGebruikers, stap0Modus, stap0Voor, stap0VangnetUsd } from "./pilot.server.ts";
+import { controleer, gebruikerTag, logStap0, onderteken, pilotAntwoord, pilotGebruikers, stap0Modus, stap0Voor, stap0VangnetUsd, zonderEmail } from "./pilot.server.ts";
 import { leesPilotCode, maakToetsStap0 } from "../maak-toets-stap0.ts";
 import type { VraagstukSpec } from "./spec.ts";
 
@@ -128,16 +128,37 @@ describe("stap 0 in losse stappen (offline)", () => {
 
 describe("stap-0-pilot: vlag per gebruiker en ondertekende toestand", () => {
   const code = "k".repeat(24);
-  const env = { STAP0_RENDERER: "pilot", STAP0_USERS: `nickoswald@live.nl:${code}, kort:abc`, XAI_API_KEY: "x" };
+  const env = { STAP0_RENDERER: "pilot", STAP0_USERS: `nick:${code}, kort:abc`, XAI_API_KEY: "x" };
   it("alleen gebruikers uit STAP0_USERS; standaard uit; 'aan' = iedereen", () => {
     assert.equal(stap0Modus({}), "uit");
     assert.equal(stap0Voor(code, {}), null);
-    assert.deepEqual(stap0Voor(code, env), { label: "nickoswald@live.nl" });
+    assert.deepEqual(stap0Voor(code, env), { label: "nick" });
     assert.equal(stap0Voor("x".repeat(24), env), null);
     assert.equal(stap0Voor(undefined, env), null);
-    assert.deepEqual(pilotGebruikers(env).map((g) => g.label), ["nickoswald@live.nl"], "te korte code telt niet");
+    assert.deepEqual(pilotGebruikers(env).map((g) => g.label), ["nick"], "te korte code telt niet");
     assert.equal(stap0Voor(code, { ...env, STAP0_RENDERER: "uit" }), null);
     assert.deepEqual(stap0Voor(undefined, { STAP0_RENDERER: "aan" }), { label: "iedereen" });
+  });
+  it("privacy: het label (ook als het een e-mailadres is) gaat nooit naar de client of in een logregel", () => {
+    const mail = "iemand@example.org";
+    const e = { STAP0_RENDERER: "pilot", STAP0_USERS: `${mail}:${code}` };
+    assert.deepEqual(pilotAntwoord(code, e), { aan: true });
+    assert.deepEqual(pilotAntwoord("x".repeat(24), e), { aan: false });
+    assert.ok(!JSON.stringify(pilotAntwoord(code, e)).includes("@"));
+    const tag = gebruikerTag(mail);
+    assert.match(tag, /^u-[0-9a-f]{8}$/);
+    assert.ok(!tag.includes(mail.split("@")[0]!));
+    assert.equal(zonderEmail(`fout bij ${mail}: x`), "fout bij [e-mail]: x");
+    const regels: string[] = [];
+    const oud = console.log;
+    console.log = (x: string) => regels.push(x);
+    try {
+      logStap0("stap", { wie: mail, fout: `kapot voor ${mail}` });
+    } finally {
+      console.log = oud;
+    }
+    assert.equal(regels.length, 1);
+    assert.ok(!regels[0]!.includes("@"), regels[0]);
   });
   it("STAP0_VANGNET_USD kan het vangnet alleen verlagen", () => {
     assert.equal(stap0VangnetUsd({}), undefined);
@@ -176,8 +197,10 @@ describe("stap-0-pilot: vlag per gebruiker en ondertekende toestand", () => {
       if (n === 2) return { ok: true as const, staat: { n: 3 }, mac: "m", status: { tekst: "klaar", fase: "klaar", usd: 0.2, open: 0 }, toets: { id: "stap0-x" } as never };
       return { ok: true as const, staat: { n: n + 1 }, mac: "m", status: { tekst: "…", fase: "herstel", usd: 0.1, open: 1 } };
     };
-    const r = await maakToetsStap0(input, { pilot: "p", stap, opslag: o });
+    const fasen: string[] = [];
+    const r = await maakToetsStap0(input, { pilot: "p", stap, opslag: o, onVoortgang: (v) => fasen.push(`${v.fase}:${v.ronde}`) });
     assert.equal(r.ok, true);
+    assert.deepEqual(fasen, ["spec:0", "herstel:0", "herstel:0", "opslaan:0"], "wachtbalk krijgt elke stap");
     assert.deepEqual(aanroepen, ["0", "1", "1", "2"], "stap 1 opnieuw vanaf de bewaarde toestand");
     assert.equal(m.get("toetski:stap0-lopend"), undefined, "na afloop opgeruimd");
     const nee = await maakToetsStap0(input, { pilot: "p", stap: async () => ({ ok: false as const, error: "niet in pilot", fallback: true }), opslag: o });

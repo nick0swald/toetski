@@ -1,8 +1,10 @@
 /**
  * Stap-0-pilot, alleen server-side:
  *  - vlag STAP0_RENDERER: "uit" (standaard) | "pilot" (alleen gebruikers uit STAP0_USERS) | "aan" (iedereen met NaSk);
- *  - STAP0_USERS: komma-gescheiden "<label>:<pilotcode>" (bijv. "nickoswald@live.nl:k3…"). De app heeft (nog) geen
- *    login; de pilotcode identificeert de gebruiker (één keer via toetski.nl/#pilot=<code> in de browser gezet);
+ *  - STAP0_USERS: komma-gescheiden "<label>:<pilotcode>" (bijv. "nick:k3…"; label vrij te kiezen, liefst neutraal).
+ *    De app heeft (nog) geen login; de pilotcode identificeert de gebruiker (één keer via toetski.nl/#pilot=<code> in
+ *    de browser gezet). Het label blijft op de server: het gaat nooit naar de client, en in de logs staat alleen een
+ *    pseudoniem (`gebruikerTag`); e-mailadressen worden uit elke logregel gefilterd;
  *  - toestand tussen de stappen wordt met HMAC ondertekend (STAP0_STATE_SECRET, anders afgeleid van XAI_API_KEY), zodat
  *    de client kosten/teller niet kan aanpassen;
  *  - productie-chat via xaiChat (leest XAI_API_KEY; nooit TOETSKI_XAI_API_KEY);
@@ -90,8 +92,23 @@ export const productieChat: StapChat = async (messages, schema, o) => {
   }
 };
 
+/** Pseudoniem voor een pilotgebruiker in logs (nooit het label zelf; een label kan een e-mailadres zijn). */
+export function gebruikerTag(label: string): string {
+  return `u-${createHash("sha256").update(`stap0:${label}`).digest("hex").slice(0, 8)}`;
+}
+
+/** Haalt e-mailadressen uit een tekst (vangnet voor logs en antwoorden). */
+export function zonderEmail(tekst: string): string {
+  return tekst.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[e-mail]");
+}
+
+/** Wat de client over de pilot te horen krijgt: alleen aan/uit (geen label, geen code). */
+export function pilotAntwoord(code: string | undefined, env: Env = envVan()): { aan: boolean } {
+  return { aan: Boolean(stap0Voor(code, env)) };
+}
+
 export function logStap0(soort: "stap" | "alarm" | "klaar", data: Record<string, unknown>): void {
-  const regel = JSON.stringify({ stap0: soort, t: new Date().toISOString(), ...data });
+  const regel = zonderEmail(JSON.stringify({ stap0: soort, t: new Date().toISOString(), ...data }));
   if (soort === "alarm") console.warn(`[stap0-alarm] ${regel}`);
   else console.log(`[stap0] ${regel}`);
 }
