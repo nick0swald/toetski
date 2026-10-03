@@ -20,6 +20,7 @@ import {
   aanvulPrompt,
   figuurAantal,
   foutHandtekening,
+  foutSoort,
   gerichtPrompt,
   puntenVerdeling,
   isServerfout,
@@ -121,6 +122,8 @@ export interface Stap0Staat {
   ruwLengtePct?: number;
   ruwFouten?: number;
   pogingen: Record<string, number>;
+  /** Per vraagstuk de fouttypen die al één betaalde herstelpoging kregen (hoogstens 1 per type; daarna vervangen/weg). */
+  herstelSoorten?: Record<string, string[]>;
   aanvulling: { n: number; open: AanvulTaak[] };
   stappen: Stap[];
   kosten: Stap0Kosten;
@@ -231,6 +234,22 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
   };
   const k = s.kal;
   const keur = (g: Generatie) => keurGeneratie(g, s.inv, k);
+  /**
+   * Selectie uit ALLE vraagstukken (ook afgekeurde) vóór schrappen of betaald herstel: is er een exacte toets die de
+   * keuring haalt en geen paragraaf extra mist, dan is herstel niet nodig. null = niets gewonnen.
+   */
+  const kiesUitAlles = (g: Generatie, waar: string): Generatie | null => {
+    const r = keur(g);
+    if (!vraagstukFouten(r)) return null;
+    const sel = selecteerGoed(g, s.inv, k);
+    if (!sel) return null;
+    const rs = keur(sel);
+    const ontbr = new Set(r.feiten.ontbrekendeParagrafen);
+    if (!voldoetAanSpec(rs, s.inv, k) || !rs.feiten.ontbrekendeParagrafen.every((p) => ontbr.has(p))) return null;
+    const weg = g.vraagstukken.reduce((n, v) => n + v.deelvragen.length, 0) - sel.vraagstukken.reduce((n, v) => n + v.deelvragen.length, 0);
+    log({ wat: `selectie uit alle vraagstukken (${waar}): ${weg} deelvraag/-vragen weggelaten, afgekeurde vallen erbuiten; geen herstel nodig`, id: "", ok: true });
+    return sel;
+  };
   /** Mislukte aanvulling/uitbreiding: tel mee voor de stopregel (gelijke handtekening = gelijke mislukking). */
   const vulMislukt = (id: string, fouten: string[]) => {
     const vul = (s.vul ??= { gelijk: 0, mislukt: 0, strategie: "nieuw" });
@@ -305,9 +324,13 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     s.ruwFouten = r0.fouten.length;
     let gen = auto(ruw);
     const fRuw = figuurAantal(gen);
-    const vooraf = schrapAfgekeurd(gen, s.inv, k);
-    gen = vooraf.gen;
-    vooraf.stappen.forEach(log);
+    const sel = kiesUitAlles(gen, "eerste generatie");
+    if (sel) gen = sel;
+    else {
+      const vooraf = schrapAfgekeurd(gen, s.inv, k);
+      gen = vooraf.gen;
+      vooraf.stappen.forEach(log);
+    }
     s.figuren = { ruw: fRuw, naSchrap: figuurAantal(gen) };
     s.gen = gen;
     s.fase = "herstel";
@@ -315,6 +338,8 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     s.rondes++;
     s.vul ??= { gelijk: 0, mislukt: 0, strategie: "nieuw" };
     let gen = auto(s.gen!);
+    const sel = kiesUitAlles(gen, `ronde ${s.rondes}`);
+    if (sel) gen = sel;
     const vooraf = schrapAfgekeurd(gen, s.inv, k);
     gen = vooraf.gen;
     vooraf.stappen.forEach(log);
@@ -351,8 +376,19 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
       const inVervanging = (id: string) => s.aanvulling.open.some((t) => t.vervangt === id);
       const fout = [...new Set([...fouteIds(rap, gen), ...reviewOpen()])].filter((id) => !inVervanging(id));
       if (fout.length) {
+        // Hoogstens 1 betaalde herstelpoging per fouttype per vraagstuk: komt een type terug, dan vervangen of weg.
+        const gehad = (s.herstelSoorten ??= {});
+        const soorten = (id: string) => [...new Set((rap.perId[id] ?? []).map(foutSoort))];
+        for (const id of fout) {
+          const terug = soorten(id).filter((x) => gehad[id]?.includes(x));
+          if (terug.length && (s.pogingen[id] ?? 0) < B.pogingenPerVraagstuk) {
+            s.pogingen[id] = B.pogingenPerVraagstuk;
+            log({ wat: `fouttype ${terug.join("+")} kwam terug na een betaalde herstelpoging; niet nog eens: vervangen of weglaten`, id, ok: false, fouten: rap.perId[id] });
+          }
+        }
         // Herstel: minst geprobeerde eerst; hoogstens `parallel` tegelijk.
-        const batch = [...fout].sort((a, b) => (s.pogingen[a] ?? 0) - (s.pogingen[b] ?? 0)).slice(0, Math.min(B.parallel, nBudget));
+        const batch = [...fout].filter((id) => (s.pogingen[id] ?? 0) < B.pogingenPerVraagstuk || !rap.perId[id]?.length).sort((a, b) => (s.pogingen[a] ?? 0) - (s.pogingen[b] ?? 0)).slice(0, Math.min(B.parallel, nBudget));
+        const soortenVoor = Object.fromEntries(batch.map((id) => [id, soorten(id)]));
         const reviewFouten = (id: string) => (s.review?.open[id] ?? []).map((f) => `docent-review: ${f}`);
         const nieuw = await pool(batch, B.parallel, (id) => vraag(gerichtPrompt({ soort: "herstel", vraagstuk: gen.vraagstukken.find((v) => v.id === id)!, fouten: [...(rap.perId[id] ?? []), ...reviewFouten(id)], gen })));
         batch.forEach((id, i) => {
@@ -360,6 +396,7 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
           // Alleen door de review (deterministisch al goed): één poging; de nieuwe versie moet de harde keuring halen.
           const doorReview = !rap.perId[id]?.length;
           if (doorReview && s.review) delete s.review.open[id];
+          if (!doorReview) gehad[id] = [...new Set([...(gehad[id] ?? []), ...(soortenVoor[id] ?? [])])];
           if (n) {
             const kand: Generatie = { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x.id === id ? metId(n, id) : x)) };
             const rk = keur(kand);
@@ -533,6 +570,9 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     s.gen = gen;
   } else if (s.fase === "afronden") {
     let gen = s.gen!;
+    // Eerst de selectie uit alles (afgekeurde vallen erbuiten); pas als die niet lukt, schrappen wat fout is.
+    const sel = kiesUitAlles(gen, "afronden");
+    if (sel) gen = sel;
     // Gestopt op tijd/vangnet: wat nog fout is, valt weg (een afgekeurd vraagstuk wordt nooit geplaatst). Liever
     // alleen de laatste deelvraag als het vraagstuk daarmee goed is.
     for (let n = 0; n < 20; n++) {

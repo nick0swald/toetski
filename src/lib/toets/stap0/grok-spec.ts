@@ -856,8 +856,8 @@ export function vormHeel(inv: SpecInvoer, voor: VraagstukSpec[], na: VraagstukSp
 }
 
 /**
- * Exacte selectie (deterministisch, geen aanroep): kies per vraagstuk "heel", "zonder laatste deelvraag" (alleen bij
- * 4 deelvragen) of "weg", zodat de toets PRECIES het puntentotaal en (indien opgegeven) precies het aantal
+ * Exacte selectie (deterministisch, geen aanroep): kies per vraagstuk "heel", "zonder de laatste k deelvragen" (er
+ * blijven er minstens 3) of "weg", zodat de toets PRECIES het puntentotaal en (indien opgegeven) precies het aantal
  * meerkeuze- en open deelvragen van de docent haalt. Bij meerdere oplossingen: de hoogste waarde (T2/I zwaarder),
  * dan zo veel mogelijk hele vraagstukken. Geen oplossing → null (dan is de toets niet af).
  */
@@ -865,43 +865,61 @@ export function selecteerExact(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibr
   const vv = vasteVorm(inv);
   const P = kal.punten;
   type St = { w: number; keuze: (VraagstukSpec | null)[] };
-  let dp = new Map<string, St>([["0|0|0", { w: 0, keuze: [] }]]);
+  // 1-punts R-vragen: hoogstens MAX_1P_R van het puntentotaal (zelfde regel als de keuring), al tijdens het kiezen.
+  const max1R = Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * P);
+  const n1R = (x: VraagstukSpec) => x.deelvragen.filter((d) => d.punten === 1 && d.rtti === "R").length;
+  let dp = new Map<string, St>([["0|0|0|0", { w: 0, keuze: [] }]]);
   for (const v of gen.vraagstukken) {
-    const kort = zonderStaart(v);
-    const opties = ([[v, 1, "heel"], [null, 0, "weg"], ...(kort ? [[kort, 0, "kort"]] : [])] as [VraagstukSpec | null, number, string][]).filter(([, , n]) => !verboden.has(`${v.id}:${n}`));
+    // Staart weglaten: latere deelvragen bouwen op eerdere voort, nooit andersom; er blijven er minstens 3 (CSE: 3–4).
+    const korter = Array.from({ length: Math.max(0, v.deelvragen.length - 3) }, (_, i) => [{ ...v, deelvragen: v.deelvragen.slice(0, v.deelvragen.length - 1 - i) }, 0, keuzeNaam(v, v.deelvragen.length - 1 - i)] as [VraagstukSpec, number, string]);
+    const opties = ([[v, 1, "heel"], [null, 0, "weg"], ...korter] as [VraagstukSpec | null, number, string][]).filter(([, , n]) => !verboden.has(`${v.id}:${n}`));
     const nd = new Map<string, St>();
     for (const [key, st] of dp) {
-      const [m, o, p] = key.split("|").map(Number) as [number, number, number];
+      const [m, o, p, r] = key.split("|").map(Number) as [number, number, number, number];
       for (const [ov, heelBonus] of opties) {
         const f = ov ? vormVan([ov]) : { mc: 0, open: 0 };
         const m2 = vv ? m + f.mc : 0, o2 = vv ? o + f.open : 0, p2 = p + (ov ? puntenVan(ov) : 0);
-        if (p2 > P || (vv && (m2 > vv.mc || o2 > vv.open))) continue;
+        const r2 = r + (ov ? n1R(ov) : 0);
+        if (p2 > P || r2 > max1R || (vv && (m2 > vv.mc || o2 > vv.open))) continue;
         const w = st.w + (ov ? waardeVan(ov) * 10 + heelBonus : 0);
-        const k2 = `${m2}|${o2}|${p2}`;
+        const k2 = `${m2}|${o2}|${p2}|${r2}`;
         const oud = nd.get(k2);
         if (!oud || w > oud.w) nd.set(k2, { w, keuze: [...st.keuze, ov] });
       }
     }
     dp = nd;
   }
-  const best = dp.get(`${vv ? vv.mc : 0}|${vv ? vv.open : 0}|${P}`);
+  const eind = `${vv ? vv.mc : 0}|${vv ? vv.open : 0}|${P}|`;
+  const best = [...dp].filter(([key]) => key.startsWith(eind)).map(([, st]) => st).sort((a, b) => b.w - a.w)[0];
   if (!best) return null;
   return { ...gen, vraagstukken: best.keuze.filter((x): x is VraagstukSpec => Boolean(x)) };
 }
 
+/** Naam van een keuze in de selectie: "heel" of "k<n>" (de eerste n deelvragen). */
+function keuzeNaam(v: VraagstukSpec, n: number): string {
+  return n >= v.deelvragen.length ? "heel" : `k${n}`;
+}
+
 /**
- * Exacte selectie die ook de keuring haalt: geeft een selectie bevindingen (bijv. 1p-R-aandeel of een weggever door
- * het weglaten), dan wordt die keuze per betrokken vraagstuk verboden en opnieuw gezocht (hoogstens 12 keer).
+ * Exacte selectie die ook de keuring haalt, uit ALLE vraagstukken (ook afgekeurde: die vallen er dan uit of worden
+ * ingekort). Geeft een selectie bevindingen, dan wordt die keuze verboden en opnieuw gezocht (hoogstens 40 keer).
+ * Een bevinding die naar een ander gekozen vraagstuk verwijst (begripherhaling, weggever tussen vraagstukken), is een
+ * paarfout: dan valt er maar één van het paar af (de laagste waarde), zodat de andere kan blijven.
  */
-export function selecteerGoed(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): Generatie | null {
+export function selecteerGoed(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">, maxRondes = 40): Generatie | null {
   const verboden = new Set<string>();
-  for (let n = 0; n < 12; n++) {
+  const ids = new Set(gen.vraagstukken.flatMap((v) => [v.id, ...v.deelvragen.map((d) => d.id)]));
+  for (let n = 0; n < maxRondes; n++) {
     const sel = selecteerExact(gen, inv, kal, verboden);
     if (!sel) return null;
     const r = keurGeneratie(sel, inv, kal);
     const fout = sel.vraagstukken.filter((v) => r.perId[v.id]?.length);
     if (!fout.length) return sel;
-    for (const v of fout) verboden.add(`${v.id}:${v.deelvragen.length === gen.vraagstukken.find((x) => x.id === v.id)?.deelvragen.length ? "heel" : "kort"}`);
+    const anderen = (v: VraagstukSpec) => sel.vraagstukken.filter((x) => x !== v).flatMap((x) => [x.id, ...x.deelvragen.map((d) => d.id)]).filter((id) => ids.has(id));
+    const paar = (v: VraagstukSpec) => r.perId[v.id]!.every((f) => anderen(v).some((id) => new RegExp(`(^|[^a-z0-9-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9-]|$)`).test(f)));
+    const eigen = fout.filter((v) => !paar(v));
+    const weg = eigen.length ? eigen : [[...fout].sort((a, b) => waardeVan(a) - waardeVan(b) || puntenVan(a) - puntenVan(b))[0]!];
+    for (const v of weg) verboden.add(`${v.id}:${keuzeNaam(gen.vraagstukken.find((x) => x.id === v.id) ?? v, v.deelvragen.length)}`);
   }
   return null;
 }
