@@ -10,12 +10,15 @@
  *     antwoordfiguur even groot;
  *  6. namen: een persoonsnaam die niet op de westerse/Nederlandse namenlijst staat, wordt in het hele vraagstuk
  *     (ook antwoordmodel) vervangen door een naam van de lijst (stil; nooit een keuringsbevinding of aanroep).
+ *  7. schema/validatie: een open vraag met een losse juiste letter → letter weg; ontbrekend vraagtype → 63 Overig;
+ *     ontbrekend of ongeldig niveau → het niveau van een andere deelvraag, anders "BB/KB/GT"; een eindantwoord met te
+ *     veel of te weinig significante cijfers → afgerond op het verwachte aantal (antwoordmodel en scorestappen mee).
  */
 import type { Berekening, FiguurControle, FiguurSpec, KrachtenFiguur, Parameter, VraagstukSpec } from "./spec.ts";
 import { figuurSvg, isTekenFiguur, meetFiguur } from "./figuren/index.ts";
 import { getalInTekst, leesNl, nl, rekenUit } from "./reken.ts";
 import { gebruikteNamen, vervangNamen } from "./namen.ts";
-import { isWeetvraag } from "./inhoud-keuring.ts";
+import { afrondDoel, isWeetvraag, significant } from "./inhoud-keuring.ts";
 import { normaliseerVraagtype } from "./doelen.ts";
 import { EINDTERMEN, KERNDOELEN } from "../leerdoelen-data.ts";
 
@@ -333,6 +336,42 @@ function fixKrachtenKader(v: VraagstukSpec, stappen: AutoStap[]): void {
 }
 
 // ── alles ────────────────────────────────────────────────────────────────────────────────────────
+// ── 7. validatie/schema ─────────────────────────────────────────────────────────────────────────────
+const NIVEAUS = ["BB/KB/GT", "vooral KB/GT", "vooral GT"] as const;
+/** x afgerond op n significante cijfers, in Nederlandse notatie; null als de notatie dubbelzinnig is (bijv. "600"). */
+export function rondSig(x: number, n: number): string | null {
+  if (!Number.isFinite(x) || x === 0) return null;
+  const e = Math.floor(Math.log10(Math.abs(Number(x.toPrecision(n)))));
+  const dec = n - 1 - e;
+  const s = dec >= 0 ? nl(x, dec) : nl(Number(x.toPrecision(n)));
+  return significant(s) === n ? s : null;
+}
+function fixValidatie(v: VraagstukSpec, d: Deelvraag, stappen: AutoStap[]): void {
+  if (!d.vraagtype) {
+    normaliseerVraagtype(d);
+    stappen.push({ id: d.id, wat: "ontbrekend vraagtype → 63 Overig" });
+  }
+  if (!NIVEAUS.includes(d.niveau)) {
+    const ander = v.deelvragen.find((x) => x !== d && NIVEAUS.includes(x?.niveau))?.niveau ?? "BB/KB/GT";
+    stappen.push({ id: d.id, wat: `niveau ${d.niveau ?? "(ontbreekt)"} → ${ander}` });
+    d.niveau = ander;
+  }
+  if (!d.antwoordmodel) return;
+  if (!d.opties && d.antwoordmodel.juist) {
+    stappen.push({ id: d.id, wat: `losse juiste letter ${d.antwoordmodel.juist} bij een open vraag weggehaald` });
+    delete d.antwoordmodel.juist;
+  }
+  const a = afrondDoel(v, d);
+  if (!a || !(a.sf > a.verwacht + 1 || a.sf < a.ondergrens)) return;
+  const oud = a.laatste.afgerond!;
+  const nieuw = rondSig(a.laatste.waarde, a.verwacht);
+  if (!nieuw || nieuw === oud || (d.opties ?? []).some((o) => getalInTekst(oud, kaal(o)))) return;
+  a.laatste.afgerond = nieuw;
+  d.antwoordmodel.regels = d.antwoordmodel.regels.map((r) => vervangGetallen(r, [[oud, nieuw]]));
+  d.scorestappen = d.scorestappen.map((s) => ({ ...s, omschrijving: vervangGetallen(s.omschrijving, [[oud, nieuw]]) }));
+  stappen.push({ id: d.id, wat: `afronding "${oud}" → "${nieuw}" (${a.verwacht} significante cijfers)` });
+}
+
 export function autoHerstelVraagstuk(v0: VraagstukSpec, vermijdNamen: Iterable<string> = []): { v: VraagstukSpec; stappen: AutoStap[] } {
   const stappen: AutoStap[] = [];
   const nm = vervangNamen(structuredClone(v0), vermijdNamen);
@@ -355,7 +394,13 @@ export function autoHerstelVraagstuk(v0: VraagstukSpec, vermijdNamen: Iterable<s
   const nOnb = vulOnbekend(v.figuur, bekend);
   if (nOnb) stappen.push({ id: v.id, wat: `${nOnb} figuurcontrole(s) met onbekende parameter → waarde uit de figuur` });
   v.deelvragen.forEach((d, i) => {
-    if (!d?.antwoordmodel) return;
+    if (!d) return;
+    try {
+      fixValidatie(v, d, stappen);
+    } catch {
+      /* laat over aan de keuring */
+    }
+    if (!d.antwoordmodel) return;
     // 8. vraagtype: officieel nr/naam bij de code (stil); een onbekend examendoel valt weg.
     const vt = normaliseerVraagtype(d);
     if (vt) stappen.push({ id: d.id, wat: vt });
