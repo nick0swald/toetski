@@ -19,6 +19,7 @@ import { overlap, woorden } from "../eval/rubric.ts";
 import { afrondFouten, begripTelling, bloklijstRegel, buitenLesstof, eenPuntsReproductie, MAX_1P_R, normaliseerTekenfiguur, paragraafKern, raaktKern, zoekBegripHerhaling, zoekBoekParafrase, zoekFiguurVerwijzingen, zoekGegevenWeggevers, zoekGetalWeggevers, zoekIncoherentie } from "./inhoud-keuring.ts";
 import { autoHerstel } from "./auto-herstel.ts";
 import { heeftRood } from "./figuren/index.ts";
+import { referentieRegel, rondeGetallenMelding } from "./referentiewaarden.ts";
 import { officieelVraagtype, relevanteDoelen, typenVoorDoelen } from "./doelen.ts";
 import type { GegenereerdeToets, Leerweg, RttiVerdeling, Vraag } from "../types";
 
@@ -259,6 +260,7 @@ export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "pun
     inv.leerjaar <= 2 ? `NIVEAU: onderbouw klas ${inv.leerjaar}: korte inleidingen, eenvoudige taal, rekenwerk in 1–2 stappen; wel CSE-opbouw met vraagstukken.` : "",
     `WEETVRAGEN: hoogstens ${Math.round((MAX_1P_R[inv.leerweg] ?? 0.35) * 100)}% van de punten (${Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * kal.punten)} punten) uit 1-punts R-vragen.`,
     bloklijstRegel(inv.bronmateriaal),
+    referentieRegel(`${inv.bronmateriaal}\n${inv.antwoordenmateriaal ?? ""}`, inv.leerjaar),
     doelenRegel(inv.leerjaar, doelen),
     typen ? vraagtypeRegel(inv.leerjaar, typen) : "",
     `\nLESSTOF:\n${inv.bronmateriaal}`,
@@ -1220,6 +1222,8 @@ export function alsGegenereerdeToets(res: Pijplijnresultaat, inv: SpecInvoer & {
     };
   });
   const kwaliteit = annoteerKalibratie({ samenvatting: "", punten: [] }, vragen, kal, inv.bronmateriaal);
+  const rond = rondeGetallenMelding(res.vragen, inv.leerjaar);
+  if (rond) kwaliteit.punten.push({ criterium: "Realistische getallen", oordeel: "let op", toelichting: rond });
   return {
     id: "stap0",
     createdAt: new Date().toISOString(),
