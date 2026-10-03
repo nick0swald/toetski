@@ -176,9 +176,9 @@ export function andereWaarde(u: string): string {
 function vervangGetallen(t: string, paren: [string, string][]): string {
   let uit = t;
   paren.forEach(([o], i) => {
-    uit = uit.replace(new RegExp(`(^|[^0-9,])${esc(o)}(?![0-9]|,[0-9])`, "g"), `$1\u0000${i}\u0000`);
+    uit = uit.replace(new RegExp(`(^|[^0-9,])${esc(o)}(?![0-9]|,[0-9])`, "g"), `$1⟦${i}⟧`);
   });
-  return uit.replace(/\u0000(\d+)\u0000/g, (_, i) => paren[Number(i)]![1]);
+  return uit.replace(/⟦(\d+)⟧/g, (_, i) => paren[Number(i)]![1]);
 }
 
 /** Herreken B; `invoer` = gewijzigde gegeven waarden [oud, nieuw] die ook in antwoordmodel en scorestappen veranderen. */
