@@ -152,10 +152,11 @@ describe("stap 0: first-time-right (offline)", () => {
     assert.equal(raaktKern(d("Bereken de afstand tot het onweer. De geluidssnelheid is 343 m/s.", "13.4 afstand"), k.get("13.4")), true);
   });
 
-  it("9. lengte: de eerste generatie mikt op ~105 %; bloklijst en voorbeelden staan in de prompt", () => {
+  it("9. lengte: de eerste generatie mikt op ~115 % (110–120); twee vraagstukken per paragraaf; bloklijst in de prompt", () => {
     const inv: SpecInvoer = { titel: "H13 Geluid", leerweg: "GT", leerjaar: 4, duurMinuten: 45, bronmateriaal: geluidBron, rttiDoel: { R: 15, T1: 45, T2: 34, I: 6 } };
     const p = specPrompt(inv, { items: 20, punten: 28 });
-    assert.match(p, /LENGTE: totaal 29 punten \(minimaal 28, maximaal 30\) verdeeld over ongeveer 21 deelvragen \(minimaal 20\)/);
+    assert.match(p, /LENGTE: totaal 32 punten \(minimaal 31, maximaal 33\) verdeeld over ongeveer 23 deelvragen \(minimaal 22\)/);
+    assert.match(p, /minstens TWEE verschillende vraagstukken/);
     assert.match(p, /BEGRIPPEN-BLOKLIJST/);
   });
 

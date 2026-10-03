@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 import {
   alsGegenereerdeToets,
   alsToetsSpec,
+  enkelGedekteParagrafen,
   generatieSchema,
   genereerSpec,
   inkorten,
   keurGeneratie,
   naarXaiSchema,
   ontbrekendeParagrafen,
+  schrapAfgekeurd,
   vraagstukSchema,
   zoekDubbeleBegrippen,
   zoekKruisWeggevers,
@@ -219,6 +221,51 @@ describe("stap 0 + Grok: spec-generatie (offline)", () => {
     assert.match(k.stappen[0]!.wat, /geschrapt \(te lang/);
     // binnen 110 %: niets
     assert.equal(inkorten({ titel: "x", vraagstukken: [a, c] }, inv, { items: 8, punten: 12 }).stappen.length, 0);
+  });
+
+  it("eerst schrappen: afgekeurd vraagstuk valt weg als lengte en dekking heel blijven (geen herstelaanroep)", async () => {
+    const fout = kopie("twee");
+    fout.deelvragen[1]!.berekeningen![2]!.waarde = 1300;
+    const chat: ChatFn = async (_m, schema) => {
+      if (schema.naam === "toets_spec") return JSON.stringify({ titel: "x", vraagstukken: [kopie("een"), fout, kopie("drie")] });
+      throw new Error("geen herstelaanroep verwacht");
+    };
+    const g = await genereerSpec(inv, { items: 8, punten: 12 }, chat);
+    assert.equal(g.gerichteAanroepen, 0);
+    assert.deepEqual(g.gen.vraagstukken.map((v) => v.id), ["een", "drie"]);
+    assert.ok(g.stappen.some((s) => s.id === "twee" && /geschrapt vóór herstel/.test(s.wat)));
+    assert.deepEqual(g.rapport.fouten, []);
+    assert.equal(g.lengteVoorInkorten, 100);
+    assert.equal(typeof g.eersteMs, "number");
+    assert.equal(g.ruw.vraagstukken.length, 3);
+  });
+
+  it("eerst schrappen: te kort of dekking breekt → wél gericht herstel", async () => {
+    // lengte: zonder het foute vraagstuk 50 % → herstel
+    const fout = kopie("twee");
+    fout.deelvragen[1]!.berekeningen![2]!.waarde = 1300;
+    assert.equal(schrapAfgekeurd({ titel: "x", vraagstukken: [kopie("een"), fout] }, inv, { items: 8, punten: 12 }).stappen.length, 0);
+    let n = 0;
+    const chat: ChatFn = async (m, schema) => {
+      if (schema.naam === "toets_spec") return JSON.stringify({ titel: "x", vraagstukken: [kopie("een"), fout] });
+      n++;
+      return JSON.stringify({ vraagstuk: kopie(/zelfde id \("([a-z0-9-]+)"\)/.exec(m.at(-1)!.content)![1]!) });
+    };
+    const g = await genereerSpec(inv, { items: 8, punten: 12 }, chat);
+    assert.equal(n, 1);
+    assert.deepEqual(g.rapport.fouten, []);
+    // dekking: het enige 13.1-vraagstuk is fout → niet schrappen (wel een ander, overbodig vraagstuk via inkorten)
+    const inv3 = { ...inv, bronmateriaal: "13.1 Het oor\nHet trommelvlies trilt mee.\n13.2 Toonhoogte\nFrequentie.\n13.3 Trillingstijd\nOscilloscoop." };
+    const oor = kopie("oor");
+    oor.deelvragen.forEach((d) => (d.leerdoel = "13.1 het trommelvlies in het oor"));
+    oor.deelvragen[1]!.berekeningen![2]!.waarde = 1300;
+    const s = schrapAfgekeurd({ titel: "x", vraagstukken: [kopie("een"), oor, kopie("drie")] }, inv3, { items: 8, punten: 12 });
+    assert.deepEqual(s.gen.vraagstukken.map((v) => v.id), ["een", "oor", "drie"]);
+    const oor2 = kopie("oor");
+    oor2.deelvragen.forEach((d) => (d.leerdoel = "13.1 het trommelvlies in het oor"));
+    const enkel = enkelGedekteParagrafen([kopie("een"), oor2], inv3);
+    assert.deepEqual(enkel.find((e) => e.paragraaf.startsWith("13.1")), { paragraaf: "13.1 Het oor", vraagstuk: "oor" });
+    assert.equal(enkelGedekteParagrafen([kopie("een"), oor2, kopie("drie")], inv3).filter((e) => !e.paragraaf.startsWith("13.1")).length, 0);
   });
 
   it("gericht herstel: hoogstens 4 aanroepen tegelijk", async () => {

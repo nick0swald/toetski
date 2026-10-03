@@ -145,8 +145,13 @@ FIGUUR-VOORBEELDEN (neem de vorm exact over; getallen en situatie zijn natuurlij
 IDS: kleine letters, cijfers en streepjes; elke deelvraag-id uniek (bijv. "fietsbel-a").
 SE-code ("se"): SE4.1 krachten/druk/werktuigen, SE4.2 energie/geluid/materie (dichtheid, fasen, stoffen), SE4.3 elektriciteit, SE4.4 arbeid/vermogen/beweging, ALG algemene vaardigheden.`;
 
-/** De eerste generatie mikt op ~105 % van de punten (marge voor schrappen; inkorten is gratis). */
-export const LENGTE_DOEL = 1.05;
+/**
+ * De eerste generatie mikt op ~115 % van de punten (minimaal 110, maximaal 120): een afgekeurd vraagstuk wordt dan eerst
+ * geschrapt in plaats van hersteld, en inkorten tot 90–110 % is gratis.
+ */
+export const LENGTE_DOEL = 1.15;
+export const LENGTE_MIN = 1.1;
+export const LENGTE_MAX = 1.2;
 
 export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten"> & Partial<Pick<Kalibratie, "vorm" | "pct1p">>): string {
   const pars = extractParagrafen(inv.bronmateriaal, inv.antwoordenmateriaal);
@@ -157,13 +162,13 @@ export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "pun
   const nVs = [Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 4)), Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 3))];
   return [
     `TOETS: "${inv.titel}" · NaSk · ${inv.leerweg} klas ${inv.leerjaar} · ${inv.duurMinuten} minuten.`,
-    // Ruim 105 %: een afgekeurd vraagstuk dat geschrapt wordt, laat de toets dan niet onder 90 % zakken; te lang wordt
-    // deterministisch ingekort (geen extra aanroep).
-    `LENGTE: totaal ${Math.round(kal.punten * LENGTE_DOEL)} punten (minimaal ${kal.punten}, maximaal ${Math.floor(kal.punten * 1.1)}) verdeeld over ongeveer ${Math.ceil(kal.items * LENGTE_DOEL)} deelvragen (minimaal ${kal.items}), dus ${nVs[0]}–${nVs[1]} vraagstukken van 3 of 4 deelvragen. Tel de punten na voordat je antwoordt.`,
+    // Ruim 115 %: afgekeurde vraagstukken worden eerst geschrapt (geen herstelaanroep); te lang wordt deterministisch
+    // ingekort tot 90–110 % (geen extra aanroep).
+    `LENGTE: totaal ${Math.round(kal.punten * LENGTE_DOEL)} punten (minimaal ${Math.ceil(kal.punten * LENGTE_MIN)}, maximaal ${Math.floor(kal.punten * LENGTE_MAX)}) verdeeld over ongeveer ${Math.ceil(kal.items * LENGTE_DOEL)} deelvragen (minimaal ${Math.ceil(kal.items * LENGTE_MIN)}), dus ${nVs[0]}–${nVs[1]} vraagstukken van 3 of 4 deelvragen. Dit is bewust meer dan de toetstijd: de software kiest daarna zelf. Tel de punten na voordat je antwoordt.`,
     `RTTI-doel (percentage van de punten): R ${r.R}%, T1 ${r.T1}%, T2 ${r.T2}%, I ${r.I}%.`,
     kal.vorm ? `VRAAGVORMEN (aantal deelvragen, ongeveer, zoals echte toetsen van deze klas): ${vormRegel(kal.vorm, kal.items)}${kal.pct1p ? `; ongeveer ${kal.pct1p}% van de deelvragen is 1 punt` : ""}.` : "",
     `FIGUREN: gebruik in deze toets 2–4 figuren uit de toegestane typen waar de lesstof dat vraagt (bijv. een oscilloscoopbeeld bij geluid, een grafiek bij beweging of metingen, een schakelschema bij elektriciteit, een krachtenfiguur bij krachten), elk met "controle".`,
-    pars.length ? `PARAGRAFEN: elke paragraaf krijgt minstens één deelvraag, verdeeld naar de hoeveelheid stof: ${pars.map((p) => `${p.code} ${p.titel}`).join("; ")}.` : "",
+    pars.length ? `PARAGRAFEN: elke paragraaf komt terug in minstens TWEE verschillende vraagstukken (waar de lesstof dat toelaat; zo blijft de dekking heel als er een vraagstuk afvalt), verder verdeeld naar de hoeveelheid stof. Zet de paragraafcode vooraan in elk leerdoel. Paragrafen: ${pars.map((p) => `${p.code} ${p.titel}`).join("; ")}.` : "",
     inv.leerjaar <= 2 ? `NIVEAU: onderbouw klas ${inv.leerjaar}: korte inleidingen, eenvoudige taal, rekenwerk in 1–2 stappen; wel CSE-opbouw met vraagstukken.` : "",
     `WEETVRAGEN: hoogstens ${Math.round((MAX_1P_R[inv.leerweg] ?? 0.35) * 100)}% van de punten (${Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * kal.punten)} punten) uit 1-punts R-vragen.`,
     bloklijstRegel(inv.bronmateriaal),
@@ -238,6 +243,22 @@ export function ontbrekendeParagrafen(vs: VraagstukSpec[], inv: Pick<SpecInvoer,
 }
 
 const normBegrip = (b: string) => kaal(b).toLowerCase().replace(/[^a-zà-ÿ0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !["van", "het", "een", "met", "uit", "bij", "and", "voor"].includes(w)).sort().join(" ");
+
+/**
+ * Paragrafen die maar door één vraagstuk gedekt worden (valt dat vraagstuk af, dan ontbreekt de paragraaf); per
+ * paragraaf het vraagstuk. Informatief: de prompt vraagt om minstens twee vraagstukken per paragraaf.
+ */
+export function enkelGedekteParagrafen(vs: VraagstukSpec[], inv: Pick<SpecInvoer, "bronmateriaal" | "antwoordenmateriaal">): { paragraaf: string; vraagstuk: string }[] {
+  const basis = new Set(ontbrekendeParagrafen(vs, inv).map((p) => p.code));
+  return vs.flatMap((v) =>
+    ontbrekendeParagrafen(
+      vs.filter((x) => x !== v),
+      inv,
+    )
+      .filter((p) => !basis.has(p.code))
+      .map((p) => ({ paragraaf: `${p.code} ${p.titel}`, vraagstuk: v.id })),
+  );
+}
 
 /** Dubbel getoetst begrip: zelfde begrip-label, of (in verschillende vraagstukken) bijna hetzelfde modelantwoord. */
 export function zoekDubbeleBegrippen(vs: VraagstukSpec[]): { id: string; vraagstuk: string; tekst: string }[] {
@@ -504,8 +525,9 @@ export interface Stap {
 
 /**
  * Genereer + keur + gericht herstel:
- *  1. één aanroep voor de hele toets;
- *  2. elk afgekeurd vraagstuk wordt OPNIEUW gegenereerd (gerichte aanroep met de keurfouten, max 2 pogingen);
+ *  1. één aanroep voor de hele toets (~115 % lengte), dan deterministische auto-fixes;
+ *  1b. afgekeurde vraagstukken eerst schrappen zolang lengte (≥ 90 %) en dekking dat toelaten (`schrapAfgekeurd`);
+ *  2. elk overgebleven afgekeurd vraagstuk wordt OPNIEUW gegenereerd (gerichte aanroep met de keurfouten, max 2 pogingen);
  *  3. pas als het dan nog niet goed is, wordt het geschrapt;
  *  4. lengte (90–110 %) en paragraafdekking worden aangevuld met nieuwe vraagstukken (parallel, elk max 2 pogingen);
  *  5. een te lange toets wordt deterministisch ingekort (vraagstuk met de laagste waarde schrappen, zie `inkorten`).
@@ -533,6 +555,37 @@ const vraagstukFouten = (r: Keuringsrapport) => Object.entries(r.perId).reduce((
 const puntenVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0), 0);
 /** "Waarde" van een vraagstuk voor het inkorten: punten op T2/I-niveau (inzicht) tellen het zwaarst. */
 const waardeVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0) * (d.rtti === "T2" || d.rtti === "I" ? 2 : 1), 0);
+
+/**
+ * Eerst schrappen, dan pas herstellen: een afgekeurd vraagstuk valt weg zolang de toets daarna nog ≥ 90 % lengte en
+ * genoeg deelvragen heeft en er geen paragraaf extra gaat ontbreken. Het vraagstuk met de meeste fouten eerst (bij
+ * gelijk: de laagste waarde). Wat niet weg kan zonder lengte of dekking te breken, gaat naar gericht herstel.
+ */
+export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): { gen: Generatie; stappen: Stap[] } {
+  let gen = gen0;
+  const stappen: Stap[] = [];
+  const minV = Math.ceil(kal.items * 0.85);
+  for (let n = 0; n < 20; n++) {
+    const r = keurGeneratie(gen, inv, kal);
+    const ontbr = new Set(r.feiten.ontbrekendeParagrafen);
+    const fout = gen.vraagstukken.filter((v) => r.perId[v.id]?.length);
+    if (!fout.length) break;
+    const kand = fout
+      .map((v) => {
+        const g: Generatie = { ...gen, vraagstukken: gen.vraagstukken.filter((x) => x !== v) };
+        const f = keurGeneratie(g, inv, kal).feiten;
+        const ok = f.lengtePct >= 90 && f.vragen >= minV && f.ontbrekendeParagrafen.every((p) => ontbr.has(p));
+        return { v, g, ok, nFout: r.perId[v.id]!.length, waarde: waardeVan(v) };
+      })
+      .filter((k) => k.ok)
+      .sort((a, b) => b.nFout - a.nFout || a.waarde - b.waarde);
+    const k = kand[0];
+    if (!k) break;
+    stappen.push({ wat: `geschrapt vóór herstel (${puntenVan(k.v)} p, ${k.nFout} fout(en); lengte en dekking blijven heel)`, id: k.v.id, ok: true, fouten: r.perId[k.v.id] });
+    gen = k.g;
+  }
+  return { gen, stappen };
+}
 
 /**
  * Deterministisch inkorten tot ≤ 110 %: schrap het vraagstuk waarna de lengte het dichtst bij 100 % komt (≥ 90 %, geen
@@ -598,11 +651,17 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
     for (const a of r.stappen) stappen.push({ wat: `auto: ${a.wat}`, id: a.id, ok: true });
     return r.gen;
   };
+  const tEerste = Date.now();
   const raw = await metHerkansing(() => chat(basis, { naam: "toets_spec", schema: generatieSchema() }, opts.maxTokens ?? 16000), "toets");
+  const eersteMs = Date.now() - tEerste;
   const ruw = normaliseer(JSON.parse(raw) as Generatie);
   const eersteRuw = keurGeneratie(ruw, inv, kal);
   let gen = auto(ruw);
   const eerste = keurGeneratie(gen, inv, kal);
+  // 1b. eerst schrappen: afgekeurde vraagstukken vallen weg als lengte en dekking dat toelaten (geen aanroep)
+  const vooraf = schrapAfgekeurd(gen, inv, kal);
+  gen = vooraf.gen;
+  stappen.push(...vooraf.stappen);
   let gericht = 0;
   const maxGericht = opts.maxGericht ?? 8;
   let gestopt = false;
@@ -678,12 +737,13 @@ export async function genereerSpec(inv: SpecInvoer, kal: Pick<Kalibratie, "items
     }
   }
 
-  // 5. te lang → deterministisch inkorten (geen extra aanroep)
+  // 5. te lang → deterministisch inkorten tot 90–110 % met behoud van dekking (geen extra aanroep)
+  const lengteVoorInkorten = keurGeneratie(gen, inv, kal).feiten.lengtePct;
   const kort = inkorten(gen, inv, kal);
   gen = kort.gen;
   stappen.push(...kort.stappen);
   const rapport = keurGeneratie(gen, inv, kal);
-  return { gen, eerste, eersteRuw, rapport, hersteld: stappen.length > 0, stappen, gerichteAanroepen: gericht };
+  return { gen, ruw, eerste, eersteRuw, eersteMs, lengteVoorInkorten, rapport, hersteld: stappen.length > 0, stappen, gerichteAanroepen: gericht };
 }
 
 // ── adapter naar het bestaande toetsformaat (voor rubriek + rechter) ─────────────────────────────

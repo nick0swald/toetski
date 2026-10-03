@@ -201,9 +201,13 @@ async function genereer(caseNaam, droog) {
   }
   const tGen = Date.now();
   writeFileSync(join(uit, "spec.json"), JSON.stringify(g.gen, null, 1));
+  // Ruwe eerste generatie (vóór auto-fixes, schrappen en herstel) voor offline analyse.
+  if (g.ruw) writeFileSync(join(uit, "eerste-generatie.json"), JSON.stringify(g.ruw, null, 1));
   const rap = g.rapport;
   const nAuto = g.stappen.filter((s) => s.wat.startsWith("auto:")).length;
-  console.log(`keuring 1: ${g.eersteRuw?.fouten.length ?? g.eerste.fouten.length} fout(en) · na ${nAuto} auto-fix(es) ${g.eerste.fouten.length}${g.hersteld ? ` → na herstel ${rap.fouten.length}` : ""} · gerichte aanroepen ${g.gerichteAanroepen}`);
+  const nVooraf = g.stappen.filter((s) => s.wat.startsWith("geschrapt vóór herstel")).length;
+  console.log(`eerste aanroep ${((g.eersteMs ?? 0) / 1000).toFixed(1)} s · lengte eerste generatie ${g.eersteRuw?.feiten.lengtePct ?? "?"} % → vóór inkorten ${g.lengteVoorInkorten ?? "?"} % → na ${rap.feiten.lengtePct} %`);
+  console.log(`keuring 1: ${g.eersteRuw?.fouten.length ?? g.eerste.fouten.length} fout(en) · na ${nAuto} auto-fix(es) ${g.eerste.fouten.length} · ${nVooraf} vraagstuk(ken) geschrapt vóór herstel${g.hersteld ? ` → eind ${rap.fouten.length}` : ""} · gerichte aanroepen ${g.gerichteAanroepen}`);
   for (const f of rap.fouten.slice(0, 30)) console.log(`  - ${f}`);
   // Render (deterministisch; alleen geplaatste vragen).
   const tR = performance.now();
@@ -250,7 +254,10 @@ async function genereer(caseNaam, droog) {
     figurenGo100: f.figurenGo === f.figuren,
     weggevers0: f.weggevers.length === 0 && !/verklappen/.test(weggeverRubriek?.detail ?? ""),
     lengte90_110: f.lengtePct >= 90 && f.lengtePct <= 110,
+    dekking: f.ontbrekendeParagrafen.length === 0,
+    overlap: f.begripHerhaling.length === 0 && f.dubbeleBegrippen.length === 0,
   };
+  const enkelGedekt = G.enkelGedekteParagrafen(g.gen.vraagstukken, inv);
   const resultaat = {
     case: caseNaam,
     ok: true,
@@ -270,12 +277,17 @@ async function genereer(caseNaam, droog) {
     gerichteAanroepen: g.gerichteAanroepen,
     topProblemen: oordeel?.topProblemen ?? [],
     kostenUsd: Math.round(runKosten * 10000) / 10000,
-    tijden: { generatieMs: tGen - t0, renderMs },
+    tijden: { eersteAanroepMs: g.eersteMs ?? null, generatieMs: tGen - t0, renderMs },
+    lengte: { eersteGeneratie: g.eersteRuw?.feiten.lengtePct ?? null, voorInkorten: g.lengteVoorInkorten ?? null, eind: f.lengtePct },
+    geschraptVoorHerstel: nVooraf,
+    autoFixes: nAuto,
+    eersteRuwFouten: g.eersteRuw?.fouten.length ?? null,
+    enkelGedekt,
     paden: { leerling: join(uit, "leerling.pdf"), docent: join(uit, "docent.pdf") },
   };
   writeFileSync(join(uit, "scores.json"), JSON.stringify({ ...kaart, rechter: oordeel, case: caseNaam }, null, 1));
   writeFileSync(join(uit, "resultaat.json"), JSON.stringify(resultaat, null, 1));
-  console.log(`\n${caseNaam}: rechter ${resultaat.rechter} (${resultaat.rechterCijfers.join("/")}) · rubriek ${kaart.cijfer} · reken ${harde.rekenen100 ? "100 %" : "FOUT"} · figuren ${f.figurenGo}/${f.figuren} GO · weggevers ${f.weggevers.length} · lengte ${f.lengtePct} % · ${rap.res.vragen.length} vragen geplaatst · render ${renderMs} ms`);
+  console.log(`\n${caseNaam}: rechter ${resultaat.rechter} (${resultaat.rechterCijfers.join("/")}) · rubriek ${kaart.cijfer} · reken ${harde.rekenen100 ? "100 %" : "FOUT"} · figuren ${f.figurenGo}/${f.figuren} GO · weggevers ${f.weggevers.length} · lengte ${f.lengtePct} % · dekking ${harde.dekking ? "OK" : "FOUT"} · overlap ${harde.overlap ? "OK" : "FOUT"} · ${rap.res.vragen.length} vragen geplaatst · render ${renderMs} ms`);
   console.log(`→ ${uit}`);
   console.log(`run-kosten $${runKosten.toFixed(4)}`);
 }
