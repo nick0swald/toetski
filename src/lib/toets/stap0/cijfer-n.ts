@@ -7,6 +7,11 @@
 import { nlCijfer, roundCijfer } from "../cijfer.ts";
 import { leesSvg, punten, schaal, Svg } from "./figuren/svg.ts";
 
+/** N-term als tekst (N kan 0,55 zijn; nlCijfer is voor cijfers 1–10). */
+export function nlN(n: number): string {
+  return n.toFixed(2).replace(/0$/, "").replace(".", ",");
+}
+
 export function cijferN(score: number, max: number, n = 1): number {
   if (max <= 0) return 1;
   const S = Math.max(0, Math.min(max, score));
@@ -27,7 +32,7 @@ export function cesuur(max: number, n = 1): number {
 }
 
 export function formule(max: number, n = 1): string {
-  const nn = nlCijfer(n).replace(/,0$/, ",0");
+  const nn = nlN(n);
   return `cijfer = 9 × score / ${max} + ${nn}${n !== 1 ? " (met de CvTE-grenzen voor N ≠ 1)" : ""}, afgerond op één decimaal`;
 }
 

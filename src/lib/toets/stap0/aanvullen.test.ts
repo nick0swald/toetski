@@ -50,7 +50,7 @@ function nepModel(o: { koppig?: string; aanvulling?: (n: number) => VraagstukSpe
 
 async function draai(chat: StapChat, vangnetUsd = 1, na?: (s: Stap0Staat) => void): Promise<Stap0Staat> {
   let s = nieuweStaat(inv, kal, "repro");
-  for (let i = 0; i < 80 && s.fase !== "klaar"; i++) {
+  for (let i = 0; i < 80 && s.fase !== "klaar" && s.fase !== "mislukt"; i++) {
     s = await voerStapUit(s, chat, { budget: { vangnetUsd } });
     na?.(s);
   }
@@ -72,8 +72,10 @@ describe("aanvullen na 143 % → 82 % (pilotrun 3 okt, offline)", () => {
     const s = await draai(chat, 1, (x) => {
       if (x.fase !== "herstel" || !x.gen) return;
       if (!x.aanvulling.open.some((t) => t.id.startsWith("vervang-"))) laagsteZonderVervang = Math.min(laagsteZonderVervang, lengte(x.gen));
+      // Vervangen vóór weghalen: zolang de vervangtaak open staat, staat het oude vraagstuk er nog.
+      for (const t of x.aanvulling.open) if (t.vervangt) assert.ok(x.gen.vraagstukken.some((v) => v.id === t.vervangt), `${t.vervangt} al weg vóór de vervanger`);
     });
-    const vervang = s.stappen.find((x) => /^vervangen door nieuw vraagstuk vervang-1 \([56] p\)/.test(x.wat));
+    const vervang = s.stappen.find((x) => /^wordt vervangen door nieuw vraagstuk vervang-1 \([56] p\)/.test(x.wat));
     assert.ok(vervang, s.stappen.map((x) => x.wat).join("\n"));
     // Sinds de figuurbescherming kan eerst-schrappen een ander (figuurloos) vraagstuk kiezen; het koppige vraagstuk
     // dat overblijft wordt vervangen, nooit zomaar geschrapt.
@@ -81,9 +83,14 @@ describe("aanvullen na 143 % → 82 % (pilotrun 3 okt, offline)", () => {
     assert.ok(!s.stappen.some((x) => /^geschrapt na \d+ pogingen/.test(x.wat) && x.id === "onweer"), "niet zomaar geschrapt");
     assert.ok(s.stappen.some((x) => /^aanvulling \d+\/[56] p/.test(x.wat) && x.id === "vervang-1" && x.ok), "vervanger geplaatst");
     assert.ok(laagsteZonderVervang >= 90, `lengte zakte onder 90 % zonder vervanger (${laagsteZonderVervang} %)`);
-    assert.deepEqual(s.restFouten, []);
-    const eind = lengte(s.gen!);
-    assert.ok(eind >= 90 && eind <= 110, String(eind));
+    // Nooit onder de spec leveren: klaar = precies de punten; haalt het (nep)model ze niet, dan "niet gelukt".
+    if (s.fase === "klaar") {
+      assert.deepEqual(s.restFouten, []);
+      assert.equal(keurGeneratie(s.gen!, inv, kal).feiten.punten, kal.punten);
+    } else {
+      assert.equal(s.fase, "mislukt");
+      assert.match(s.nietGelukt!, /^Niet gelukt: je vroeg 28 punten; er waren 26 punten goedgekeurd/);
+    }
   });
 
   it("oorzaak 2: aanvullingen sneuvelden op begrip-herhaling/dubbel begrip; de prompt noemt nu exacte punten, paragrafen, begrippen die op zijn en waarom de vorige poging is afgekeurd", async () => {
@@ -127,7 +134,7 @@ describe("aanvullen na 143 % → 82 % (pilotrun 3 okt, offline)", () => {
     assert.ok(s.stappen.some((x) => /^uitgebreid \d → \d p/.test(x.wat) && x.ok), s.stappen.map((x) => `${x.wat} ${x.id} ${x.fouten?.[0] ?? ""}`).join("\n"));
   });
 
-  it("88–90 %: na 2 gelijke mislukte aanvullingen geaccepteerd met waarschuwing (niet als open bevinding)", async () => {
+  it("89 %: wordt niet meer geaccepteerd; lukt aanvullen niet, dan niet gelukt (geen toets onder de spec)", async () => {
     const fin: Generatie = { titel: "H13", vraagstukken: kopie(D.hersteld) };
     const zw = fin.vraagstukken.find((v) => v.id === "zwembad")!;
     zw.deelvragen = zw.deelvragen.slice(0, -1);
@@ -135,12 +142,10 @@ describe("aanvullen na 143 % → 82 % (pilotrun 3 okt, offline)", () => {
     const steeds = D.aanvullingen.find((v) => v.id === "festival")!;
     const chat: StapChat = async () => ({ tekst: JSON.stringify({ vraagstuk: kopie(steeds) }), usd: 0.02 });
     let s: Stap0Staat = { ...nieuweStaat(inv, kal, "w"), fase: "herstel", gen: fin };
-    for (let i = 0; i < 10 && s.fase !== "klaar"; i++) s = await voerStapUit(s, chat);
-    assert.equal(s.fase, "klaar");
-    assert.deepEqual(s.restFouten, []);
-    assert.equal(s.waarschuwingen?.length, 1);
-    assert.match(s.waarschuwingen![0]!, /lengte 89 % geaccepteerd/);
-    assert.equal(s.kosten.gericht, 2, "precies twee gelijke mislukkingen");
+    for (let i = 0; i < 60 && s.fase !== "klaar" && s.fase !== "mislukt"; i++) s = await voerStapUit(s, chat);
+    assert.equal(s.fase, "mislukt");
+    assert.match(s.nietGelukt!, /^Niet gelukt: je vroeg \d+ punten/);
+    assert.ok(!s.waarschuwingen?.some((w) => /geaccepteerd/.test(w)));
   });
 });
 

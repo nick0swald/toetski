@@ -31,6 +31,41 @@ export interface SpecInvoer {
   rttiDoel: RttiVerdeling;
   /** Plaatjesmodus van de docent: "zonder" schakelt alleen ai-afbeeldingen (foto's) uit, nooit de figuren uit de bibliotheek. */
   plaatjes?: "auto" | "met" | "zonder";
+  /** Formulier van de docent (harde eisen). Vak alleen als label; MC/open exact als ze zijn opgegeven. */
+  vak?: string;
+  mcVragen?: number;
+  openVragen?: number;
+  extraEisen?: string;
+  moeilijkheid?: "makkelijk" | "normaal" | "moeilijk";
+  examenvragen?: boolean;
+  /** Normeringsterm N uit de cesuur van de docent (cijfer = 9 · S / L + N). */
+  nTerm?: number;
+}
+
+/** Vaste vraagvorm van de docent (alleen als beide aantallen zijn opgegeven). */
+export function vasteVorm(inv: Pick<SpecInvoer, "mcVragen" | "openVragen">): { mc: number; open: number } | null {
+  return inv.mcVragen != null && inv.openVragen != null ? { mc: inv.mcVragen, open: inv.openVragen } : null;
+}
+/** Harde formuliereisen voor stap 0 (uit de invoer van de docent; niets valt stil weg). */
+export function formEisen(
+  d: { vak?: string; mcVragen?: number; openVragen?: number; extraEisen?: string; moeilijkheid?: SpecInvoer["moeilijkheid"]; examenvragen?: boolean; cijferNorm?: { cesuurPct: number } },
+  ruw?: { extraEisen?: string; stuurdocument?: string },
+): Pick<SpecInvoer, "vak" | "mcVragen" | "openVragen" | "extraEisen" | "moeilijkheid" | "examenvragen" | "nTerm"> {
+  const extra = [ruw?.extraEisen ?? d.extraEisen, ruw?.stuurdocument].map((x) => x?.trim()).filter(Boolean).join("\n");
+  return {
+    ...(d.vak?.trim() ? { vak: d.vak.trim() } : {}),
+    ...(d.mcVragen != null && d.openVragen != null ? { mcVragen: d.mcVragen, openVragen: d.openVragen } : {}),
+    ...(extra ? { extraEisen: extra } : {}),
+    ...(d.moeilijkheid ? { moeilijkheid: d.moeilijkheid } : {}),
+    ...(d.examenvragen ? { examenvragen: true } : {}),
+    ...(d.cijferNorm ? { nTerm: nTermVoorCesuur(d.cijferNorm.cesuurPct) } : {}),
+  };
+}
+/** Meerkeuze = deelvraag met opties (A–D of juist/onjuist); de rest is open. */
+export const isMc = (d: { opties?: unknown[] }) => (d.opties?.length ?? 0) >= 2;
+/** N-term bij een cesuur (% van de punten voor een 5,5): 9 · c + N = 5,5, begrensd op 0–2, op 2 decimalen. */
+export function nTermVoorCesuur(cesuurPct: number): number {
+  return Math.round(Math.max(0, Math.min(2, 5.5 - (9 * cesuurPct) / 100)) * 100) / 100;
 }
 
 export interface Generatie {
@@ -203,16 +238,23 @@ export function specPrompt(inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "pun
     .map((t) => `${t.nr}=${t.code} (${t.naam.slice(0, 50)})`)
     .join("; ");
   const r = inv.rttiDoel;
+  const vv = vasteVorm(inv);
   const nVs = [Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 4)), Math.max(2, Math.round((kal.items * LENGTE_DOEL) / 3))];
   return [
-    `TOETS: "${inv.titel}" · NaSk · ${inv.leerweg} klas ${inv.leerjaar} · ${inv.duurMinuten} minuten.`,
+    `TOETS: "${inv.titel}" · ${inv.vak?.trim() || "NaSk"} · ${inv.leerweg} klas ${inv.leerjaar} · ${inv.duurMinuten} minuten.`,
+    vv
+      ? `VASTE EIS VAN DE DOCENT (hard): de uiteindelijke toets heeft PRECIES ${vv.mc} meerkeuzedeelvragen (met "opties" en een "juist"-letter) en PRECIES ${vv.open} open deelvragen (zonder opties en zonder "juist"-letter), samen PRECIES ${kal.punten} punten. Lever nu ongeveer 15 % extra van BEIDE soorten (minstens ${Math.ceil(vv.mc * LENGTE_DOEL)} meerkeuze en ${Math.ceil(vv.open * LENGTE_DOEL)} open${vv.mc === 0 ? "; dus GEEN meerkeuze" : ""}${vv.open === 0 ? "; dus GEEN open vragen" : ""}); de software kiest daarna de exacte set.`
+      : `VASTE EIS VAN DE DOCENT (hard): de uiteindelijke toets heeft PRECIES ${kal.punten} punten.`,
     // Ruim 115 %: afgekeurde vraagstukken worden eerst geschrapt (geen herstelaanroep); te lang wordt deterministisch
     // ingekort tot 90–110 % (geen extra aanroep).
     `LENGTE: totaal ${Math.round(kal.punten * LENGTE_DOEL)} punten (minimaal ${Math.ceil(kal.punten * LENGTE_MIN)}, maximaal ${Math.floor(kal.punten * LENGTE_MAX)}) verdeeld over ongeveer ${Math.ceil(kal.items * LENGTE_DOEL)} deelvragen (minimaal ${Math.ceil(kal.items * LENGTE_MIN)}), dus ${nVs[0]}–${nVs[1]} vraagstukken van 3 of 4 deelvragen. Dit is bewust meer dan de toetstijd: de software kiest daarna zelf. Tel de punten na voordat je antwoordt.`,
     `RTTI-doel (percentage van de punten): R ${r.R}%, T1 ${r.T1}%, T2 ${r.T2}%, I ${r.I}%.`,
-    kal.vorm ? `VRAAGVORMEN (aantal deelvragen, ongeveer, zoals echte toetsen van deze klas): ${vormRegel(kal.vorm, kal.items)}${kal.pct1p ? `; ongeveer ${kal.pct1p}% van de deelvragen is 1 punt` : ""}.` : "",
+    !vv && kal.vorm ? `VRAAGVORMEN (aantal deelvragen, ongeveer, zoals echte toetsen van deze klas): ${vormRegel(kal.vorm, kal.items)}${kal.pct1p ? `; ongeveer ${kal.pct1p}% van de deelvragen is 1 punt` : ""}.` : "",
     `FIGUREN: een goede toets heeft 2–4 figuren waar ze iets toevoegen (een schema, een meteraflezing, een grafiek of een uitgewerkt voorbeeld in de context), gekozen uit het FIGURENMENU bij de onderwerpen van deze lesstof, elk met "controle". Een toets zonder enige figuur is bij deze stof bijna altijd zwakker; voeg nooit een figuur toe die niets toevoegt.${inv.plaatjes === "zonder" ? " Geen ai-afbeelding (de docent wil geen foto's); figuren uit de bibliotheek wel." : ""}`,
     pars.length ? `PARAGRAFEN: elke paragraaf komt terug in minstens TWEE verschillende vraagstukken (waar de lesstof dat toelaat; zo blijft de dekking heel als er een vraagstuk afvalt), verder verdeeld naar de hoeveelheid stof. Zet de paragraafcode vooraan in elk leerdoel. Paragrafen: ${pars.map((p) => `${p.code} ${p.titel}`).join("; ")}.` : "",
+    inv.moeilijkheid && inv.moeilijkheid !== "normaal" ? `MOEILIJKHEID (keuze van de docent): ${inv.moeilijkheid === "makkelijk" ? "makkelijker dan normaal: kortere contexten, minder rekenstappen, meer T1" : "moeilijker dan normaal: meer T2/I, rekenwerk in meer stappen"}.` : "",
+    inv.examenvragen && inv.leerjaar >= 3 ? `EXAMENSTIJL (keuze van de docent): contexten en vraagtypen zoals het CSE (de 62 CSE-vraagtypen), nooit letterlijk uit een examen.` : "",
+    inv.extraEisen?.trim() ? `EXTRA EISEN VAN DE DOCENT (volg ze, tenzij ze een regel hierboven breken):\n${inv.extraEisen.trim().slice(0, 2000)}` : "",
     inv.leerjaar <= 2 ? `NIVEAU: onderbouw klas ${inv.leerjaar}: korte inleidingen, eenvoudige taal, rekenwerk in 1–2 stappen; wel CSE-opbouw met vraagstukken.` : "",
     `WEETVRAGEN: hoogstens ${Math.round((MAX_1P_R[inv.leerweg] ?? 0.35) * 100)}% van de punten (${Math.floor((MAX_1P_R[inv.leerweg] ?? 0.35) * kal.punten)} punten) uit 1-punts R-vragen.`,
     bloklijstRegel(inv.bronmateriaal),
@@ -359,6 +401,8 @@ export interface Keuringsrapport {
     punten: number;
     doelPunten: number;
     doelVragen: number;
+    mc: number;
+    open: number;
     lengtePct: number;
     rekenStappen: number;
     rekenFout: number;
@@ -417,7 +461,7 @@ export function alsToetsSpec(gen: Generatie, inv: SpecInvoer): ToetsSpec {
     titel: gen.titel || inv.titel,
     vragen: gen.vraagstukken.map((v) => v.id),
     minuten: inv.duurMinuten,
-    nTerm: 1,
+    nTerm: inv.nTerm ?? 1,
     klas: { leerjaar: inv.leerjaar, leerweg: inv.leerweg },
     voorblad: {
       kop: inv.titel,
@@ -529,6 +573,11 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
   const punten = alle.reduce((s, d) => s + (d.punten ?? 0), 0);
   const lengtePct = Math.round((punten / kal.punten) * 100);
   if (lengtePct < 90 || lengtePct > 110) voeg("", `lengte: ${punten} punten = ${lengtePct} % van het doel ${kal.punten} (moet 90–110 %)`);
+  const nMc = alle.filter(isMc).length;
+  const nOpen = alle.length - nMc;
+  const vv = vasteVorm(inv);
+  if (vv && (nMc !== vv.mc || nOpen !== vv.open)) voeg("", `spec: ${nMc} meerkeuze en ${nOpen} open, de docent vraagt precies ${vv.mc} meerkeuze en ${vv.open} open`);
+  if (punten !== kal.punten) voeg("", `spec: ${punten} punten, de docent vraagt precies ${kal.punten}`);
   if (alle.length < Math.ceil(kal.items * 0.85)) voeg("", `lengte: ${alle.length} deelvragen, doel ± ${kal.items} (minimaal ${Math.ceil(kal.items * 0.85)})`);
   const rekenStappen = alle.reduce((s, d) => s + (d.berekeningen?.length ?? 0), 0);
   const rekenFout = res.keuringen.reduce((s, k) => s + k.fouten.filter((f) => /geeft .*spec zegt|afgerond|staat niet in|onbekend teken|rest na positie|onbekende variabele|parameter .* staat niet/i.test(f)).length, 0);
@@ -542,6 +591,8 @@ export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibra
     feiten: {
       vraagstukken: gen.vraagstukken.length,
       vragen: alle.length,
+      mc: nMc,
+      open: nOpen,
       punten,
       doelPunten: kal.punten,
       doelVragen: kal.items,
@@ -684,7 +735,7 @@ function contextRegels(gen: Generatie, inv: SpecInvoer, behalve: string, extraPu
  * Prompt voor een NIEUW, volledig vraagstuk: exacte punten per deelvraag, uit de minst getoetste paragrafen van
  * dezelfde lesstof, met de begrippen die op zijn, en (bij een herkansing) waarom de vorige poging is afgekeurd.
  */
-export function aanvulPrompt(o: { id: string; punten: number; paragrafen: string[]; gen: Generatie; inv: SpecInvoer; fouten?: string[]; vorige?: VraagstukSpec; figuur?: string }): string {
+export function aanvulPrompt(o: { id: string; punten: number; paragrafen: string[]; gen: Generatie; inv: SpecInvoer; fouten?: string[]; vorige?: VraagstukSpec; figuur?: string; vorm?: { mc: number; open: number } }): string {
   const verdeling = puntenVerdeling(o.punten);
   const p = verdeling.reduce((a, b) => a + b, 0);
   const kop = `Schrijf nu ALLEEN één vraagstuk (JSON: {"vraagstuk": …}). De rest van de toets staat al vast:\n${overzicht(o.gen, o.id)}`;
@@ -692,8 +743,9 @@ export function aanvulPrompt(o: { id: string; punten: number; paragrafen: string
   const terug = o.vorige && o.fouten?.length
     ? `\n\nJE VORIGE POGING ("${o.vorige.titel}") IS DOOR DE SOFTWARE AFGEKEURD. Waarom:\n- ${waaromAfgekeurd(o.fouten).join("\n- ")}\nLetterlijke bevindingen:\n- ${o.fouten.slice(0, 8).join("\n- ")}\nSchrijf een ANDER vraagstuk (andere situatie en andere begrippen) waarin deze punten niet terugkomen.`
     : "";
+  const vorm = o.vorm ? `VORM (eis van de docent): van deze deelvragen zijn er precies ${o.vorm.mc} meerkeuze (met "opties" en "juist"; meerkeuze is 1 punt) en ${o.vorm.open} open (zonder opties en zonder "juist"). Pas de puntverdeling daarop aan, het totaal blijft ${p} punten.` : "";
   const fig = o.figuur ? `FIGUUR: dit vraagstuk krijgt een figuur die de vragen echt beter maakt (de docent-review stelde voor: ${o.figuur}). Kies uit het FIGURENMENU, met "controle", en laat minstens één deelvraag de figuur echt gebruiken (aflezen, aanvullen of redeneren).` : "";
-  return [kop, "", opdracht, fig, ...contextRegels(o.gen, o.inv, o.id, p), "Houd je verder aan alle regels van de opdracht." + terug].filter(Boolean).join("\n");
+  return [kop, "", opdracht, vorm, fig, ...contextRegels(o.gen, o.inv, o.id, p), "Houd je verder aan alle regels van de opdracht." + terug].filter(Boolean).join("\n");
 }
 
 /**
@@ -772,6 +824,88 @@ export function zonderStaart(v: VraagstukSpec): VraagstukSpec | null {
   return v.deelvragen.length >= 4 ? { ...v, deelvragen: v.deelvragen.slice(0, -1) } : null;
 }
 
+/** MC/open-telling van een (deel)toets. */
+export function vormVan(vs: VraagstukSpec[]): { mc: number; open: number } {
+  const d = vs.flatMap((v) => v.deelvragen ?? []);
+  const mc = d.filter(isMc).length;
+  return { mc, open: d.length - mc };
+}
+/** Schrappen mag de verdeling van de docent niet onder de eis brengen (of verder eronder als hij er al onder zit). */
+export function vormHeel(inv: SpecInvoer, voor: VraagstukSpec[], na: VraagstukSpec[]): boolean {
+  const vv = vasteVorm(inv);
+  if (!vv) return true;
+  const a = vormVan(voor), b = vormVan(na);
+  return b.mc >= Math.min(a.mc, vv.mc) && b.open >= Math.min(a.open, vv.open);
+}
+
+/**
+ * Exacte selectie (deterministisch, geen aanroep): kies per vraagstuk "heel", "zonder laatste deelvraag" (alleen bij
+ * 4 deelvragen) of "weg", zodat de toets PRECIES het puntentotaal en (indien opgegeven) precies het aantal
+ * meerkeuze- en open deelvragen van de docent haalt. Bij meerdere oplossingen: de hoogste waarde (T2/I zwaarder),
+ * dan zo veel mogelijk hele vraagstukken. Geen oplossing → null (dan is de toets niet af).
+ */
+export function selecteerExact(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "punten">, verboden: Set<string> = new Set()): Generatie | null {
+  const vv = vasteVorm(inv);
+  const P = kal.punten;
+  type St = { w: number; keuze: (VraagstukSpec | null)[] };
+  let dp = new Map<string, St>([["0|0|0", { w: 0, keuze: [] }]]);
+  for (const v of gen.vraagstukken) {
+    const kort = zonderStaart(v);
+    const opties = ([[v, 1, "heel"], [null, 0, "weg"], ...(kort ? [[kort, 0, "kort"]] : [])] as [VraagstukSpec | null, number, string][]).filter(([, , n]) => !verboden.has(`${v.id}:${n}`));
+    const nd = new Map<string, St>();
+    for (const [key, st] of dp) {
+      const [m, o, p] = key.split("|").map(Number) as [number, number, number];
+      for (const [ov, heelBonus] of opties) {
+        const f = ov ? vormVan([ov]) : { mc: 0, open: 0 };
+        const m2 = vv ? m + f.mc : 0, o2 = vv ? o + f.open : 0, p2 = p + (ov ? puntenVan(ov) : 0);
+        if (p2 > P || (vv && (m2 > vv.mc || o2 > vv.open))) continue;
+        const w = st.w + (ov ? waardeVan(ov) * 10 + heelBonus : 0);
+        const k2 = `${m2}|${o2}|${p2}`;
+        const oud = nd.get(k2);
+        if (!oud || w > oud.w) nd.set(k2, { w, keuze: [...st.keuze, ov] });
+      }
+    }
+    dp = nd;
+  }
+  const best = dp.get(`${vv ? vv.mc : 0}|${vv ? vv.open : 0}|${P}`);
+  if (!best) return null;
+  return { ...gen, vraagstukken: best.keuze.filter((x): x is VraagstukSpec => Boolean(x)) };
+}
+
+/**
+ * Exacte selectie die ook de keuring haalt: geeft een selectie bevindingen (bijv. 1p-R-aandeel of een weggever door
+ * het weglaten), dan wordt die keuze per betrokken vraagstuk verboden en opnieuw gezocht (hoogstens 12 keer).
+ */
+export function selecteerGoed(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): Generatie | null {
+  const verboden = new Set<string>();
+  for (let n = 0; n < 12; n++) {
+    const sel = selecteerExact(gen, inv, kal, verboden);
+    if (!sel) return null;
+    const r = keurGeneratie(sel, inv, kal);
+    const fout = sel.vraagstukken.filter((v) => r.perId[v.id]?.length);
+    if (!fout.length) return sel;
+    for (const v of fout) verboden.add(`${v.id}:${v.deelvragen.length === gen.vraagstukken.find((x) => x.id === v.id)?.deelvragen.length ? "heel" : "kort"}`);
+  }
+  return null;
+}
+
+/** Voldoet de (geselecteerde) toets aan de harde spec: geen afgekeurd vraagstuk, exact punten en exacte vorm. */
+export function voldoetAanSpec(r: Keuringsrapport, inv: SpecInvoer, kal: Pick<Kalibratie, "punten">): boolean {
+  const vv = vasteVorm(inv);
+  return vraagstukFouten(r) === 0 && r.feiten.punten === kal.punten && (!vv || (r.feiten.mc === vv.mc && r.feiten.open === vv.open));
+}
+
+/** Leesbare reden (voor de docent) waarom de toets niet aan de spec kwam. */
+export function waaromNietGelukt(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "punten">, usd: number, stopReden?: string): string {
+  const vv = vasteVorm(inv);
+  const f = vormVan(gen.vraagstukken);
+  const p = gen.vraagstukken.reduce((s, v) => s + puntenVan(v), 0);
+  const eis = vv ? `${vv.mc} meerkeuze, ${vv.open} open en ${kal.punten} punten` : `${kal.punten} punten`;
+  const heb = vv ? `${f.mc} meerkeuze, ${f.open} open en ${p} punten` : `${p} punten`;
+  const waarom = stopReden === "vangnet" ? "het kostenplafond is bereikt" : stopReden === "tijd" ? "de tijd is op" : stopReden === "vastgelopen" ? "het aanvullen liep vast" : "de goedgekeurde vragen passen niet precies";
+  return `Niet gelukt: je vroeg ${eis}; er waren ${heb} goedgekeurd en daarmee is de exacte toets niet te maken (${waarom}). Er is geen halve toets gemaakt. Kosten: $${usd.toFixed(2)}. Probeer het opnieuw, of pas de aantallen of de lesstof aan.`;
+}
+
 /**
  * Eerst schrappen, dan pas herstellen: zolang de toets daarna nog ≥ 90 % lengte en genoeg deelvragen heeft en er
  * geen paragraaf extra gaat ontbreken. Liever één deelvraag dan een heel vraagstuk: zit de fout alleen in de laatste
@@ -788,7 +922,7 @@ export function schrapAfgekeurd(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kali
     const fout = gen.vraagstukken.filter((v) => r.perId[v.id]?.length);
     if (!fout.length) break;
     const fig0 = figuurAantal(gen);
-    const heel = (f: Keuringsrapport["feiten"], g: Generatie) => f.lengtePct >= 90 && f.vragen >= minV && f.ontbrekendeParagrafen.every((p) => ontbr.has(p)) && figuurOk(fig0, figuurAantal(g));
+    const heel = (f: Keuringsrapport["feiten"], g: Generatie) => f.lengtePct >= 90 && f.vragen >= minV && f.ontbrekendeParagrafen.every((p) => ontbr.has(p)) && figuurOk(fig0, figuurAantal(g)) && vormHeel(inv, gen.vraagstukken, g.vraagstukken);
     // 1. alleen de laatste deelvraag weg, als het vraagstuk daarmee goed wordt
     const staart = fout
       .map((v) => {
@@ -847,7 +981,7 @@ export function inkorten(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie,
     const beoordeel = (g: Generatie, k: Omit<Kand, "gen" | "pct">) => {
       const r2 = keurGeneratie(g, inv, kal);
       const f2 = r2.feiten;
-      if (f2.lengtePct < 90 || f2.ontbrekendeParagrafen.length > ontbr || f2.vragen < minV || vraagstukFouten(r2) > fout0) return;
+      if (f2.lengtePct < 90 || f2.ontbrekendeParagrafen.length > ontbr || f2.vragen < minV || vraagstukFouten(r2) > fout0 || !vormHeel(inv, gen.vraagstukken, g.vraagstukken)) return;
       const fig = figuurAantal(g);
       if (!figuurOk(fig0, fig)) return;
       kand.push({ gen: g, pct: f2.lengtePct, ...k, figVerlies: fig < fig0 });
@@ -1078,10 +1212,10 @@ export function alsGegenereerdeToets(res: Pijplijnresultaat, inv: SpecInvoer & {
     extraEisen: "",
     ronde: 1,
     cijferNorm: { model: "lineair", cesuurPct: 55, exponent: 1 },
-    meta: { titel: inv.titel, vak: "NaSk", leerweg: inv.leerweg, leerjaar: inv.leerjaar as 1 | 2 | 3 | 4, duurMinuten: inv.duurMinuten, school: "", hulpmiddelen: [], instructies: [], onderwerp: inv.titel, versie: "A", moeilijkheid: "normaal" },
+    meta: { titel: inv.titel, vak: inv.vak?.trim() || "NaSk", leerweg: inv.leerweg, leerjaar: inv.leerjaar as 1 | 2 | 3 | 4, duurMinuten: inv.duurMinuten, school: "", hulpmiddelen: [], instructies: [], onderwerp: inv.titel, versie: "A", moeilijkheid: inv.moeilijkheid ?? "normaal" },
     vragen,
     nakijkmodel,
-    cesuur: { nTerm: 1, cesuurPunten: 0, toelichting: "", formule: "" },
+    cesuur: { nTerm: inv.nTerm ?? 1, cesuurPunten: 0, toelichting: "", formule: "" },
     matrijs: { domeinen: [], cellen: {}, totalen: {} as never, doelverdeling: inv.rttiDoel },
     kwaliteit,
     ...extra,

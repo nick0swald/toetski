@@ -7,7 +7,7 @@ import type { FiguurSpec, OpmaakVraag, SeCode, ToetsSpec } from "./spec.ts";
 import type { Pijplijnresultaat } from "./pijplijn.ts";
 import type { PngRender } from "./export-pdf.ts";
 import { figuurSvg } from "./figuren/index.ts";
-import { cijferGrafiekSvg, cijferTabel, cesuur, cesuurPct, formule } from "./cijfer-n.ts";
+import { cijferGrafiekSvg, cijferTabel, cesuur, cesuurPct, formule, nlN } from "./cijfer-n.ts";
 import { nlCijfer } from "../cijfer.ts";
 import { PAGE_A4, PAGE_MARGINS, pageNumberChrome } from "../docx-pagina.ts";
 import { leerdoelMetDoel, typeSleutel, vraagtypeNaam, antwoordKop, bandTekst, contextTitel, indelingKop, instructieVoor, INVULVELDEN, jaarVan, matrijsTotalen, ondVan, voorbladTekst, rttiRegel, SE_INFO, SE_ORDE, seLabel, seOmschrijving, UITLEG_DOCENT, uitlegIndeling, vraagstukBereik } from "./opmaak.ts";
@@ -279,7 +279,7 @@ export async function maakDocxs(toets: ToetsSpec, res: Pijplijnresultaat, png: P
     ]),
     new Paragraph({ children: [new PageBreak()] }),
     para("Cijferberekening", { bold: true, size: 26, na: 120 }),
-    para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlCijfer(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cesuur(max, n)} van de ${max} punten</b> (${cesuurPct(cesuur(max, n), max)} %).`, { na: 120 }),
+    para(`Maximumscore: <b>${max} punten</b>. Normeringsterm N = ${nlN(n)}. ${formule(max, n)}. Cesuur (laagste voldoende): <b>${cesuur(max, n)} van de ${max} punten</b> (${cesuurPct(cesuur(max, n), max)} %).`, { na: 120 }),
     rasterTabel(
       Array(4).fill(["Score", "Cijfer"]).flat(),
       Array.from({ length: rijenN }, (_, r) => Array.from({ length: 4 }, (_, g) => { const it = ct[g * rijenN + r]; return it ? [String(it.score), nlCijfer(it.cijfer)] : ["", ""]; }).flat()),

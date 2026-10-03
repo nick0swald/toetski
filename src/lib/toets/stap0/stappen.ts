@@ -8,7 +8,7 @@
  *       nieuw vraagstuk met dezelfde punten en paragrafen. Aanvullen = volledige vraagstukken met exacte punten uit de
  *       minst getoetste paragrafen; twee gelijke mislukkingen → andere strategie (uitbreiden; 88–90 % met
  *       waarschuwing); beide strategieën vast → stoppen ("vastgelopen");
- *   (c) "afronden": lengtebewust inkorten tot net onder 110 % (nooit onder 90 %), liever losse deelvragen.
+ *   (c) "afronden": afgekeurde vraagstukken weg, dan exacte selectie (precies punten + MC/open van de docent); lukt dat niet: "mislukt".
  * Geen vaste limiet op het aantal herstelaanroepen (alleen tijd en geld); geen rechter in productie.
  * Pure logica: de modelaanroep komt binnen als `StapChat` (productie: xaiChat met XAI_API_KEY; tests: nep).
  */
@@ -21,7 +21,7 @@ import {
   figuurAantal,
   foutHandtekening,
   gerichtPrompt,
-  inkorten,
+  puntenVerdeling,
   isServerfout,
   keurGeneratie,
   metId,
@@ -37,6 +37,13 @@ import {
   vraagstukFouten,
   vraagstukSchema,
   zonderStaart,
+  selecteerExact,
+  selecteerGoed,
+  voldoetAanSpec,
+  vormHeel,
+  vormVan,
+  vasteVorm,
+  waaromNietGelukt,
   type Generatie,
   type Keuringsrapport,
   type SpecInvoer,
@@ -46,7 +53,7 @@ import type { VraagstukSpec } from "./spec.ts";
 import type { Kalibratie } from "../kalibratie.ts";
 
 export type Stap0Kal = Pick<Kalibratie, "items" | "punten"> & Partial<Pick<Kalibratie, "vorm" | "pct1p">>;
-export type Stap0Fase = "spec" | "herstel" | "afronden" | "klaar";
+export type Stap0Fase = "spec" | "herstel" | "afronden" | "klaar" | "mislukt";
 
 /** Productieregels (Nick, 3 okt): doel ≤ $0,35 per toets, vangnet $1, alarm boven $0,50; tijd is de grens. */
 export const STAP0_BUDGET = {
@@ -84,6 +91,10 @@ export interface AanvulTaak {
   fouten?: string[];
   /** Figuurtaak uit de docent-review: dit nieuwe vraagstuk moet een (zinvolle) figuur hebben; één poging. */
   figuur?: string;
+  /** Vervangt dit (afgekeurde) vraagstuk; dat blijft staan tot de vervanger is goedgekeurd. */
+  vervangt?: string;
+  /** Gewenste MC/open-verdeling van het nieuwe vraagstuk (eis van de docent). */
+  vorm?: { mc: number; open: number };
 }
 
 /** Docent-review: rondes, open herstelopdrachten per vraagstuk en de first-time-right-meting. */
@@ -134,6 +145,8 @@ export interface Stap0Staat {
   review?: Stap0Review;
   /** Aantal figuren (bibliotheek) in de ruwe eerste generatie en na eerst-schrappen. */
   figuren?: { ruw: number; naSchrap: number };
+  /** Fase "mislukt": leesbare reden voor de docent (de toets haalde de spec niet; er wordt niets geleverd). */
+  nietGelukt?: string;
 }
 
 export type StapChat = (
@@ -162,10 +175,15 @@ const MAX_LOG = 300;
 const andereFouten = (r: Keuringsrapport, id: string) => Object.entries(r.perId).filter(([x]) => x && x !== id).flatMap(([x, l]) => l.map((f) => `[${x}] ${f}`)).slice(0, 8);
 const fouteIds = (r: Keuringsrapport, gen: Generatie) => gen.vraagstukken.filter((v) => r.perId[v.id]?.length).map((v) => v.id);
 
-/** Is de toets af: geen fouten op vraagstukniveau, lengte ≥ 90 %, genoeg deelvragen en alle paragrafen gedekt. */
-export function allesGoed(r: Keuringsrapport, kal: Stap0Kal): boolean {
+/**
+ * Is de toets af: geen fouten op vraagstukniveau, alle paragrafen gedekt en (met gen + inv) een exacte selectie
+ * mogelijk (precies de punten en de MC/open-verdeling van de docent); zonder gen/inv: lengte ≥ 90 % en genoeg deelvragen.
+ */
+export function allesGoed(r: Keuringsrapport, kal: Stap0Kal, gen?: Generatie, inv?: SpecInvoer): boolean {
   const f = r.feiten;
-  return vraagstukFouten(r) === 0 && f.lengtePct >= 90 && f.vragen >= Math.ceil(kal.items * 0.85) && f.ontbrekendeParagrafen.length === 0;
+  if (vraagstukFouten(r) !== 0 || f.ontbrekendeParagrafen.length !== 0) return false;
+  if (gen && inv) return selecteerGoed(gen, inv, kal) !== null;
+  return f.lengtePct >= 90 && f.vragen >= Math.ceil(kal.items * 0.85);
 }
 
 /** Voer precies één stap uit (volgens `staat.fase`) en geef de nieuwe toestand terug. Gooit alleen bij een mislukte eerste generatie. */
@@ -307,9 +325,9 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
     const figuurOpen = () => s.aanvulling.open.some((t) => t.figuur);
     // Docent-review: na groen op de deterministische keuring; ronde 2 alleen als ronde 1 iets liet herstellen.
     const reviewMag = () => !tijdOp && past(REVIEW.reserveUsd) && (!s.review || (s.review.rondes < REVIEW.maxRondes && s.review.hersteld > 0));
-    if (allesGoed(rap, k) && !reviewOpen().length && !figuurOpen() && reviewMag()) {
+    if (allesGoed(rap, k, gen, s.inv) && !reviewOpen().length && !figuurOpen() && reviewMag()) {
       await doeReview(gen);
-    } else if (allesGoed(rap, k) && !reviewOpen().length && !figuurOpen()) s.fase = "afronden";
+    } else if (allesGoed(rap, k, gen, s.inv) && !reviewOpen().length && !figuurOpen()) s.fase = "afronden";
     else if (tijdOp || !past(B.reserveVraagstukUsd)) {
       s.stopReden = tijdOp ? "tijd" : "vangnet";
       s.fase = "afronden";
@@ -329,7 +347,9 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
         }
       };
       const nBudget = Math.max(0, Math.floor((B.vangnetUsd - s.kosten.usd) / B.reserveVraagstukUsd + 1e-9));
-      const fout = [...new Set([...fouteIds(rap, gen), ...reviewOpen()])];
+      // Een vraagstuk met een open vervangtaak blijft staan (vervangen vóór weghalen) maar wordt niet opnieuw hersteld.
+      const inVervanging = (id: string) => s.aanvulling.open.some((t) => t.vervangt === id);
+      const fout = [...new Set([...fouteIds(rap, gen), ...reviewOpen()])].filter((id) => !inVervanging(id));
       if (fout.length) {
         // Herstel: minst geprobeerde eerst; hoogstens `parallel` tegelijk.
         const batch = [...fout].sort((a, b) => (s.pogingen[a] ?? 0) - (s.pogingen[b] ?? 0)).slice(0, Math.min(B.parallel, nBudget));
@@ -361,7 +381,7 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
         // Te vaak mislukt. Weg mag alleen als lengte (≥ 90 %), aantal deelvragen en dekking heel blijven; anders
         // eerst alleen de laatste deelvraag (als het vraagstuk daarmee goed is), en anders wordt het vraagstuk
         // vervangen door een NIEUW vraagstuk met dezelfde punten en paragrafen (aanvultaak).
-        const opgegeven = fouteIds(rap, gen).filter((id) => (s.pogingen[id] ?? 0) >= B.pogingenPerVraagstuk);
+        const opgegeven = fouteIds(rap, gen).filter((id) => (s.pogingen[id] ?? 0) >= B.pogingenPerVraagstuk && !inVervanging(id));
         for (const id of opgegeven) {
           const v = gen.vraagstukken.find((x) => x.id === id)!;
           const ontbr = new Set(rap.feiten.ontbrekendeParagrafen);
@@ -370,16 +390,16 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
           const v2 = zonderStaart(v);
           const metStaart = v2 ? { ...gen, vraagstukken: gen.vraagstukken.map((x) => (x.id === id ? v2 : x)) } : null;
           const rs = metStaart ? keur(metStaart) : null;
-          if (fz.lengtePct >= 90 && fz.vragen >= minV && fz.ontbrekendeParagrafen.every((p) => ontbr.has(p))) {
+          if (fz.lengtePct >= 90 && fz.vragen >= minV && fz.ontbrekendeParagrafen.every((p) => ontbr.has(p)) && vormHeel(s.inv, gen.vraagstukken, zonder.vraagstukken) && selecteerExact(zonder, s.inv, k)) {
             log({ wat: `geschrapt na ${s.pogingen[id]} pogingen (lengte blijft ${fz.lengtePct} %)`, id, ok: false, fouten: rap.perId[id] });
             gen = zonder;
-          } else if (metStaart && rs && !rs.perId[id]?.length && rs.feiten.lengtePct >= 90) {
+          } else if (metStaart && rs && !rs.perId[id]?.length && rs.feiten.lengtePct >= 90 && vormHeel(s.inv, gen.vraagstukken, metStaart.vraagstukken)) {
             log({ wat: `deelvraag ${v.deelvragen.at(-1)!.id} geschrapt na ${s.pogingen[id]} pogingen (rest is goed)`, id, ok: false, fouten: rap.perId[id] });
             gen = metStaart;
           } else {
-            const taak: AanvulTaak = { id: `vervang-${++s.aanvulling.n}`, punten: puntenVan(v), paragrafen: paragrafenVan(v, s.inv) };
-            log({ wat: `vervangen door nieuw vraagstuk ${taak.id} (${taak.punten} p) na ${s.pogingen[id]} pogingen; schrappen zou de lengte op ${fz.lengtePct} % zetten`, id, ok: false, fouten: rap.perId[id] });
-            gen = zonder;
+            // Vervangen vóór weghalen: het oude vraagstuk blijft staan tot de vervanger is goedgekeurd.
+            const taak: AanvulTaak = { id: `vervang-${++s.aanvulling.n}`, punten: puntenVan(v), paragrafen: paragrafenVan(v, s.inv), vervangt: id, ...(vasteVorm(s.inv) ? { vorm: vormVan([v]) } : {}) };
+            log({ wat: `wordt vervangen door nieuw vraagstuk ${taak.id} (${taak.punten} p) na ${s.pogingen[id]} pogingen; schrappen zou de lengte op ${fz.lengtePct} % zetten`, id, ok: false, fouten: rap.perId[id] });
             s.aanvulling.open.push(taak);
           }
           rap = keur(gen);
@@ -425,16 +445,23 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
           const telling = paragraafTelling(gen.vraagstukken, s.inv);
           const mist = telling.filter((p) => p.n === 0);
           const n = Math.max(1, Math.min(B.parallel, nBudget, Math.max(Math.ceil(tekortP / 6), Math.ceil(mist.length / 2), Math.ceil(tekortV / 4))));
-          const totaal = Math.max(3 * n, tekortP);
+          // Tekort aan meerkeuze of open (eis van de docent) telt mee: het nieuwe vraagstuk krijgt die vorm.
+          const vv = vasteVorm(s.inv);
+          const mcTekort = vv ? Math.max(0, vv.mc - f.mc) : 0;
+          const openTekort = vv ? Math.max(0, vv.open - f.open) : 0;
+          const totaal = Math.max(3 * n, tekortP, mcTekort + openTekort);
           taken = Array.from({ length: n }, (_, i) => {
             const punten = Math.max(3, Math.min(8, Math.round(totaal / n)));
             const eigen = mist.filter((_, j) => j % n === i);
             const pars = (eigen.length ? eigen : telling.slice((2 * i) % Math.max(1, telling.length)).concat(telling).slice(0, 2)).map((p) => `${p.code} ${p.titel}`);
-            return { id: `aanvulling-${++s.aanvulling.n}`, punten, paragrafen: pars };
+            const nDeel = puntenVerdeling(punten).length;
+            const mcI = Math.min(nDeel, Math.ceil(mcTekort / n));
+            const vorm = vv && (mcTekort || openTekort) ? { mc: openTekort ? mcI : nDeel, open: openTekort ? nDeel - mcI : 0 } : undefined;
+            return { id: `aanvulling-${++s.aanvulling.n}`, punten, paragrafen: pars, ...(vorm ? { vorm } : {}) };
           });
         }
         taken = taken.slice(0, Math.min(B.parallel, nBudget));
-        const nieuw = await pool(taken, B.parallel, (t) => vraag(aanvulPrompt({ id: t.id, punten: t.punten, paragrafen: t.paragrafen, gen, inv: s.inv, vorige: t.vorige, fouten: t.fouten, figuur: t.figuur })));
+        const nieuw = await pool(taken, B.parallel, (t) => vraag(aanvulPrompt({ id: t.id, punten: t.punten, paragrafen: t.paragrafen, gen, inv: s.inv, vorige: t.vorige, fouten: t.fouten, figuur: t.figuur, vorm: t.vorm })));
         const open: AanvulTaak[] = s.aanvulling.open.filter((t) => !taken.includes(t));
         taken.forEach((t, i) => {
           const v = nieuw[i];
@@ -448,7 +475,9 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
             return;
           }
           const voor = vraagstukFouten(rap);
-          const kand: Generatie = { ...gen, vraagstukken: [...gen.vraagstukken, metId(v, t.id)] };
+          // Vervangtaak: pas nu (vervanger goedgekeurd) gaat het oude vraagstuk eruit.
+          const basisVs = t.vervangt ? gen.vraagstukken.filter((x) => x.id !== t.vervangt) : gen.vraagstukken;
+          const kand: Generatie = { ...gen, vraagstukken: [...basisVs, metId(v, t.id)] };
           const rk = keur(kand);
           const eigen = rk.perId[t.id] ?? [];
           const zonderFiguur = t.figuur && figuurAantal(kand) <= figuurAantal(gen) ? ["figuur: het nieuwe vraagstuk heeft geen figuur"] : [];
@@ -482,11 +511,9 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
       if (s.vul.gelijk >= 2 || s.vul.mislukt >= 6) {
         const r2 = keur(gen);
         const alleenLengte = vraagstukFouten(r2) === 0 && r2.feiten.ontbrekendeParagrafen.length === 0 && r2.feiten.vragen >= minV;
-        if (alleenLengte && r2.feiten.lengtePct >= 88) {
-          (s.waarschuwingen ??= []).push(`lengte ${r2.feiten.lengtePct} % geaccepteerd (88–90 %) na ${s.vul.mislukt} mislukte aanvulling(en) (${s.vul.sig ?? "?"})`);
-          log({ wat: `andere strategie: lengte ${r2.feiten.lengtePct} % geaccepteerd met waarschuwing`, id: "", ok: true });
-          s.fase = "afronden";
-        } else if ((s.vul.wissels ?? 0) >= 3) {
+        // Geen "88–90 % accepteren" meer: de spec van de docent is exact (anders: niet gelukt).
+        void alleenLengte;
+        if ((s.vul.wissels ?? 0) >= 3) {
           // Beide strategieën twee keer zonder enige vooruitgang: vastgelopen; stoppen spaart geld (het vangnet blijft de grens).
           s.stopReden = "vastgelopen";
           log({ wat: `gestopt: aanvullen en uitbreiden lopen vast (${s.vul.sig ?? "?"})`, id: "", ok: false, fouten: s.vul.laatste });
@@ -501,7 +528,7 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
           s.vul = { gelijk: 0, mislukt: 0, strategie: "nieuw", uit: s.vul.uit, wissels: (s.vul.wissels ?? 0) + 1 };
         }
       }
-      if (s.fase === "herstel" && allesGoed(keur(gen), k) && !s.aanvulling.open.some((t) => t.id.startsWith("vervang-") || t.figuur) && !reviewOpen().length && !reviewMag()) s.fase = "afronden";
+      if (s.fase === "herstel" && allesGoed(keur(gen), k, gen, s.inv) && !s.aanvulling.open.some((t) => t.id.startsWith("vervang-") || t.figuur) && !reviewOpen().length && !reviewMag()) s.fase = "afronden";
     }
     s.gen = gen;
   } else if (s.fase === "afronden") {
@@ -524,14 +551,23 @@ export async function voerStapUit(staat0: Stap0Staat, chat: StapChat, opts: Stap
       }
     }
     s.lengteVoorInkorten = keur(gen).feiten.lengtePct;
-    const kort = inkorten(gen, s.inv, k);
-    kort.stappen.forEach(log);
-    s.gen = kort.gen;
+    // Exact selecteren (deterministisch): precies de punten en de MC/open-verdeling van de docent, anders niet gelukt.
+    const exact = selecteerGoed(gen, s.inv, k);
+    if (exact) {
+      const weg = gen.vraagstukken.reduce((n, v) => n + v.deelvragen.length, 0) - exact.vraagstukken.reduce((n, v) => n + v.deelvragen.length, 0);
+      if (weg) log({ wat: `exacte selectie: ${weg} deelvraag/-vragen weggelaten`, id: "", ok: true });
+    }
+    s.gen = exact ?? gen;
     const r = keur(s.gen);
-    // Geaccepteerde lengte 88–90 % staat als waarschuwing, niet als open bevinding.
-    s.restFouten = s.waarschuwingen?.length ? r.fouten.filter((f) => !/^lengte: \d+ punten = (88|89) %/.test(f)) : r.fouten;
-    s.fase = "klaar";
-    opts.log?.("klaar", monitoring(s, r));
+    s.restFouten = r.fouten;
+    if (exact && voldoetAanSpec(r, s.inv, k)) {
+      s.fase = "klaar";
+      opts.log?.("klaar", monitoring(s, r));
+    } else {
+      s.fase = "mislukt";
+      s.nietGelukt = waaromNietGelukt(gen, s.inv, k, s.kosten.usd, s.stopReden);
+      opts.log?.("klaar", { ...monitoring(s, r), mislukt: true });
+    }
   }
   s.tijden.stapMs.push(nu() - t0);
   opts.log?.("stap", { id: s.id, fase: s.fase, ronde: s.rondes, ms: nu() - t0, usd: s.kosten.usd, gericht: s.kosten.gericht, ...(dezeStap.length ? { afgekeurd: dezeStap } : {}) });
@@ -582,8 +618,10 @@ export function statusTekst(s: Pick<Stap0Staat, "fase" | "rondes" | "kosten" | "
     case "herstel":
       return `Controleren en verbeteren${s.rondes ? ` (ronde ${s.rondes + 1})` : ""}${r ? ` · nog ${r.fouten} punt(en) open` : ""}…`;
     case "afronden":
-      return "Inkorten en opmaken…";
+      return "Exacte toets samenstellen en opmaken…";
     case "klaar":
       return "Klaar.";
+    case "mislukt":
+      return "Niet gelukt.";
   }
 }
