@@ -6,6 +6,8 @@
  *  3. tekenvraag: controle op wat de leerling tekent uit de leerlingfiguur halen; een ontbrekende antwoordfiguur maken
  *     (krachten: pijl uit grootte + richting in de tekst; grafiek: de getoonde reeks wordt de rode antwoordreeks);
  *  4. getal-weggever binnen een vraagstuk → "Ga uit van …" met een andere waarde (en de berekening opnieuw);
+ *  4b. gegeven-weggever over de hele toets (ook W ↔ kW, tussen vraagstukken): het gegeven verschuift naar een andere
+ *     ronde waarde (≈ +20 %) en alle deelvragen die ermee rekenen, worden opnieuw doorgerekend;
  *  5. krachtenfiguur: kader passend om voorwerp + pijlen (niets afgesneden, geen lege ruimte), leerling- en
  *     antwoordfiguur even groot;
  *  6. namen: een persoonsnaam die niet op de westerse/Nederlandse namenlijst staat, wordt in het hele vraagstuk
@@ -18,7 +20,7 @@ import type { Berekening, FiguurControle, FiguurSpec, KrachtenFiguur, Parameter,
 import { figuurSvg, isTekenFiguur, meetFiguur } from "./figuren/index.ts";
 import { getalInTekst, leesNl, nl, rekenUit } from "./reken.ts";
 import { gebruikteNamen, vervangNamen } from "./namen.ts";
-import { afrondDoel, isWeetvraag, significant } from "./inhoud-keuring.ts";
+import { afrondDoel, isWeetvraag, significant, zoekGegevenWeggevers, zoekGetalWeggevers } from "./inhoud-keuring.ts";
 import { normaliseerVraagtype } from "./doelen.ts";
 import { EINDTERMEN, KERNDOELEN } from "../leerdoelen-data.ts";
 
@@ -281,6 +283,57 @@ function fixGetalWeggevers(v: VraagstukSpec, stappen: AutoStap[]): void {
   });
 }
 
+/**
+ * 4b. Gegeven-weggever (zoekGegevenWeggevers): een gegeven ("1400 W", "Ga uit van 3,0 cm") ligt op een uitkomst die
+ * elders berekend wordt, ook in een andere eenheid (W ↔ kW) of in een ander vraagstuk. Is het gegeven een
+ * tekstparameter, dan krijgt hij een duidelijk andere waarde (andereWaarde) in de hele tekst van zijn vraagstuk, en
+ * rekent elke deelvraag die hem gebruikt opnieuw. Alleen als dat de weggever oplost zonder een nieuwe te maken; een
+ * gegeven in een MC-optie of in een figuurcontrole blijft staan (dan beslist de keuring).
+ */
+export function fixGegevenWeggevers(vs: VraagstukSpec[], stappen: AutoStap[]): VraagstukSpec[] {
+  let lijst = vs;
+  const tel = (l: VraagstukSpec[]) => zoekGegevenWeggevers(l).length + zoekGetalWeggevers(l).length;
+  const geprobeerd = new Set<string>();
+  for (let ronde = 0; ronde < 12; ronde++) {
+    const b = zoekGegevenWeggevers(lijst).find((x) => x.gegeven && !geprobeerd.has(x.tekst));
+    if (!b) break;
+    geprobeerd.add(b.tekst);
+    const m = /^(\d+(?:[.,]\d+)?)\s*(\S+)$/.exec(b.gegeven!);
+    const iv = lijst.findIndex((x) => x.id === b.vraagstuk);
+    if (!m || iv < 0) continue;
+    const [, getal, eenheid] = m as unknown as [string, string, string];
+    const v: VraagstukSpec = structuredClone(lijst[iv]!);
+    const weergave = (p: Parameter) => p.weergave ?? nl(p.waarde);
+    const past = (p: Parameter) => p.bron === "tekst" && weergave(p) === getal && (!p.eenheid || p.eenheid.trim() === eenheid);
+    const namen = new Set([...(v.parameters ?? []), ...v.deelvragen.flatMap((d) => d.parameters ?? [])].filter(past).map((p) => p.naam));
+    if (!namen.size) continue;
+    const figs = [v.figuur, ...v.deelvragen.flatMap((d) => [d.figuur, d.antwoordmodel?.figuur])];
+    if (figs.some((f) => ((f as { controle?: FiguurControle[] } | undefined)?.controle ?? []).some((c) => "parameter" in c && namen.has(String(c.parameter))))) continue;
+    const re = new RegExp(`(^|[^0-9,])${esc(getal)}(\\s*${esc(eenheid)})(?![\\p{L}\\d])`, "gu");
+    if (v.deelvragen.some((d) => (d.opties ?? []).some((o) => new RegExp(re.source, "u").test(kaal(o))))) continue;
+    const nieuw = andereWaarde(getal);
+    const zet = (t: string) => t.replace(re, `$1${nieuw}$2`);
+    const zetP = (p: Parameter) => (past(p) && namen.has(p.naam) ? { ...p, waarde: leesNl(nieuw), weergave: nieuw } : p);
+    v.context = v.context.map(zet);
+    v.parameters = v.parameters?.map(zetP);
+    let ok = true;
+    for (const d of v.deelvragen) {
+      d.context = d.context?.map(zet);
+      d.stam = zet(d.stam);
+      const gebruikt = (d.parameters ?? []).some((p) => namen.has(p.naam)) || (v.parameters ?? []).some((p) => namen.has(p.naam));
+      d.parameters = d.parameters?.map(zetP);
+      if (gebruikt && d.berekeningen?.length && !herrekenDeelvraag(d, v.parameters ?? [], [[getal, nieuw]])) ok = false;
+    }
+    const tekst = kaal([...v.context, ...v.deelvragen.flatMap((d) => [...(d.context ?? []), d.stam])].join(" "));
+    if (!ok || !getalInTekst(nieuw, tekst)) continue;
+    const kandidaat = lijst.map((x, i) => (i === iv ? v : x));
+    if (tel(kandidaat) >= tel(lijst)) continue;
+    lijst = kandidaat;
+    stappen.push({ id: b.id, wat: `gegeven-weggever: "${b.gegeven}" ligt op een uitkomst elders → ${nieuw} ${eenheid}, opnieuw doorgerekend` });
+  }
+  return lijst;
+}
+
 // ── 5. krachtenkader ─────────────────────────────────────────────────────────────────────────────
 /** Omvang van het voorwerp rond het aangrijpingspunt (cm; dx links/rechts, dy onder/boven). */
 const VOORWERP: Record<string, [number, number, number, number]> = {
@@ -443,5 +496,11 @@ export function autoHerstel<G extends { vraagstukken: VraagstukSpec[] }>(gen: G)
     stappen.push(...r.stappen);
     return r.v;
   });
-  return { gen: { ...gen, vraagstukken: vs }, stappen };
+  let uit = vs;
+  try {
+    uit = fixGegevenWeggevers(vs, stappen);
+  } catch {
+    /* laat over aan de keuring */
+  }
+  return { gen: { ...gen, vraagstukken: uit }, stappen };
 }

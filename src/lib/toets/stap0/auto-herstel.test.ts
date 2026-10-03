@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { andereWaarde, autoHerstel, autoHerstelVraagstuk, leidJuistAf, pasKrachtenKader, rondSig } from "./auto-herstel.ts";
 import { genereerSpec, hoofdstukNaam, isServerfout, keurGeneratie, specPrompt, type ChatFn, type SpecInvoer } from "./grok-spec.ts";
-import { afrondFouten, bloklijstRegel, paragraafKern, raaktKern, zoekBegripHerhaling, zoekGetalWeggevers } from "./inhoud-keuring.ts";
+import { afrondFouten, bloklijstRegel, paragraafKern, zoekGegevenWeggevers, raaktKern, zoekBegripHerhaling, zoekGetalWeggevers } from "./inhoud-keuring.ts";
 import { controleerBerekeningen, leesNl } from "./reken.ts";
 import { laadFixtures } from "./laad.ts";
 import { verwerkToets } from "./pijplijn.ts";
@@ -124,6 +124,24 @@ describe("stap 0: first-time-right (offline)", () => {
     assert.deepEqual(c.antwoordmodel.regels, ["F = M / r = 580 / 3,0 = 190 N"]);
     assert.deepEqual(c.scorestappen.map((x) => x.omschrijving), ["F = 580 / 3,0", "190 N"]);
     assert.deepEqual(fouten(autoHerstelVraagstuk(v).v).filter((f) => /krat-c/.test(f) && !/juiste letter/.test(f)), []);
+  });
+
+  it("4d. gegeven-weggever tussen vraagstukken, W ↔ kW: '1400 W' bij een uitkomst 1,4 kW → andere waarde, opnieuw doorgerekend", () => {
+    const dv = (id: string, extra: object) => ({ id, vraagtype: { nr: 63, code: "OVERIG", naam: "Overig" }, niveau: "BB/KB/GT", punten: 2, scorestappen: [{ omschrijving: "a", punten: 1 }, { omschrijving: "b", punten: 1 }], rtti: "T1", ...extra });
+    const strijk = { id: "strijk", soort: "vraagstuk", titel: "Strijken", se: "SE4.2", hoofdstuk: "E", context: ["Een strijkijzer gebruikt 0,70 kWh in 0,50 h."], parameters: [{ naam: "E", waarde: 0.7, bron: "tekst", eenheid: "kWh", weergave: "0,70" }, { naam: "t", waarde: 0.5, bron: "tekst", eenheid: "h", weergave: "0,50" }],
+      deelvragen: [dv("strijk-a", { stam: "Bereken het vermogen in kW.", antwoordmodel: { regels: ["P = 0,70 / 0,50 = 1,4 kW"] }, berekeningen: [{ naam: "P", formule: "E / t", waarde: 1.4, eenheid: "kW", afgerond: "1,4", tolerantie: 0.001 }] }), dv("strijk-b", { stam: "Noem een energiebron.", antwoordmodel: { regels: ["zon"] } })] };
+    const fohn = { id: "fohn", soort: "vraagstuk", titel: "Föhn", se: "SE4.2", hoofdstuk: "E", context: ["Een föhn van 1400 W staat 0,25 h aan."], parameters: [{ naam: "P", waarde: 1400, bron: "tekst", eenheid: "W", weergave: "1400" }, { naam: "t", waarde: 0.25, bron: "tekst", eenheid: "h", weergave: "0,25" }],
+      deelvragen: [dv("fohn-a", { stam: "Bereken de energie in kWh.", antwoordmodel: { regels: ["E = 1400 × 0,25 / 1000 = 0,35 kWh"] }, berekeningen: [{ naam: "E", formule: "P * t / 1000", waarde: 0.35, eenheid: "kWh", afgerond: "0,35", tolerantie: 0.001 }] }), dv("fohn-b", { stam: "Noem een apparaat.", antwoordmodel: { regels: ["lamp"] } })] };
+    const vs = [strijk, fohn] as unknown as VraagstukSpec[];
+    assert.ok(zoekGegevenWeggevers(vs).some((b) => b.gegeven === "1400 W"));
+    const { gen, stappen } = autoHerstel({ vraagstukken: vs });
+    const f = gen.vraagstukken[1]!;
+    assert.equal(zoekGegevenWeggevers(gen.vraagstukken).length, 0);
+    assert.match(f.context[0]!, /föhn van 1700 W/);
+    assert.equal(f.parameters![0]!.waarde, 1700);
+    assert.equal(f.deelvragen[0]!.berekeningen![0]!.afgerond, "0,43");
+    assert.match(f.deelvragen[0]!.antwoordmodel.regels[0]!, /1700 × 0,25 \/ 1000 = 0,43 kWh/);
+    assert.ok(stappen.some((s) => /gegeven-weggever/.test(s.wat)));
   });
 
   it("4c. lege tekenfiguur op vraagstukniveau, tekenvraag later (ronde 5, krat-duwen) → figuur naar de tekenvraag", () => {

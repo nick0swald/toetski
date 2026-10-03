@@ -6,7 +6,9 @@ import type { Berekening, DeelvraagSpec, Parameter, VraagSpec } from "./spec.ts"
 
 /** Nederlandse notatie: 7.875 → "7,875"; 0.3 met 2 decimalen → "0,30". */
 export function nl(x: number, decimalen?: number): string {
-  const s = decimalen === undefined ? String(Number(x.toPrecision(12))) : x.toFixed(decimalen);
+  // Half naar boven (weg van 0), ook bij binaire restjes: 0,425 → "0,43" (toFixed gaf "0,42").
+  const half = (d: number) => (Math.sign(x) * Math.round(Number((Math.abs(x) * 10 ** d).toPrecision(12)))) / 10 ** d;
+  const s = decimalen === undefined ? String(Number(x.toPrecision(12))) : half(decimalen).toFixed(decimalen);
   return s.replace(".", ",");
 }
 
