@@ -480,12 +480,24 @@ export function alsToetsSpec(gen: Generatie, inv: SpecInvoer): ToetsSpec {
  * Leesbare hoofdstuk-/onderwerpnaam voor de opmaak ("Onderwerp: H3 Krachten" i.p.v. "Onderwerp: 3"): een kaal nummer
  * wordt aangevuld met de hoofdstuktitel uit de lesstof ("Hoofdstuk 3 Krachten (…)").
  */
+/** Kort matrijslabel: tot het eerste scheidingsteken (— – : ; ( ,) als het te lang is, en hoogstens `max` tekens (op een woordgrens, met …). */
+export function kortLabel(t: string, max = 40): string {
+  let s = (t ?? "").replace(/\s+/g, " ").trim();
+  if (s.length <= max) return s;
+  const kop = /^(.{3,}?)\s*(?:[—–:;(,]|\s-\s)/.exec(s);
+  if (kop && kop[1]!.length >= 3) s = kop[1]!.trim();
+  if (s.length <= max) return s;
+  const knip = s.slice(0, max - 1);
+  const w = knip.lastIndexOf(" ");
+  return `${(w > max / 2 ? knip.slice(0, w) : knip).replace(/[\s,;:–—-]+$/, "")}…`;
+}
+
 export function hoofdstukNaam(h: string, bron: string): string {
   const m = /^\s*(?:H|hoofdstuk\s*)?(\d{1,2})(?:\.\d{1,2})?\s*$/i.exec(h ?? "");
-  if (!m) return h;
+  if (!m) return kortLabel(h);
   const kop = new RegExp(`^\\s*(?:Hoofdstuk|H)\\s*${m[1]}\\b[\\s:.–-]*([^\\n(]+)`, "im").exec(bron);
   const titel = kop?.[1]?.trim().replace(/[\s:.–-]+$/, "");
-  return titel ? `H${m[1]} ${titel}` : `H${m[1]}`;
+  return titel ? kortLabel(`H${m[1]} ${titel}`) : `H${m[1]}`;
 }
 
 /**
