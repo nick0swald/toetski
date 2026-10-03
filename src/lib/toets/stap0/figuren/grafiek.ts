@@ -3,7 +3,7 @@
  * reeksen als rechte lijn, vloeiende (monotone) kromme of meetpunten (×), of kleine (v,t)-panelen zonder getallen.
  */
 import type { As, GrafiekFiguur } from "../spec.ts";
-import { leesSvg, punten, ROOD, schaal, Svg } from "./svg.ts";
+import { leesSvg, paneelKolommen, punten, ROOD, schaal, Svg } from "./svg.ts";
 
 const nlGetal = (v: number) => String(Math.round(v * 1000) / 1000).replace(".", ",");
 
@@ -112,15 +112,21 @@ function diagramSvg(f: GrafiekFiguur): string {
 
 function panelenSvg(f: GrafiekFiguur): string {
   const p = f.panelen!;
-  const W = 9.0 * 72;
-  const H = 2.4 * 72;
+  // Even grote cellen; 4 panelen als 2 × 2 (A B / C D), zie paneelKolommen.
+  const kol = paneelKolommen(p.length);
+  const rijen = Math.ceil(p.length / kol);
+  const cw = 2.25 * 72;
+  const ch = 2.0 * 72;
+  const W = kol * cw;
+  const H = rijen * ch;
   const s = new Svg(W, H);
-  const cel = W / p.length;
   p.forEach((pan, i) => {
-    const L = i * cel + 26;
-    const R = (i + 1) * cel - 10;
-    const T = 24;
-    const B = H - 26;
+    const c = i % kol;
+    const r = Math.floor(i / kol);
+    const L = c * cw + 26;
+    const R = (c + 1) * cw - 10;
+    const T = r * ch + 24;
+    const B = (r + 1) * ch - 26;
     const X = schaal(f.x.min, f.x.max, L, R);
     const Y = schaal(f.y.min, f.y.max, B, T);
     s.groep(`data-rol="paneel" data-paneel="${pan.label}"`, () => {

@@ -1,20 +1,20 @@
 /** Oscilloscoopscherm (port van scope() in makefigs.py): raster in hokjes, sinus met amplitude en trillingstijd in hokjes. */
 import type { OscilloscoopFiguur } from "../spec.ts";
-import { leesSvg, punten, Svg } from "./svg.ts";
+import { leesSvg, paneelKolommen, punten, Svg } from "./svg.ts";
 
 export function oscilloscoopSvg(f: OscilloscoopFiguur): string {
   const nx = f.hokjesX;
   const ny = f.hokjesY;
   const meer = f.panelen.length > 1;
   const u = meer ? 17 : 30; // pt per hokje (zoals f03 resp. f25)
-  const kol = meer ? 3 : 1;
-  const cellen = meer ? f.panelen.length + (f.notitie ? 1 : 0) : 1;
-  const rijen = Math.ceil(cellen / kol);
+  const kol = meer ? paneelKolommen(f.panelen.length) : 1;
+  const rijen = Math.ceil(f.panelen.length / kol);
   const titel = meer ? 1.6 * u : 0;
   const gapX = meer ? 1.0 * u : 0;
   const gapY = meer ? 0.6 * u : 0;
   const marge = 6;
-  const onder = f.onderschrift ? 1.6 * u : 0;
+  const notitieRegels = meer && f.notitie ? f.notitie.split("\n").length : 0;
+  const onder = (f.onderschrift ? 1.6 * u : 0) + (notitieRegels ? 0.4 * u + notitieRegels * 13.2 : 0);
   const W = marge * 2 + kol * nx * u + (kol - 1) * gapX;
   const H = marge * 2 + rijen * (titel + ny * u) + (rijen - 1) * gapY + onder;
   const s = new Svg(W, H);
@@ -39,14 +39,8 @@ export function oscilloscoopSvg(f: OscilloscoopFiguur): string {
       s.polyline(pts, { lw: 1.8, rol: "signaal" });
     });
   });
-  if (meer && f.notitie) {
-    const i = f.panelen.length;
-    const c = i % kol;
-    const r = Math.floor(i / kol);
-    const x0 = marge + c * (nx * u + gapX);
-    const y0 = marge + r * (titel + ny * u + gapY) + titel;
-    s.text(x0 + (nx * u) / 2, y0 + (ny * u) / 2, f.notitie, { size: 11, anker: "middle", va: "center" });
-  }
+  // Notitie bij een set panelen: als regel(s) onder het raster (geen losse cel, zodat 2 × 2 symmetrisch blijft).
+  if (notitieRegels) s.text(W / 2, marge + rijen * (titel + ny * u) + (rijen - 1) * gapY + 0.4 * u, f.notitie!, { size: 11, anker: "middle", va: "top", rol: "notitie" });
   if (f.onderschrift) s.text(W / 2, H - marge - 0.55 * u, f.onderschrift, { size: 11, anker: "middle", rol: "onderschrift" });
   return s.toString(f.breedteCm, 'data-figuur="oscilloscoop"');
 }

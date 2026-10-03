@@ -3,6 +3,14 @@
  * dezelfde betekenis hebben als in makefigs.py (matplotlib). De figuur wordt in de toets op `breedteCm` geplaatst.
  */
 export const PT_PER_CM = 72 / 2.54;
+
+/**
+ * Kolommen voor een set even grote panelen (bv. meerkeuze-opties A–D). Algemene regel: 4 panelen altijd als
+ * 2 × 2 (A B / C D); 2–3 naast elkaar; meer dan 4 in rijen van 3.
+ */
+export function paneelKolommen(n: number): number {
+  return n === 4 ? 2 : Math.min(Math.max(n, 1), 3);
+}
 export const ROOD = "#c0392b";
 export const BLAUW = "#1f5f99";
 const FONT = "Liberation Sans";

@@ -23,9 +23,16 @@ import type { Fixture, VraagSpec } from "./spec.ts";
 import { valideerSpec, valideerToets } from "./valideer.ts";
 import { formuleringCSE, voorbladTekst } from "./opmaak.ts";
 import { keurAiAfbeelding } from "./figuren/ai-afbeelding.ts";
+import { leesSvg, paneelKolommen } from "./figuren/svg.ts";
 
 const kloon = <T>(x: T): T => structuredClone(x);
 const fixtures = laadFixtures();
+/** Splitsing in leerlingdelen alleen als de toetsspec erom vraagt; de voorbeeldtoets is standaard niet gesplitst. */
+const DELEN_AB = [
+  { naam: "Deel A", vragen: ["se41-bloempot", "se41-boomstam", "se41-krat", "se41-bakfiets", "se42-sleutelhanger", "se42-toongenerator"] },
+  { naam: "Deel B", vragen: ["se43-stoelverwarming", "se43-afzuigkap", "se43-sanne", "se44-tram", "se44-skeeler", "alg-lampje"] },
+];
+const gesplitst = () => ({ ...laadVoorbeeldtoets(), delen: kloon(DELEN_AB) });
 const fx = (id: string) => kloon(fixtures.find((f) => f.id === id)!) as Fixture;
 
 test("10–15 fixtures, elk geldig volgens schema + regels", () => {
@@ -49,7 +56,8 @@ test("schema/regels vangen fouten", () => {
 });
 
 test("toetsspec: elke vraag in precies één leerlingdeel", () => {
-  const t = laadVoorbeeldtoets();
+  assert.deepEqual(valideerToets(laadVoorbeeldtoets(), fixtures.map((f) => f.id)), []);
+  const t = gesplitst();
   assert.deepEqual(valideerToets(t, fixtures.map((f) => f.id)), []);
   const fout = kloon(t);
   fout.delen![1].vragen.push(fout.delen![0].vragen[0]);
@@ -62,7 +70,10 @@ test("pijplijn: alle vragen GO, nummering en delen", () => {
   assert.deepEqual(res.toetsFouten, []);
   assert.equal(res.vragen.length, 15);
   assert.deepEqual(res.vragen.map((q) => q.nr), Array.from({ length: 15 }, (_, i) => i + 1));
-  assert.deepEqual(res.delen.map((d) => [d.naam, d.nrs[0], d.nrs.at(-1)]), [["Deel A", 1, 9], ["Deel B", 10, 15]]);
+  assert.equal(laadVoorbeeldtoets().delen, undefined, "standaard geen splitsing");
+  assert.deepEqual(res.delen.map((d) => [d.naam, d.nrs[0], d.nrs.at(-1)]), [["", 1, 15]]);
+  const ab = verwerkToets(gesplitst(), fixtures);
+  assert.deepEqual(ab.delen.map((d) => [d.naam, d.nrs[0], d.nrs.at(-1)]), [["Deel A", 1, 9], ["Deel B", 10, 15]]);
   assert.equal(res.vragen.reduce((s, q) => s + q.punten, 0), 31);
 });
 
@@ -90,6 +101,25 @@ test("figuurkeuring: de getekende waarde wordt teruggemeten; een afwijking is no
   const f = kloon(q.figuur!) as Extract<typeof q.figuur, { type: "maatcilinder" }>;
   f!.cilinders[1].niveau = 39;
   assert.equal(keurFiguur(f!, p).go, false);
+});
+
+test("4 panelen (meerkeuze A–D) altijd als 2 × 2, even groot", () => {
+  const toon = fx("se42-toongenerator");
+  assert.ok("deelvragen" in toon);
+  for (const f of [toon.deelvragen[2].figuur!, (fx("se44-skeeler") as VraagSpec).figuur!]) {
+    const els = leesSvg(figuurSvg(f));
+    const vakken = els.filter((e) => e.attrs["data-rol"] === (f.type === "oscilloscoop" ? "scherm" : "assen")).map((e) => ["x", "y", "width", "height"].map((k) => Number(e.attrs[k])));
+    assert.equal(vakken.length, 4, f.type);
+    const xs = [...new Set(vakken.map((v) => v[0].toFixed(1)))];
+    const ys = [...new Set(vakken.map((v) => v[1].toFixed(1)))];
+    assert.equal(xs.length, 2, `${f.type}: 2 kolommen`);
+    assert.equal(ys.length, 2, `${f.type}: 2 rijen`);
+    assert.ok(vakken.every((v) => Math.abs(v[2] - vakken[0][2]) < 0.01 && Math.abs(v[3] - vakken[0][3]) < 0.01), `${f.type}: even groot`);
+    // Volgorde A B / C D: A links boven, D rechts onder.
+    assert.ok(vakken[0][0] < vakken[1][0] && vakken[0][1] === vakken[1][1] && vakken[2][1] > vakken[0][1] && vakken[3][0] > vakken[2][0]);
+  }
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map(paneelKolommen), [1, 2, 3, 2, 3, 3]);
+  assert.doesNotMatch(JSON.stringify(fixtures), /eerste figuur/);
 });
 
 test("figuurkeuring per type: oscilloscoop, schakelschema, grafiek, krachten", () => {
@@ -180,11 +210,10 @@ test("export: leerlingdeel zonder antwoorden, docentdeel met sleutel, matrijs en
   const ms = performance.now() - t0;
   const tekst = (b: Uint8Array) => Buffer.from(b).toString("latin1");
   assert.match(tekst(pdf.leerling.slice(0, 8)), /^%PDF-1\./);
-  assert.equal(pdf.leerlingDelen.length, 2);
+  assert.equal(pdf.leerlingDelen.length, 0, "standaard geen losse delen");
   // pdfkit zet tekst als hex-glyphs; daarom de structuur via de documentinfo + paginatelling controleren
   const paginas = (b: Uint8Array) => (tekst(b).match(/\/Type \/Page\b/g) ?? []).length;
   assert.ok(paginas(pdf.docent) > paginas(pdf.leerling));
-  assert.equal(paginas(pdf.leerling), pdf.leerlingDelen.reduce((s, d) => s + paginas(d.pdf), 0));
   assert.ok(ms < 2000, `export duurde ${ms.toFixed(0)} ms`);
   // Inhoud: alleen als poppler (pdftotext) aanwezig is
   if (spawnSync("pdftotext", ["-v"]).status === 0) {
@@ -195,7 +224,17 @@ test("export: leerlingdeel zonder antwoorden, docentdeel met sleutel, matrijs en
     };
     const l = lees(pdf.leerling, "l.pdf");
     const d = lees(pdf.docent, "d.pdf");
-    for (const x of ["Deel A · vraag 1–9", "Deel B · vraag 10–15", "Naam", "Klas", "Datum", "Extra tijd 20%", "Behaalde punten", "Cijfer", "Gebruik het BINAS informatieboek.", "Dit deel bestaat uit 9 vragen.", "Meerkeuzevragen", "Open vragen", "Toongenerator", "einde", "→"]) assert.ok(l.includes(x), `leerling mist "${x}"`);
+    for (const x of ["Naam", "Klas", "Datum", "Extra tijd 20%", "Behaalde punten", "Cijfer", "Gebruik het BINAS informatieboek.", "Deze toets bestaat uit 15 vragen.", "Voor deze toets zijn maximaal 31 punten te behalen.", "Meerkeuzevragen", "Open vragen", "Toongenerator", "einde", "→"]) assert.ok(l.includes(x), `leerling mist "${x}"`);
+    // Standaard één leerlingdeel met één voorblad.
+    assert.equal(l.split("Behaalde punten").length - 1, 1, "precies één voorblad");
+    assert.doesNotMatch(l, /Deel A|Deel B|Dit deel/);
+    // Gesplitst alleen op verzoek van de toetsspec: twee voorbladen.
+    const tAB = gesplitst();
+    const pAB = await maakPdfs(tAB, verwerkToets(tAB, fixtures), stap0Fonts(), pngRender);
+    assert.equal(pAB.leerlingDelen.length, 2);
+    const lab = lees(pAB.leerling, "lab.pdf");
+    assert.equal(lab.split("Behaalde punten").length - 1, 2, "twee voorbladen");
+    for (const x of ["Deel A · vraag 1–9", "Deel B · vraag 10–15", "Dit deel bestaat uit 9 vragen.", "Dit deel bestaat uit 6 vragen.", "Deze toets bestaat uit twee delen"]) assert.ok(lab.includes(x), `gesplitst mist "${x}"`);
     assert.doesNotMatch(l, /Antwoordmodel|Toetsmatrijs|Cijferberekening|maximumscore|Type \d+ ·/);
     for (const kop of ["Antwoordmodel", "Toetsmatrijs", "Totaal per SE-toets", "Totaal per RTTI-categorie", "Cijferberekening", "cijfer tegen score"]) assert.match(d, new RegExp(kop));
   }
@@ -240,7 +279,7 @@ test("ai-afbeelding: schema, alleen als situatieplaatje, placeholder zonder beel
 });
 
 test("voorblad: velden van de schooltoetsen + leerlingblad, geen schoolnaam, schoolveld standaard leeg", () => {
-  const t = laadVoorbeeldtoets();
+  const t = gesplitst();
   const res = verwerkToets(t, fixtures);
   const deelA = res.delen[0];
   const qs = res.vragen.filter((q) => deelA.nrs.includes(q.nr));
@@ -254,4 +293,9 @@ test("voorblad: velden van de schooltoetsen + leerlingblad, geen schoolnaam, sch
   const metSchool = voorbladTekst({ ...t, voorblad: { ...t.voorblad, schoolveld: "Sectie NaSk — mevr. Jansen" } }, qs, null, [res.delen[0]], "");
   assert.equal(metSchool.schoolveld, "Sectie NaSk — mevr. Jansen");
   assert.equal(metSchool.onder[0], "Deze toets bestaat uit 9 vragen.");
+  const std = verwerkToets(laadVoorbeeldtoets(), fixtures);
+  const v1 = voorbladTekst(laadVoorbeeldtoets(), std.vragen, null, std.delen, "");
+  assert.deepEqual(v1.rechts, ["SE4", "voorbeeld stap 0", "90 minuten"]);
+  assert.equal(v1.delenZin, "");
+  assert.equal(v1.onder[0], "Deze toets bestaat uit 15 vragen.");
 });

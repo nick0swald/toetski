@@ -53,6 +53,10 @@ def maatcilinder(f, path):
     ax.set_xlim(-0.6, (n - 1) * 3.2 + 2.8); ax.set_ylim(-1.1, top + 0.75); ax.set_aspect("equal"); ax.axis("off")
     save(fig, path)
 
+def kolommen(n):
+    """Zelfde regel als paneelKolommen() in svg.ts: 4 panelen als 2 x 2, anders max. 3 naast elkaar."""
+    return 2 if n == 4 else min(max(n, 1), 3)
+
 def osc(f, path):
     nx, ny = f["hokjesX"], f["hokjesY"]
     P = f["panelen"]
@@ -62,14 +66,22 @@ def osc(f, path):
         if f.get("onderschrift"): ax.text(nx / 2, -ny / 2 - 0.7, f["onderschrift"], ha="center", va="top", fontsize=11)
         ax.set_ylim(-ny / 2 - 1.4, ny / 2)
     else:
-        fig, axs = plt.subplots(2, 3, figsize=(8.2, 4.6))
-        for ax, p in zip(axs.flat, P): MF.scope(ax, p["amplitude"], nx / p["trillingstijd"], p.get("label"), nx, ny)
-        for ax in list(axs.flat)[len(P):]:
-            ax.axis("off")
-        if f.get("notitie"):
-            ax = axs.flat[len(P)]
-            ax.text(0.5, 0.5, f["notitie"], ha="center", va="center", fontsize=11, transform=ax.transAxes)
-        fig.tight_layout()
+        # Zelfde geometrie als oscilloscoopSvg(): 17 pt per hokje, titel 1,6 hokje, tussenruimte 1,0 / 0,6 hokje.
+        kol = kolommen(len(P)); rij = -(-len(P) // kol)
+        u = 17; marge = 6; titel = 1.6 * u; gx, gy = 1.0 * u, 0.6 * u
+        nreg = len(f["notitie"].split("\n")) if f.get("notitie") else 0
+        onder = (0.4 * u + nreg * 13.2) if nreg else 0
+        Wp = marge * 2 + kol * nx * u + (kol - 1) * gx
+        Hp = marge * 2 + rij * (titel + ny * u) + (rij - 1) * gy + onder
+        fig = plt.figure(figsize=(Wp / 72, Hp / 72))
+        for i, p in enumerate(P):
+            c, r = i % kol, i // kol
+            x0 = marge + c * (nx * u + gx); y0 = marge + r * (titel + ny * u + gy) + titel
+            ax = fig.add_axes([x0 / Wp, 1 - (y0 + ny * u) / Hp, nx * u / Wp, ny * u / Hp])
+            MF.scope(ax, p["amplitude"], nx / p["trillingstijd"], None, nx, ny)
+            if p.get("label"): ax.set_title(p["label"], fontsize=12, fontweight="bold", pad=0.45 * u)
+        if nreg:
+            fig.text(0.5, 1 - (marge + rij * (titel + ny * u) + (rij - 1) * gy + 0.4 * u) / Hp, f["notitie"], ha="center", va="top", fontsize=11)
     save(fig, path)
 
 SYM = {"weerstand": S.resistor, "variabele-weerstand": S.variable_resistor, "lamp": S.lamp, "motor": S.motor,
@@ -108,14 +120,23 @@ def nl(v): return f"{v:g}".replace(".", ",")
 def grafiek(f, path):
     if f.get("panelen"):
         P = f["panelen"]
-        fig, axs = plt.subplots(1, len(P), figsize=(9.0, 2.4))
-        for ax, p in zip(axs, P):
+        # Zelfde geometrie als panelenSvg() in grafiek.ts: cellen van 2,25 x 2,0 inch, assen 26/10/24/26 pt ingesprongen.
+        kol = kolommen(len(P)); rij = -(-len(P) // kol)
+        cw, ch = 2.25 * 72, 2.0 * 72; Wp, Hp = kol * cw, rij * ch
+        fig = plt.figure(figsize=(Wp / 72, Hp / 72))
+        axs = []
+        for i in range(len(P)):
+            c, r = i % kol, i // kol
+            L, R, T, B = c * cw + 26, (c + 1) * cw - 10, r * ch + 24, (r + 1) * ch - 26
+            axs.append(fig.add_axes([L / Wp, 1 - B / Hp, (R - L) / Wp, (B - T) / Hp]))
+        axs = np.array(axs, dtype=object).reshape(-1, 1)
+        for ax, p in zip(axs.flat, P):
             xs, ys = zip(*p["punten"]); ax.plot(xs, ys, color="black", lw=2)
             ax.set_xlim(f["x"]["min"], f["x"]["max"]); ax.set_ylim(f["y"]["min"], f["y"]["max"])
             ax.set_xticks([]); ax.set_yticks([])
             ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
-            ax.set_xlabel(f["x"]["label"]); ax.set_ylabel(f["y"]["label"]); ax.set_title(p["label"], fontweight="bold")
-        fig.tight_layout(); save(fig, path); return
+            ax.set_xlabel(f["x"]["label"], fontsize=11, labelpad=6); ax.set_ylabel(f["y"]["label"], fontsize=11, labelpad=5); ax.set_title(p["label"], fontweight="bold", fontsize=12, pad=8)
+        save(fig, path); return
     fijn = bool(f["x"].get("fijn") or f["y"].get("fijn"))
     fig, ax = plt.subplots(figsize=(5.8, 4.4 if fijn else 3.6))
     X, Y = f["x"], f["y"]
@@ -198,5 +219,6 @@ n = 0
 for p in sorted(glob.glob(os.path.join(ROOT, "src/lib/toets/stap0/fixtures/*.json"))):
     fx = json.load(open(p, encoding="utf-8"))
     for i, (f, rol) in enumerate(figuren(fx)):
+        if f["type"] == "ai-afbeelding": continue  # placeholder; geen referentie (beeld komt uit de beeldstroom)
         R[f["type"]](f, os.path.join(OUT, f'{fx["id"]}-{i}-{rol}.png')); n += 1
 print(f"{n} referentiefiguren in {OUT}")
