@@ -1,6 +1,5 @@
 /**
  * Stap 0 (deterministische renderer + export in leerling- en docentdeel).
- * Nog NIET gekoppeld aan de live generatie: deze vlag staat uit en wordt nergens in de app gelezen
- * behalve als expliciete opt-in in een volgende stap.
+ * In de app alleen achter de server-side vlag STAP0_RENDERER ("uit" | "pilot" | "aan") met allowlist STAP0_USERS;
+ * zie ./pilot.server.ts en ../stap0-server.ts. Standaard uit: iedereen houdt de huidige pijplijn.
  */
-export const STAP0_RENDERER = false;

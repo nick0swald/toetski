@@ -9,6 +9,7 @@ import { KwaliteitPanel } from "@/components/toets/kwaliteit-panel";
 import { MatrijsSheet } from "@/components/toets/matrijs-sheet";
 import { NakijkSheet } from "@/components/toets/nakijk-sheet";
 import { ToetsSheet } from "@/components/toets/toets-sheet";
+import { Stap0Export } from "@/components/toets/stap0-export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -295,6 +296,7 @@ function ToetsPage() {
               </Button>
             </div>
           </div>
+          {current.stap0 ? <Stap0Export toets={current} /> : null}
           {isMatrijs ? null : (
             <div className="mt-4 grid gap-2 rounded-[var(--radius-lg)] bg-surface p-4">
               <Label htmlFor="bijschaven" className="text-sm font-semibold text-brand">

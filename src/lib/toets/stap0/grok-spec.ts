@@ -7,7 +7,7 @@
  *                        weggevers, schoolnamen/merken, letterlijk overnemen uit de lesstof).
  *   alsGegenereerdeToets(...) → adapter naar het bestaande toetsformaat, zodat de eval-rubriek en -rechter werken.
  *
- * Nog niet in de app gekoppeld: alleen achter STAP0_RENDERER (uit) en in het eval-harnas.
+ * In de app alleen achter de server-side vlag STAP0_RENDERER + STAP0_USERS (pilot, zie pilot.server.ts) en in het eval-harnas.
  */
 import { SPEC_SCHEMA } from "./spec-schema.ts";
 import type { Fixture, FiguurSpec, OpmaakVraag, ToetsSpec, VraagstukSpec } from "./spec.ts";
@@ -398,6 +398,31 @@ export function hoofdstukNaam(h: string, bron: string): string {
   return titel ? `H${m[1]} ${titel}` : `H${m[1]}`;
 }
 
+/**
+ * Toets + opmaak voor de export. Standaard één leerlingdeel (één voorblad); `splitsen` maakt op verzoek deel A en B
+ * (hele vraagstukken, verdeeld op punten).
+ */
+export function opmaakVoor(gen: Generatie, inv: SpecInvoer, opts: { splitsen?: boolean } = {}): { toets: ToetsSpec; res: Pijplijnresultaat } {
+  const toets = alsToetsSpec(gen, inv);
+  if (opts.splitsen && gen.vraagstukken.length >= 2) {
+    const tot = gen.vraagstukken.reduce((s, v) => s + puntenVan(v), 0);
+    let som = 0;
+    const a: string[] = [];
+    const b: string[] = [];
+    for (const v of gen.vraagstukken) {
+      const p = puntenVan(v);
+      if (!b.length && (!a.length || som + p / 2 <= tot / 2)) {
+        a.push(v.id);
+        som += p;
+      } else b.push(v.id);
+    }
+    if (!b.length) b.push(a.pop()!);
+    toets.delen = [{ naam: "Deel A", vragen: a }, { naam: "Deel B", vragen: b }];
+  }
+  const fixtures: Fixture[] = gen.vraagstukken.map((v) => ({ ...v, soort: "vraagstuk", hoofdstuk: hoofdstukNaam(v.hoofdstuk, inv.bronmateriaal) }) as Fixture);
+  return { toets, res: verwerkToets(toets, fixtures) };
+}
+
 export function keurGeneratie(gen: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie, "items" | "punten">): Keuringsrapport {
   const perId: Record<string, string[]> = { "": [] };
   const voeg = (id: string, f: string) => (perId[id] ??= []).push(f);
@@ -536,7 +561,7 @@ export interface Stap {
 /** Maximaal zoveel gerichte aanroepen tegelijk. */
 const PARALLEL = 4;
 
-async function pool<T, R>(xs: T[], n: number, f: (x: T) => Promise<R>): Promise<R[]> {
+export async function pool<T, R>(xs: T[], n: number, f: (x: T) => Promise<R>): Promise<R[]> {
   const uit: R[] = new Array(xs.length);
   let i = 0;
   await Promise.all(
@@ -551,10 +576,10 @@ async function pool<T, R>(xs: T[], n: number, f: (x: T) => Promise<R>): Promise<
 }
 
 /** Aantal fouten op vraagstukniveau (zonder de toetsniveau-fouten lengte/dekking). */
-const vraagstukFouten = (r: Keuringsrapport) => Object.entries(r.perId).reduce((s, [id, l]) => s + (id ? l.length : 0), 0);
-const puntenVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0), 0);
+export const vraagstukFouten = (r: Keuringsrapport) => Object.entries(r.perId).reduce((s, [id, l]) => s + (id ? l.length : 0), 0);
+export const puntenVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0), 0);
 /** "Waarde" van een vraagstuk voor het inkorten: punten op T2/I-niveau (inzicht) tellen het zwaarst. */
-const waardeVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0) * (d.rtti === "T2" || d.rtti === "I" ? 2 : 1), 0);
+export const waardeVan = (v: VraagstukSpec) => v.deelvragen.reduce((s, d) => s + (d.punten ?? 0) * (d.rtti === "T2" || d.rtti === "I" ? 2 : 1), 0);
 
 /**
  * Eerst schrappen, dan pas herstellen: een afgekeurd vraagstuk valt weg zolang de toets daarna nog ≥ 90 % lengte en
@@ -626,7 +651,7 @@ export function inkorten(gen0: Generatie, inv: SpecInvoer, kal: Pick<Kalibratie,
 }
 
 /** Vraagstuk onder een vaste id, met deelvraag-ids <id>-a, <id>-b … (geen botsing met de rest van de toets). */
-function metId(v: VraagstukSpec, id: string): VraagstukSpec {
+export function metId(v: VraagstukSpec, id: string): VraagstukSpec {
   return { ...v, id, deelvragen: v.deelvragen.map((d, i) => ({ ...d, id: `${id}-${String.fromCharCode(97 + i)}` })) };
 }
 

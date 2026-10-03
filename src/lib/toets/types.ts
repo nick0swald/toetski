@@ -404,6 +404,8 @@ export interface GegenereerdeToets {
   controle?: ControleLog;
   /** Tokens en kosten (USD) van alle modelaanroepen voor deze toets (stap 1 + stap 2). */
   kosten?: ToetsKosten;
+  /** Stap-0-pilot: de geaccepteerde spec (voor PDF/Word-export op de server) + monitoring. */
+  stap0?: Stap0Bijlage;
   /** Officiële leerdoelen van deze toets (vooraf gekoppeld, deterministisch) met richtpunten. */
   leerdoelen?: LeerdoelPlan;
 }
@@ -540,6 +542,14 @@ export const PICTOGRAM_BESCHRIJVING: Record<GhsSymbool, string> = {
 };
 
 /** Kostenoverzicht per toets (zie llm.ts). */
+export interface Stap0Bijlage {
+  versie: 1;
+  /** Generatie (vraagstukken) en invoer als JSON; vorm: zie stap0/grok-spec.ts (Generatie, SpecInvoer). */
+  gen: JsonWaarde;
+  inv: JsonWaarde;
+  monitoring: { [k: string]: JsonWaarde };
+}
+
 export interface ToetsKosten {
   usd: number;
   tokensIn: number;

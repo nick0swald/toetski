@@ -54,7 +54,7 @@ Na `--timeout` seconden, of na `--stil` seconden zonder uitvoer/hartslag (`$WAAK
 Grok vult alleen de gestructureerde spec (JSON-schema, structured output); de deterministische stap-0-pijplijn keurt
 (schema, rekencontrole, figuur-go/no-go, lengte 90–110 %, weggevers, merken/schoolnamen, letterlijk overnemen,
 tekenvraag met al ingevulde grafiek) en rendert leerling- en docentdeel (PDF + Word). Hooguit 1 herstelaanroep.
-Niet in de app gekoppeld (`STAP0_RENDERER` blijft uit).
+In de app alleen als pilot achter de server-side vlag `STAP0_RENDERER=pilot` + allowlist `STAP0_USERS` (stapsgewijs, zie `src/lib/toets/stap0-server.ts`).
 
 ```
 node scripts/eval/waakhond.mjs --timeout 1200 --stil 120 --max-usd 0.55 -- \
