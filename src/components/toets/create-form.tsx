@@ -33,6 +33,7 @@ import {
   BRON_ACCEPT,
   MAX_ANTWOORD_TEKENS,
   MAX_BRON_TEKENS,
+  inkortMelding,
   bestandTeGroot,
   leesBronBestand,
 } from "@/lib/toets/lees-bron";
@@ -62,6 +63,7 @@ function veldenUitStukken(stukken: Stuk[]): {
   antwoorden: string;
   extra: string;
   url: string;
+  meldingen: string[];
 } {
   const blok = (s: Stuk) =>
     s.naam && s.naam !== "tekstvak" && s.naam !== "plaktekst"
@@ -78,6 +80,8 @@ function veldenUitStukken(stukken: Stuk[]): {
         : antwoorden,
     extra,
     url: stukken.find((s) => s.rol === "url")?.tekst.trim() ?? "",
+    // Nooit stil inkorten: noem wat er wegvalt.
+    meldingen: [inkortMelding(bron, MAX_BRON_TEKENS, "De lesstof (alles samen)"), inkortMelding(antwoorden, MAX_ANTWOORD_TEKENS, "Het antwoordenmateriaal (alles samen)")].filter((m): m is string => Boolean(m)),
   };
 }
 
@@ -99,7 +103,10 @@ export function CreateForm() {
   const [titel, setTitel] = useState("");
   const [vak, setVak] = useState("");
   const [leerweg, setLeerweg] = useState<Leerweg>("KB");
-  const [leerjaar, setLeerjaar] = useState<1 | 2 | 3 | 4>(2);
+  // Klas is verplicht (geen standaard): een stille klas 2 maakte de toets onbedoeld onderbouw.
+  const [leerjaar, setLeerjaar] = useState<1 | 2 | 3 | 4 | null>(null);
+  const jaarSchatting = leerjaar ?? 3;
+  const [leesMeldingen, setLeesMeldingen] = useState<string[]>([]);
   // Klas 4: blok 'Examenvragen' met echte CSE-contexten (bronvermelding 'naar: examen …'); standaard aan.
   const [examenvragen, setExamenvragen] = useState(true);
   const [moeilijkheid, setMoeilijkheid] = useState<Moeilijkheid>("normaal");
@@ -108,7 +115,7 @@ export function CreateForm() {
   const [mcTekst, setMcTekst] = useState("");
   const [openTekst, setOpenTekst] = useState("");
   const [rtti, setRtti] = useState<RttiVerdeling>(
-    rttiDoelVoor(2, "normaal"),
+    rttiDoelVoor(3, "normaal"),
   );
   const [cijferNorm, setCijferNorm] = useState<CijferNorm>(DEFAULT_CIJFER);
   const [stukken, setStukken] = useState<Stuk[]>([]);
@@ -198,6 +205,11 @@ export function CreateForm() {
           const pagina =
             result.paginaAantal != null ? ` · ${result.paginaAantal} pagina’s` : "";
           const scan = result.scan ? " · scan gelezen" : "";
+          if (result.melding) {
+            const m = result.melding;
+            setLeesMeldingen((l) => (l.includes(m) ? l : [...l, m]));
+            toast.warning(m);
+          }
           gelezen.push({
             naam: `${file.name}${pagina}${scan}${result.afgekapt ? " · ingekort" : ""}`,
             tekst: result.text.slice(0, MAX_BRON_TEKENS),
@@ -283,7 +295,14 @@ export function CreateForm() {
         ];
       }
     }
+    if (leerjaar == null) {
+      const msg = "Kies eerst de klas (verplicht).";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
     const v = veldenUitStukken(actief);
+    for (const m of v.meldingen) toast.warning(m);
     if (!v.bron.trim() && !v.url.trim()) {
       toast.error("Drop of plak eerst lesstof (leerlingboek). Commentaar alleen is niet genoeg.");
       return;
@@ -389,7 +408,7 @@ export function CreateForm() {
   }
 
 
-  const defaultRtti = rttiVoorJaar(leerjaar, "normaal");
+  const defaultRtti = rttiVoorJaar(jaarSchatting, "normaal");
   const moeilijkheidStandaard =
     moeilijkheid === "normaal" &&
     rtti.R === defaultRtti.R &&
@@ -402,7 +421,7 @@ export function CreateForm() {
     cijferNorm.exponent === DEFAULT_CIJFER.exponent;
 
   function schatPunten(minuten: number, m: Moeilijkheid): number {
-    return toetsLengte(minuten, leerweg, m, { leerjaar, vak }).punten;
+    return toetsLengte(minuten, leerweg, m, { leerjaar: jaarSchatting, vak }).punten;
   }
 
   const selectCls =
@@ -551,6 +570,11 @@ export function CreateForm() {
         <Stap0Balk voortgang={stap0Voortgang} />
       ) : busy && voortgang ? <VoortgangsBalk voortgang={voortgang} aantalVragen={aantalVoorBalk} /> : null}
       {error ? <p className="text-sm text-warn">{error}</p> : null}
+      {[...leesMeldingen, ...velden.meldingen].map((m) => (
+        <p key={m} className="text-sm text-warn" role="alert">
+          Let op: {m}
+        </p>
+      ))}
       <Button type="submit" disabled={!canSubmit} className="h-auto min-h-20 w-full justify-between rounded-[var(--radius-lg)] px-6 py-5 text-left sm:px-8 [&_svg]:size-6">
         <span className="min-w-0">
           <span className="block text-xl font-bold">{busy ? "Bezig…" : "Toets maken"}</span>
@@ -575,14 +599,20 @@ export function CreateForm() {
               <Label htmlFor="jaar">Klas</Label>
               <select
                 id="jaar"
-                value={leerjaar}
+                value={leerjaar ?? ""}
+                required
+                aria-invalid={leerjaar == null}
                 onChange={(e) => {
+                  if (!e.target.value) return;
                   const jaar = Number(e.target.value) as 1 | 2 | 3 | 4;
                   setLeerjaar(jaar);
                   setRtti(rttiVoorJaar(jaar, moeilijkheid));
                 }}
                 className={selectCls}
               >
+                <option value="" disabled>
+                  Kies…
+                </option>
                 {[1, 2, 3, 4].map((j) => (
                   <option key={j} value={j}>
                     {j}
@@ -709,7 +739,7 @@ export function CreateForm() {
             value={moeilijkheid}
             onChange={(m) => {
               setMoeilijkheid(m);
-              setRtti(rttiVoorJaar(leerjaar, m));
+              setRtti(rttiVoorJaar(jaarSchatting, m));
             }}
             options={MOEILIJKHEDEN}
           />
