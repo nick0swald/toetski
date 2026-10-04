@@ -92,12 +92,35 @@ export function naarXaiSchema(x: unknown): unknown {
   return o;
 }
 
+/** Velden verplicht maken met null als toegestane waarde (xAI strict: anyOf [schema, null]). */
+export const MC_FIGUUR_VELDEN = { deelvraag: ["opties", "figuur", "tekenvraag"], antwoordmodel: ["juist", "figuur"], vraagstuk: ["figuur"] } as const;
+function verplichtNullable(o: { required?: string[]; properties: Record<string, Record<string, unknown>> }, velden: readonly string[]): void {
+  for (const k of velden) {
+    const p = o.properties[k];
+    if (!p) continue;
+    o.properties[k] = { anyOf: [p, { type: "null" }] };
+    o.required = [...new Set([...(o.required ?? []), k])];
+  }
+}
+/** null betekent "niet van toepassing": weg ermee, zodat de rest van de code (en de schemacontrole) het veld als afwezig ziet. */
+export function zonderNull<T>(x: T): T {
+  if (Array.isArray(x)) return x.map(zonderNull) as T;
+  if (x && typeof x === "object") return Object.fromEntries(Object.entries(x).filter(([, w]) => w !== null).map(([k, w]) => [k, zonderNull(w)])) as T;
+  return x;
+}
+
 function defs(): Record<string, unknown> {
   const d = naarXaiSchema(SPEC_SCHEMA.definitions) as Record<string, Record<string, unknown>>;
   const vs = structuredClone(d.vraagstuk) as { properties: Record<string, Record<string, unknown>> };
   vs.properties.deelvragen = { ...vs.properties.deelvragen, minItems: 3, maxItems: 4 };
-  const dv = structuredClone(d.deelvraag) as { required: string[] };
+  const dv = structuredClone(d.deelvraag) as { required: string[]; properties: Record<string, Record<string, unknown>> };
   dv.required = [...dv.required, "begrip", "leerdoel"];
+  // Strict structured output laat optionele velden soms helemaal weg (baseline 4 okt: 0 MC in 5 van de 5 eerste
+  // generaties). Velden waar het MC- en figuurpad op leunt zijn daarom verplicht maar nullable: null = "niet van
+  // toepassing" (normaliseer haalt null weer weg).
+  verplichtNullable(dv, MC_FIGUUR_VELDEN.deelvraag);
+  verplichtNullable(dv.properties.antwoordmodel as never, MC_FIGUUR_VELDEN.antwoordmodel);
+  verplichtNullable(vs as never, MC_FIGUUR_VELDEN.vraagstuk);
   return { ...d, vraagstuk: vs, deelvraag: dv };
 }
 
@@ -290,7 +313,7 @@ function vormRegel(v: Kalibratie["vorm"], items: number): string {
  * opties krijgt de paneellabels van de figuur als opties ("beeld A" …).
  */
 export function normaliseer(gen: Generatie): Generatie {
-  const g = structuredClone(gen);
+  const g = zonderNull(structuredClone(gen));
   for (const v of g.vraagstukken ?? []) {
     (v.deelvragen ?? []).forEach((d, i) => {
       const teken = d.tekenvraag ?? /\b(teken|schets)\b/i.test(kaal(d.stam ?? ""));
